@@ -247,6 +247,24 @@
       object-fit: contain;
     }
 
+    .result-prompt {
+      max-width: 600px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      cursor: pointer;
+      transition: all 0.15s;
+      word-break: break-word;
+      text-align: center;
+    }
+
+    .result-prompt:hover { border-color: #444; color: var(--text); }
+
     .result-meta {
       font-family: var(--mono);
       font-size: 12px;
@@ -569,10 +587,12 @@
       </div>
       <div class="result-container" id="resultContainer">
         <img class="result-img" id="resultImg">
+        <div class="result-prompt" id="resultPrompt"></div>
         <div class="result-meta" id="resultMeta"></div>
         <div class="result-actions">
           <button class="action-btn" id="downloadBtn">Download</button>
           <button class="action-btn" id="copyBtn">Copy to clipboard</button>
+          <button class="action-btn" id="copyPromptBtn">Copy prompt</button>
         </div>
       </div>
     </main>
@@ -811,6 +831,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Generation failed");
 
+        data.prompt = prompt;
         state.currentImage = data;
         showResult(data);
         addToHistory(data);
@@ -833,6 +854,7 @@
       img.src = data.image;
       container.classList.add("visible");
       $("#useResultBtn").disabled = false;
+      $("#resultPrompt").textContent = data.prompt || "";
 
       const meta = [];
       meta.push(`${data.elapsed}s`);
@@ -847,7 +869,36 @@
 
     function addToHistory(data) {
       state.history.unshift(data);
+      saveHistory();
       renderHistory();
+    }
+
+    function saveHistory() {
+      try {
+        const slim = state.history.slice(0, 50).map((h) => ({
+          image: h.image,
+          prompt: h.prompt,
+          elapsed: h.elapsed,
+          filename: h.filename,
+          provider: h.provider,
+          usage: h.usage,
+        }));
+        localStorage.setItem("ima2_history", JSON.stringify(slim));
+      } catch {}
+    }
+
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem("ima2_history");
+        if (raw) {
+          state.history = JSON.parse(raw);
+          renderHistory();
+          if (state.history.length > 0) {
+            state.currentImage = state.history[0];
+            showResult(state.history[0]);
+          }
+        }
+      } catch {}
     }
 
     function renderHistory() {
@@ -886,6 +937,19 @@
       } catch {
         toast("Copy failed", true);
       }
+    });
+
+    // ── Copy prompt ──
+    $("#copyPromptBtn").addEventListener("click", () => {
+      if (!state.currentImage?.prompt) return;
+      navigator.clipboard.writeText(state.currentImage.prompt);
+      toast("Prompt copied");
+    });
+
+    $("#resultPrompt").addEventListener("click", () => {
+      if (!state.currentImage?.prompt) return;
+      navigator.clipboard.writeText(state.currentImage.prompt);
+      toast("Prompt copied");
     });
 
     // ── Toast ──
@@ -943,6 +1007,7 @@
 
     loadBilling();
     updateCost();
+    loadHistory();
   </script>
 </body>
 </html>

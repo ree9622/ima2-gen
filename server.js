@@ -48,26 +48,49 @@ async function generateViaOAuth(prompt, quality, size) {
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err.error?.message || `OAuth proxy returned ${res.status}`);
+    const text = await res.text();
+    let msg;
+    try { msg = JSON.parse(text).error?.message; } catch {}
+    throw new Error(msg || `OAuth proxy returned ${res.status}: ${text.slice(0, 200)}`);
   }
 
-  const text = await res.text();
+  // Read SSE stream line by line
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let imageB64 = null;
+  let usage = null;
 
-  // extract image from output_item.done event
-  const lines = text.split("\n");
-  for (const line of lines) {
-    if (!line.startsWith("data: ")) continue;
-    try {
-      const data = JSON.parse(line.slice(6));
-      if (data.type === "response.output_item.done" && data.item?.type === "image_generation_call") {
-        return { b64: data.item.result, usage: null };
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop(); // keep incomplete line
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6);
+      if (payload === "[DONE]") continue;
+      try {
+        const data = JSON.parse(payload);
+        if (data.type === "response.output_item.done" && data.item?.type === "image_generation_call" && data.item.result) {
+          imageB64 = data.item.result;
+        }
+        if (data.type === "response.completed") {
+          usage = data.response?.usage || null;
+        }
+        if (data.type === "error") {
+          throw new Error(data.error?.message || JSON.stringify(data));
+        }
+      } catch (e) {
+        if (e.message && !e.message.startsWith("Unexpected")) throw e;
       }
-      if (data.type === "response.completed") {
-        return { b64: null, usage: data.response?.usage };
-      }
-    } catch {}
+    }
   }
+
+  if (imageB64) return { b64: imageB64, usage };
   throw new Error("No image data received from OAuth proxy");
 }
 
@@ -104,6 +127,7 @@ app.post("/api/generate", async (req, res) => {
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
     const useOAuth = provider === "oauth" || (provider === "auto" && !HAS_API_KEY);
+    console.log(`[generate] provider=${useOAuth ? "oauth" : "api"} quality=${quality} size=${size}`);
     const startTime = Date.now();
 
     let imageB64, usage;

@@ -9,10 +9,29 @@
   "scripts": {
     "start": "node bin/ima2.js serve",
     "dev": "node --watch server.js",
-    "setup": "node bin/ima2.js setup"
+    "setup": "node bin/ima2.js setup",
+    "prepublishOnly": "npm run lint:pkg",
+    "lint:pkg": "node -e \"const p=require('./package.json'); if(!p.name||!p.version||!p.bin) throw new Error('missing fields')\"",
+    "release:patch": "npm version patch && npm publish && git push origin main --tags",
+    "release:minor": "npm version minor && npm publish && git push origin main --tags",
+    "release:major": "npm version major && npm publish && git push origin main --tags"
   },
-  "keywords": ["openai", "gpt-image-2", "image-generation", "oauth"],
+  "keywords": ["openai", "gpt-image-2", "image-generation", "oauth", "cli"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lidge-jun/ima2-gen.git"
+  },
+  "files": [
+    "bin/",
+    "public/",
+    "server.js",
+    ".env.example",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.1.0",

@@ -1,14 +1,20 @@
 # ima2-gen
 
+[![npm version](https://img.shields.io/npm/v/ima2-gen)](https://www.npmjs.com/package/ima2-gen)
+
 Minimal CLI + web UI for OpenAI `gpt-image-2` image generation.
 
-## Quick Start
+## Install & Run
 
 ```bash
-git clone https://github.com/lidge-jun/ima2-gen.git
-cd ima2-gen
-npm install
-npm start
+npx ima2-gen serve
+```
+
+Or install globally:
+
+```bash
+npm install -g ima2-gen
+ima2 serve
 ```
 
 First run prompts you to choose:
@@ -23,16 +29,9 @@ Then opens `http://localhost:3333`.
 ## CLI
 
 ```bash
-npx ima2 serve    # start server (auto-setup on first run)
-npx ima2 setup    # reconfigure auth
-npx ima2 reset    # clear saved config
-```
-
-Or install globally:
-
-```bash
-npm install -g ima2-gen
-ima2 serve
+ima2 serve    # start server (auto-setup on first run)
+ima2 setup    # reconfigure auth
+ima2 reset    # clear saved config
 ```
 
 ## Features
@@ -44,7 +43,8 @@ ima2 serve
 - **Size** — presets (1024 ~ 4K) + custom (any 16px-aligned ratio)
 - **Format** — PNG / JPEG / WebP
 - **Moderation** — auto (standard) / low (less restrictive)
-- **History** — session thumbnail strip
+- **Prompt display** — shown under image, click to copy
+- **History** — persisted across page refreshes (localStorage)
 - **Download / Copy** — save or clipboard
 
 ## Architecture
@@ -75,3 +75,7 @@ OAUTH_PORT=10531
 | High    | $0.211    | $0.165    | $0.165    |
 
 OAuth mode is free (uses your ChatGPT Plus/Pro subscription).
+
+## License
+
+MIT

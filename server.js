@@ -70,6 +70,7 @@ app.post("/api/edit", async (req, res) => {
       mask: maskB64,
       quality = "low",
       size = "1024x1024",
+      moderation = "low",
     } = req.body;
 
     if (!prompt || !imageB64)
@@ -89,6 +90,7 @@ app.post("/api/edit", async (req, res) => {
       image: imageFile,
       quality,
       size,
+      moderation,
     };
 
     if (maskB64) {

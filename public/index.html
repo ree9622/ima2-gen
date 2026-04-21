@@ -348,6 +348,110 @@
     .toast.visible { transform: translateY(0); opacity: 1; }
     .toast.error { border-color: var(--red); color: var(--red); }
 
+    /* ── Mode tabs ── */
+    .mode-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 8px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .mode-tab:hover { color: var(--text); }
+    .mode-tab.active { background: var(--surface-2); color: var(--accent-bright); }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .upload-zone.visible { display: flex; }
+
+    .drop-area {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-area:hover, .drop-area.dragover {
+      border-color: #555;
+      color: var(--text);
+      background: var(--surface-2);
+    }
+
+    .drop-area.has-image {
+      padding: 0;
+      border-style: solid;
+      border-color: var(--border);
+    }
+
+    .drop-area img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: contain;
+      border-radius: calc(var(--radius) - 2px);
+    }
+
+    .drop-area .remove-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 22px; height: 22px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .drop-area:hover .remove-btn { opacity: 1; }
+
+    .use-result-btn {
+      padding: 7px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .use-result-btn:hover { border-color: #444; color: var(--text); }
+    .use-result-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
     /* ── Responsive ── */
     @media (max-width: 800px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
@@ -368,6 +472,20 @@
       <div class="billing-bar" id="billingBar">
         <div class="label">API Status</div>
         <div class="value" id="billingValue" style="color:var(--text-dim)">checking...</div>
+      </div>
+
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="t2i">Text to Image</button>
+        <button class="mode-tab" data-mode="i2i">Image to Image</button>
+      </div>
+
+      <div class="upload-zone" id="uploadZone">
+        <div class="section-title">Source Image</div>
+        <div class="drop-area" id="dropArea">
+          Drop image here or click to upload
+          <input type="file" accept="image/*" id="fileInput" style="display:none">
+        </div>
+        <button class="use-result-btn" id="useResultBtn" disabled>Use current result as source</button>
       </div>
 
       <div class="section-title">Prompt</div>
@@ -451,6 +569,7 @@
     const $$ = (s) => document.querySelectorAll(s);
 
     let state = {
+      mode: "t2i",
       quality: "low",
       size: "1024x1024",
       format: "png",
@@ -458,6 +577,7 @@
       generating: false,
       history: [],
       currentImage: null,
+      sourceImageB64: null,
     };
 
     // ── Cost matrix (gpt-image-2) ──
@@ -471,6 +591,83 @@
       const cost = COST_MAP[state.quality]?.[state.size] ?? 0;
       $("#costEstimate").textContent = `~$${cost.toFixed(3)}`;
     }
+
+    // ── Mode tabs ──
+    $$(".mode-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        $$(".mode-tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        state.mode = tab.dataset.mode;
+        const uploadZone = $("#uploadZone");
+        uploadZone.classList.toggle("visible", state.mode === "i2i");
+        $("#generateBtn").textContent = state.mode === "i2i" ? "Edit Image" : "Generate";
+        $("#prompt").placeholder = state.mode === "i2i"
+          ? "Describe the edit you want to make..."
+          : "Describe the image you want to generate...";
+      });
+    });
+
+    // ── Image upload ──
+    const dropArea = $("#dropArea");
+    const fileInput = $("#fileInput");
+
+    dropArea.addEventListener("click", () => {
+      if (!dropArea.classList.contains("has-image")) fileInput.click();
+    });
+
+    dropArea.addEventListener("dragover", (e) => { e.preventDefault(); dropArea.classList.add("dragover"); });
+    dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropArea.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith("image/")) loadSourceImage(file);
+    });
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files[0]) loadSourceImage(fileInput.files[0]);
+    });
+
+    function loadSourceImage(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = reader.result.split(",")[1];
+        state.sourceImageB64 = b64;
+        dropArea.classList.add("has-image");
+        dropArea.innerHTML = `<img src="${reader.result}"><button class="remove-btn" onclick="clearSourceImage(event)">&times;</button>`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function loadSourceFromDataUrl(dataUrl) {
+      state.sourceImageB64 = dataUrl.split(",")[1];
+      dropArea.classList.add("has-image");
+      dropArea.innerHTML = `<img src="${dataUrl}"><button class="remove-btn" onclick="clearSourceImage(event)">&times;</button>`;
+    }
+
+    function clearSourceImage(e) {
+      if (e) e.stopPropagation();
+      state.sourceImageB64 = null;
+      dropArea.classList.remove("has-image");
+      dropArea.innerHTML = 'Drop image here or click to upload<input type="file" accept="image/*" id="fileInput" style="display:none">';
+      document.getElementById("fileInput").addEventListener("change", () => {
+        const f = document.getElementById("fileInput").files[0];
+        if (f) loadSourceImage(f);
+      });
+    }
+
+    $("#useResultBtn").addEventListener("click", () => {
+      if (!state.currentImage) return;
+      loadSourceFromDataUrl(state.currentImage.image);
+      // switch to i2i mode
+      $$(".mode-tab").forEach((t) => t.classList.remove("active"));
+      document.querySelector('.mode-tab[data-mode="i2i"]').classList.add("active");
+      state.mode = "i2i";
+      $("#uploadZone").classList.add("visible");
+      $("#generateBtn").textContent = "Edit Image";
+      $("#prompt").placeholder = "Describe the edit you want to make...";
+      toast("Source image loaded from result");
+    });
 
     // ── Option buttons ──
     function setupOptionGroup(container, key) {
@@ -525,16 +722,21 @@
       $("#emptyState").style.display = "none";
 
       try {
-        const res = await fetch("/api/generate", {
+        const isEdit = state.mode === "i2i" && state.sourceImageB64;
+        const endpoint = isEdit ? "/api/edit" : "/api/generate";
+        const payload = {
+          prompt,
+          quality: state.quality,
+          size: state.size,
+          format: state.format,
+          moderation: state.moderation,
+        };
+        if (isEdit) payload.image = state.sourceImageB64;
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            quality: state.quality,
-            size: state.size,
-            format: state.format,
-            moderation: state.moderation,
-          }),
+          body: JSON.stringify(payload),
         });
 
         const data = await res.json();
@@ -561,6 +763,7 @@
       const img = $("#resultImg");
       img.src = data.image;
       container.classList.add("visible");
+      $("#useResultBtn").disabled = false;
 
       const meta = [];
       meta.push(`${data.elapsed}s`);

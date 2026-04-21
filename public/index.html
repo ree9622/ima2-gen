@@ -474,6 +474,15 @@
         <div class="value" id="billingValue" style="color:var(--text-dim)">checking...</div>
       </div>
 
+      <div class="option-group">
+        <div class="section-title">Provider</div>
+        <div class="option-row" id="providerGroup">
+          <button class="option-btn active" data-value="oauth" style="color:var(--green)">OAuth<br><span style="font-size:10px;color:var(--text-dim)">free / codex login</span></button>
+          <button class="option-btn" data-value="api">API Key<br><span style="font-size:10px;color:var(--text-dim)">paid / .env</span></button>
+        </div>
+        <div id="oauthStatus" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:4px 0"></div>
+      </div>
+
       <div class="mode-tabs">
         <button class="mode-tab active" data-mode="t2i">Text to Image</button>
         <button class="mode-tab" data-mode="i2i">Image to Image</button>
@@ -515,7 +524,14 @@
         <div class="option-row" id="sizeGroup3">
           <button class="option-btn" data-value="3840x2160">3840x2160<br><span style="font-size:10px;color:var(--text-dim)">4K land</span></button>
           <button class="option-btn" data-value="2160x3840">2160x3840<br><span style="font-size:10px;color:var(--text-dim)">4K port</span></button>
+          <button class="option-btn" data-value="custom" id="customSizeBtn">Custom<br><span style="font-size:10px;color:var(--text-dim)">any ratio</span></button>
         </div>
+        <div class="option-row" id="customSizeRow" style="display:none">
+          <input type="number" id="customW" placeholder="W" min="256" max="3840" step="16" value="1920" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;text-align:center;outline:none">
+          <span style="color:var(--text-dim);align-self:center;font-family:var(--mono);font-size:12px">x</span>
+          <input type="number" id="customH" placeholder="H" min="256" max="3840" step="16" value="1088" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;text-align:center;outline:none">
+        </div>
+        <div id="sizeHint" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);display:none">Both must be multiples of 16, max 3840, ratio &le; 3:1</div>
       </div>
 
       <div class="option-group">
@@ -570,6 +586,7 @@
 
     let state = {
       mode: "t2i",
+      provider: "oauth",
       quality: "low",
       size: "1024x1024",
       format: "png",
@@ -588,9 +605,71 @@
     };
 
     function updateCost() {
+      if (state.provider === "oauth") {
+        $("#costEstimate").textContent = "free";
+        $("#costEstimate").style.color = "var(--green)";
+        return;
+      }
+      $("#costEstimate").style.color = "";
       const cost = COST_MAP[state.quality]?.[state.size] ?? 0;
       $("#costEstimate").textContent = `~$${cost.toFixed(3)}`;
     }
+
+    // ── Provider ──
+    setupOptionGroup($("#providerGroup"), "provider");
+
+    async function checkOAuthStatus() {
+      try {
+        const res = await fetch("/api/oauth/status");
+        const data = await res.json();
+        const el = $("#oauthStatus");
+        if (data.status === "ready") {
+          el.textContent = "OAuth ready — " + (data.models?.length || 0) + " models";
+          el.style.color = "var(--green)";
+        } else if (data.status === "auth_required") {
+          el.innerHTML = 'Run <code style="color:var(--accent)">codex login</code> first';
+          el.style.color = "var(--amber)";
+        } else {
+          el.textContent = "OAuth proxy starting...";
+          el.style.color = "var(--text-dim)";
+          setTimeout(checkOAuthStatus, 3000);
+        }
+      } catch { $("#oauthStatus").textContent = ""; }
+    }
+    checkOAuthStatus();
+
+    // ── Custom size ──
+    const allSizeButtons = $$("#sizeGroup1 .option-btn, #sizeGroup2 .option-btn, #sizeGroup3 .option-btn");
+
+    function handleSizeClick(btn) {
+      allSizeButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const val = btn.dataset.value;
+      const isCustom = val === "custom";
+      $("#customSizeRow").style.display = isCustom ? "flex" : "none";
+      $("#sizeHint").style.display = isCustom ? "block" : "none";
+      if (isCustom) {
+        updateCustomSize();
+      } else {
+        state.size = val;
+      }
+      updateCost();
+    }
+
+    allSizeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => handleSizeClick(btn));
+    });
+
+    function snap16(n) { return Math.round(n / 16) * 16; }
+
+    function updateCustomSize() {
+      const w = snap16(parseInt($("#customW").value) || 1024);
+      const h = snap16(parseInt($("#customH").value) || 1024);
+      state.size = `${w}x${h}`;
+    }
+
+    $("#customW").addEventListener("change", updateCustomSize);
+    $("#customH").addEventListener("change", updateCustomSize);
 
     // ── Mode tabs ──
     $$(".mode-tab").forEach((tab) => {
@@ -681,17 +760,6 @@
       });
     }
 
-    // Size buttons span multiple rows
-    const allSizeBtns = $$("#sizeGroup1 .option-btn, #sizeGroup2 .option-btn, #sizeGroup3 .option-btn");
-    allSizeBtns.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        allSizeBtns.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.size = btn.dataset.value;
-        updateCost();
-      });
-    });
-
     setupOptionGroup($("#qualityGroup"), "quality");
     setupOptionGroup($("#moderationGroup"), "moderation");
 
@@ -730,6 +798,7 @@
           size: state.size,
           format: state.format,
           moderation: state.moderation,
+          provider: state.provider,
         };
         if (isEdit) payload.image = state.sourceImageB64;
 
@@ -772,6 +841,7 @@
       }
       meta.push(state.quality);
       meta.push(state.size);
+      if (data.provider) meta.push(data.provider);
       $("#resultMeta").textContent = meta.join("  ·  ");
     }
 
@@ -848,6 +918,12 @@
             return sum + bucket.results.reduce((s, r) => s + (r.amount?.value || 0), 0);
           }, 0);
           el.textContent = `$${(totalCost / 100).toFixed(2)} this month`;
+          el.style.color = "var(--accent)";
+          return;
+        }
+
+        if (data.oauth) {
+          el.textContent = "OAuth mode (no API key)";
           el.style.color = "var(--accent)";
           return;
         }

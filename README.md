@@ -1,48 +1,77 @@
-# Image Gen
+# ima2-gen
 
-Minimal web UI for OpenAI `gpt-image-2` image generation.
+Minimal CLI + web UI for OpenAI `gpt-image-2` image generation.
+
+## Quick Start
+
+```bash
+git clone https://github.com/lidge-jun/ima2-gen.git
+cd ima2-gen
+npm install
+npm start
+```
+
+First run prompts you to choose:
+
+```
+  1) API Key  — paste your OpenAI API key (paid)
+  2) OAuth    — login with ChatGPT account (free)
+```
+
+Then opens `http://localhost:3333`.
+
+## CLI
+
+```bash
+npx ima2 serve    # start server (auto-setup on first run)
+npx ima2 setup    # reconfigure auth
+npx ima2 reset    # clear saved config
+```
+
+Or install globally:
+
+```bash
+npm install -g ima2-gen
+ima2 serve
+```
 
 ## Features
 
+- **Dual provider** — OAuth (free, ChatGPT account) or API Key (paid)
 - **Text-to-Image** — generate images from text prompts
-- **Image-to-Image** — edit/inpaint existing images with prompts
+- **Image-to-Image** — edit/inpaint with drag-and-drop
 - **Quality** — low / medium / high
-- **Size** — 1024x1024 ~ 4K, plus auto
+- **Size** — presets (1024 ~ 4K) + custom (any 16px-aligned ratio)
 - **Format** — PNG / JPEG / WebP
 - **Moderation** — auto (standard) / low (less restrictive)
-- **Cost estimate** — per-request pricing based on quality & size
-- **API billing** — check remaining credits
-- **History** — session thumbnail strip with click-to-view
-- **Download / Copy** — save or clipboard generated images
+- **History** — session thumbnail strip
+- **Download / Copy** — save or clipboard
 
-## Setup
+## Architecture
 
-```bash
-cp .env.example .env
-# Add your OpenAI API key to .env
-
-npm install
-npm start
-# → http://localhost:3333
+```
+ima2 serve
+  ├── Express (:3333)          ← web UI + API
+  └── openai-oauth (:10531)    ← embedded OAuth proxy
 ```
 
-## .env
+## Config
 
+Stored in `.ima2/config.json` (auto-created, gitignored).
+
+Optional `.env`:
 ```
 OPENAI_API_KEY=sk-proj-...
 PORT=3333
+OAUTH_PORT=10531
 ```
 
-## Tech Stack
-
-- **Backend**: Express 5 + OpenAI SDK
-- **Frontend**: Vanilla HTML/CSS/JS (single file, no build step)
-- **Model**: `gpt-image-2`
-
-## Pricing Reference (gpt-image-2)
+## Pricing (API Key mode)
 
 | Quality | 1024x1024 | 1024x1536 | 1536x1024 |
 |---------|-----------|-----------|-----------|
 | Low     | $0.006    | $0.005    | $0.005    |
 | Medium  | $0.053    | $0.041    | $0.041    |
 | High    | $0.211    | $0.165    | $0.165    |
+
+OAuth mode is free (uses your ChatGPT Plus/Pro subscription).

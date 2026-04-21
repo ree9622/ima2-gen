@@ -1,15 +1,22 @@
 {
-  "name": "image-gen",
+  "name": "ima2-gen",
   "version": "1.0.0",
-  "private": true,
+  "description": "GPT Image 2 generator with OAuth & API key support",
   "type": "module",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+  "bin": {
+    "ima2": "./bin/ima2.js"
   },
+  "scripts": {
+    "start": "node bin/ima2.js serve",
+    "dev": "node --watch server.js",
+    "setup": "node bin/ima2.js setup"
+  },
+  "keywords": ["openai", "gpt-image-2", "image-generation", "oauth"],
+  "license": "MIT",
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
-    "openai": "^5.8.2"
+    "openai": "^5.8.2",
+    "openai-oauth": "^1.0.2"
   }
 }

@@ -40,7 +40,7 @@ async function generateViaOAuth(prompt, quality, size) {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({
-      model: "gpt-5.4-mini",
+      model: "gpt-5.4",
       input: [{ role: "user", content: prompt }],
       tools: [{ type: "image_generation", quality, size }],
       stream: true,
@@ -75,7 +75,7 @@ async function generateViaOAuth(prompt, quality, size) {
     throw new Error("No image data in response (non-stream mode)");
   }
 
-  // Read SSE stream line by line
+  // Read SSE stream — collect complete events separated by double newlines
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -88,25 +88,36 @@ async function generateViaOAuth(prompt, quality, size) {
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
+    // SSE events are separated by blank lines (\n\n)
+    let boundary;
+    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
 
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const payload = line.slice(6);
-      if (payload === "[DONE]") continue;
+      // Extract data from event block
+      let eventData = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("data: ")) {
+          eventData += line.slice(6);
+        }
+      }
+
+      if (!eventData || eventData === "[DONE]") continue;
+
       try {
-        const data = JSON.parse(payload);
+        const data = JSON.parse(eventData);
         eventCount++;
-        if (data.type === "response.output_item.done" && data.item?.type === "image_generation_call" && data.item.result) {
-          imageB64 = data.item.result;
-          console.log("[oauth] got image data, b64 length:", imageB64.length);
+
+        if (data.type === "response.output_item.done" && data.item?.type === "image_generation_call") {
+          if (data.item.result) {
+            imageB64 = data.item.result;
+            console.log("[oauth] got image, b64 length:", imageB64.length);
+          }
         }
         if (data.type === "response.completed") {
           usage = data.response?.usage || null;
         }
         if (data.type === "error") {
-          console.error("[oauth] stream error:", JSON.stringify(data));
           throw new Error(data.error?.message || JSON.stringify(data));
         }
       } catch (e) {
@@ -115,9 +126,37 @@ async function generateViaOAuth(prompt, quality, size) {
     }
   }
 
-  console.log("[oauth] stream done, events:", eventCount, "hasImage:", !!imageB64);
-  if (imageB64) return { b64: imageB64, usage };
-  throw new Error("No image data received from OAuth proxy (parsed " + eventCount + " events)");
+  console.log("[oauth] stream ended, events:", eventCount, "hasImage:", !!imageB64);
+
+  // If stream ended without image, the proxy may have split the response.
+  // Wait briefly and retry with non-stream to check if image was generated.
+  if (!imageB64) {
+    console.log("[oauth] no image in stream, retrying non-stream...");
+    const retryRes = await fetch(`${OAUTH_URL}/v1/responses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5.4",
+        input: [{ role: "user", content: prompt }],
+        tools: [{ type: "image_generation", quality, size }],
+        stream: false,
+      }),
+    });
+
+    if (retryRes.ok) {
+      const json = await retryRes.json();
+      for (const item of json.output || []) {
+        if (item.type === "image_generation_call" && item.result) {
+          console.log("[oauth] got image from retry, b64 length:", item.result.length);
+          return { b64: item.result, usage: json.usage };
+        }
+      }
+    }
+
+    throw new Error("No image data received from OAuth proxy (parsed " + eventCount + " events)");
+  }
+
+  return { b64: imageB64, usage };
 }
 
 // ── Provider info ──

@@ -624,7 +624,7 @@
         const data = await res.json();
         const el = $("#oauthStatus");
         if (data.status === "ready") {
-          el.textContent = "OAuth ready — " + (data.models?.length || 0) + " models";
+          el.textContent = "gpt-image-2 ready";
           el.style.color = "var(--green)";
         } else if (data.status === "auth_required") {
           el.innerHTML = 'Run <code style="color:var(--accent)">codex login</code> first';

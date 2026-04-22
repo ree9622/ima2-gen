@@ -22,7 +22,9 @@ function runCLI(args, extraEnv = {}) {
   });
 }
 
-async function waitForHealth(base, timeoutMs = 8000) {
+const HEALTH_TIMEOUT = process.platform === "win32" ? 30000 : 8000;
+
+async function waitForHealth(base, timeoutMs = HEALTH_TIMEOUT) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -36,14 +38,29 @@ async function waitForHealth(base, timeoutMs = 8000) {
 
 describe("ima2 CLI commands (live server)", () => {
   let server;
+  let serverStderr = "";
 
   before(async () => {
     server = spawn("node", ["server.js"], {
-      env: { ...process.env, PORT, HOME: FAKE_HOME, USERPROFILE: FAKE_HOME },
+      env: {
+        ...process.env,
+        PORT,
+        HOME: FAKE_HOME,
+        USERPROFILE: FAKE_HOME,
+        IMA2_NO_OAUTH_PROXY: "1",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
-    server.stderr.on("data", (d) => { if (process.env.DEBUG_TEST) process.stderr.write(d); });
-    await waitForHealth(`http://localhost:${PORT}`);
+    server.stderr.on("data", (d) => {
+      serverStderr += d.toString();
+      if (process.env.DEBUG_TEST) process.stderr.write(d);
+    });
+    try {
+      await waitForHealth(`http://localhost:${PORT}`);
+    } catch (err) {
+      process.stderr.write(`\n[server stderr on health-timeout]\n${serverStderr}\n`);
+      throw err;
+    }
   });
 
   after(async () => {

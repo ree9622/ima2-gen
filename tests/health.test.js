@@ -11,7 +11,9 @@ import { tmpdir } from "node:os";
 const PORT = String(3500 + Math.floor(Math.random() * 400));
 const FAKE_HOME = mkdtempSync(join(tmpdir(), "ima2-test-home-"));
 
-async function waitForHealth(base, timeoutMs = 8000) {
+const HEALTH_TIMEOUT = process.platform === "win32" ? 30000 : 8000;
+
+async function waitForHealth(base, timeoutMs = HEALTH_TIMEOUT) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -25,18 +27,31 @@ async function waitForHealth(base, timeoutMs = 8000) {
 
 describe("Server: /api/health + advertisement", () => {
   let child;
+  let childStderr = "";
 
   before(async () => {
     child = spawn("node", ["server.js"], {
-      env: { ...process.env, PORT, HOME: FAKE_HOME, USERPROFILE: FAKE_HOME },
+      env: {
+        ...process.env,
+        PORT,
+        HOME: FAKE_HOME,
+        USERPROFILE: FAKE_HOME,
+        IMA2_NO_OAUTH_PROXY: "1",
+      },
       cwd: process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
     });
     // drain stderr to surface boot errors if test hangs
     child.stderr.on("data", (d) => {
+      childStderr += d.toString();
       if (process.env.DEBUG_TEST) process.stderr.write(d);
     });
-    await waitForHealth(`http://localhost:${PORT}`);
+    try {
+      await waitForHealth(`http://localhost:${PORT}`);
+    } catch (err) {
+      process.stderr.write(`\n[server stderr on health-timeout]\n${childStderr}\n`);
+      throw err;
+    }
   });
 
   after(async () => {

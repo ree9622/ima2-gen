@@ -950,7 +950,12 @@ function startOAuthProxy() {
 
 // ── Boot ──
 const PORT = process.env.PORT || 3333;
-const oauthChild = startOAuthProxy();
+// Tests (and some CI contexts) can opt out of the OAuth proxy subprocess.
+// The proxy is a user-facing login helper, not required for /api/health or
+// offline unit tests, and starting it on Windows CI can add 7-10s latency.
+const oauthChild = process.env.IMA2_NO_OAUTH_PROXY === "1"
+  ? null
+  : startOAuthProxy();
 
 // CLI discovery: advertise running server under ~/.ima2/server.json
 const __advertisePath = join(homedir(), ".ima2", "server.json");
@@ -980,7 +985,7 @@ function __unadvertise() {
 
 onShutdown(() => {
   __unadvertise();
-  try { oauthChild.kill(); } catch {}
+  try { oauthChild?.kill(); } catch {}
 });
 process.on("exit", __unadvertise);
 

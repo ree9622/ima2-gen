@@ -312,20 +312,45 @@ app.get("/api/oauth/status", async (_req, res) => {
 });
 
 // ── Inflight registry ──
-app.get("/api/inflight", (_req, res) => {
-  res.json({ jobs: listJobs() });
+app.get("/api/inflight", (req, res) => {
+  const kind =
+    typeof req.query.kind === "string" && req.query.kind.length > 0
+      ? req.query.kind
+      : undefined;
+  const sessionId =
+    typeof req.query.sessionId === "string" && req.query.sessionId.length > 0
+      ? req.query.sessionId
+      : undefined;
+  res.json({ jobs: listJobs({ kind, sessionId }) });
 });
 
 // ── Generate image (supports parallel via n) ──
 app.post("/api/generate", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
   try {
+    const sessionId =
+      typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
+    const clientNodeId =
+      typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
     const { prompt, quality = "low", size = "1024x1024", format = "png", moderation = "low", provider = "auto", n = 1, references = [] } =
       req.body;
 
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
     const count = Math.min(Math.max(parseInt(n) || 1, 1), 8);
-    startJob({ requestId, kind: "classic", prompt, meta: { quality, size, n: count } });
+    startJob({
+      requestId,
+      kind: "classic",
+      prompt,
+      meta: {
+        kind: "classic",
+        sessionId,
+        parentNodeId: null,
+        clientNodeId,
+        quality,
+        size,
+        n: count,
+      },
+    });
 
     if (!Array.isArray(references) || references.length > 5) {
       return res.status(400).json({ error: "references must be an array of up to 5 base64 strings" });
@@ -553,7 +578,20 @@ app.post("/api/node/generate", async (req, res) => {
   const body = req.body || {};
   const parentNodeId = body.parentNodeId ?? null;
   const requestId = typeof body.requestId === "string" ? body.requestId : null;
-  startJob({ requestId, kind: "node", prompt: body.prompt, meta: { parentNodeId } });
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId : null;
+  const clientNodeId =
+    typeof body.clientNodeId === "string" ? body.clientNodeId : null;
+  startJob({
+    requestId,
+    kind: "node",
+    prompt: body.prompt,
+    meta: {
+      kind: "node",
+      sessionId,
+      parentNodeId,
+      clientNodeId,
+    },
+  });
   try {
     const { prompt, quality = "low", size = "1024x1024", format = "png", references = [] } = body;
     const { provider = "oauth" } = body;

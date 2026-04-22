@@ -4,8 +4,7 @@ export function HistoryStrip() {
   const history = useAppStore((s) => s.history);
   const currentImage = useAppStore((s) => s.currentImage);
   const selectHistory = useAppStore((s) => s.selectHistory);
-
-  if (history.length === 0) return <div className="history-strip" />;
+  const openGallery = useAppStore((s) => s.openGallery);
 
   return (
     <div className="history-strip">
@@ -21,6 +20,15 @@ export function HistoryStrip() {
           />
         );
       })}
+      <button
+        type="button"
+        className="history-thumb history-thumb--add"
+        onClick={openGallery}
+        aria-label="Open gallery"
+        title="Open gallery"
+      >
+        +
+      </button>
     </div>
   );
 }

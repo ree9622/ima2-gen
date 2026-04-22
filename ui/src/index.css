@@ -44,12 +44,20 @@ body {
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  min-height: 0;
+}
+.sidebar__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow-y: auto;
-  height: 100dvh;
 }
 
 .logo {
@@ -413,8 +421,11 @@ body {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 4px 0;
-  margin-top: auto;
+  overflow-y: hidden;
+  padding: 10px 16px;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 .history-strip::-webkit-scrollbar {
   height: 4px;
@@ -444,6 +455,111 @@ body {
 .history-thumb.active {
   border-color: var(--accent);
   opacity: 1;
+}
+.history-thumb--add {
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border);
+  opacity: 0.85;
+}
+.history-thumb--add:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+/* ── Gallery modal ── */
+.gallery-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 110;
+  backdrop-filter: blur(3px);
+}
+.gallery {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: min(1200px, 92vw);
+  height: min(820px, 88vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gallery__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.gallery__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.gallery__meta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.gallery__close {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.gallery__close:hover {
+  border-color: var(--accent);
+}
+.gallery__grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+.gallery__tile {
+  padding: 0;
+  border: 2px solid transparent;
+  background: var(--surface-2);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 1;
+}
+.gallery__tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery__tile:hover {
+  border-color: #3a3a3a;
+}
+.gallery__tile--active {
+  border-color: var(--accent);
+}
+.gallery__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
+  font-size: 14px;
 }
 
 /* ── Toast ── */
@@ -733,6 +849,9 @@ body {
     border-bottom: 1px solid var(--border);
     max-height: 50dvh;
     height: auto;
+  }
+  .sidebar__scroll {
+    padding: 12px;
   }
   .canvas {
     min-height: 50dvh;

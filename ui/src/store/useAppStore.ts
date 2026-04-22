@@ -82,6 +82,9 @@ type AppState = {
   toast: ToastState;
   rightPanelOpen: boolean;
   toggleRightPanel: () => void;
+  galleryOpen: boolean;
+  openGallery: () => void;
+  closeGallery: () => void;
 
   uiMode: UIMode;
   setUIMode: (m: UIMode) => void;
@@ -150,6 +153,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       } catch {}
       return { rightPanelOpen: next };
     }),
+  galleryOpen: false,
+  openGallery: () => set({ galleryOpen: true }),
+  closeGallery: () => set({ galleryOpen: false }),
 
   uiMode: loadUIMode(),
   setUIMode: (m) => {

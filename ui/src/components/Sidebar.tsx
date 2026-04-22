@@ -12,29 +12,31 @@ export function Sidebar() {
   const uiMode = useAppStore((s) => s.uiMode);
   return (
     <aside className="sidebar">
-      <div className="logo">
-        <div className="logo-dot" />
-        Image Gen
-        <span className="logo-badge">gpt-image-2</span>
+      <div className="sidebar__scroll">
+        <div className="logo">
+          <div className="logo-dot" />
+          Image Gen
+          <span className="logo-badge">gpt-image-2</span>
+        </div>
+        <UIModeSwitch />
+        {uiMode === "classic" ? (
+          <>
+            <ProviderSelect />
+            <PromptInput />
+            <GenerateButton />
+            <InFlightList />
+          </>
+        ) : (
+          <>
+            <SessionPicker />
+            <div className="sidebar__node-hint">
+              Node mode: click a node to edit its prompt, then Generate. Settings on the right panel
+              (quality/size) apply to all new generations.
+            </div>
+            <InFlightList />
+          </>
+        )}
       </div>
-      <UIModeSwitch />
-      {uiMode === "classic" ? (
-        <>
-          <ProviderSelect />
-          <PromptInput />
-          <GenerateButton />
-          <InFlightList />
-        </>
-      ) : (
-        <>
-          <SessionPicker />
-          <div className="sidebar__node-hint">
-            Node mode: click a node to edit its prompt, then Generate. Settings on the right panel
-            (quality/size) apply to all new generations.
-          </div>
-          <InFlightList />
-        </>
-      )}
       <HistoryStrip />
     </aside>
   );

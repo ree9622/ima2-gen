@@ -4,6 +4,7 @@ import { Canvas } from "./components/Canvas";
 import { NodeCanvas } from "./components/NodeCanvas";
 import { RightPanel } from "./components/RightPanel";
 import { Toast } from "./components/Toast";
+import { GalleryModal } from "./components/GalleryModal";
 import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
         <RightPanel />
       </div>
       <Toast />
+      <GalleryModal />
     </>
   );
 }

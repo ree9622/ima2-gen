@@ -5,7 +5,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { existsSync } from "fs";
-import { newNodeId, saveNode, loadNodeB64, loadNodeMeta } from "./lib/nodeStore.js";
+import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64 } from "./lib/nodeStore.js";
 import { startJob, finishJob, listJobs, setJobPhase } from "./lib/inflight.js";
 import {
   createSession,
@@ -593,7 +593,14 @@ app.post("/api/node/generate", async (req, res) => {
     },
   });
   try {
-    const { prompt, quality = "low", size = "1024x1024", format = "png", references = [] } = body;
+    const {
+      prompt,
+      quality = "low",
+      size = "1024x1024",
+      format = "png",
+      references = [],
+      externalSrc = null,
+    } = body;
     const { provider = "oauth" } = body;
 
     if (provider === "api") {
@@ -627,6 +634,11 @@ app.post("/api/node/generate", async (req, res) => {
     let parentB64 = null;
     if (parentNodeId) {
       parentB64 = await loadNodeB64(__dirname, `${parentNodeId}.png`);
+    } else if (typeof externalSrc === "string" && externalSrc.length > 0) {
+      // TODO(0.09 D4): history promotion should materialize imported assets into a
+      // node-owned file path. This stub allows controlled reads from generated/
+      // so promotion can fail gracefully instead of assuming <nodeId>.png only.
+      parentB64 = await loadAssetB64(__dirname, externalSrc);
     }
 
     let b64, usage, webSearchCalls = 0;

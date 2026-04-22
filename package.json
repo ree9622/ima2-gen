@@ -45,9 +45,11 @@
     "node": ">=18"
   },
   "dependencies": {
+    "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "openai": "^5.8.2",
-    "openai-oauth": "^1.0.2"
+    "openai-oauth": "^1.0.2",
+    "ulid": "^3.0.2"
   }
 }

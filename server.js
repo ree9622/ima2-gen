@@ -6,6 +6,15 @@ import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { existsSync } from "fs";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta } from "./lib/nodeStore.js";
+import {
+  createSession,
+  listSessions,
+  getSession,
+  renameSession,
+  deleteSession,
+  saveGraph,
+  ensureDefaultSession,
+} from "./lib/sessionStore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -604,6 +613,89 @@ app.get("/api/node/:nodeId", async (req, res) => {
   }
 });
 
+// ── Session DB (0.06) ──
+app.get("/api/sessions", (_req, res) => {
+  try {
+    res.json({ sessions: listSessions() });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.post("/api/sessions", (req, res) => {
+  try {
+    const title = (req.body?.title || "Untitled").slice(0, 200);
+    const session = createSession({ title });
+    res.status(201).json({ session });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.get("/api/sessions/:id", (req, res) => {
+  try {
+    const session = getSession(req.params.id);
+    if (!session) {
+      return res.status(404).json({
+        error: { code: "SESSION_NOT_FOUND", message: "Session not found" },
+      });
+    }
+    res.json({ session });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.patch("/api/sessions/:id", (req, res) => {
+  try {
+    const title = req.body?.title;
+    if (typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({
+        error: { code: "INVALID_TITLE", message: "Title required" },
+      });
+    }
+    const ok = renameSession(req.params.id, title.slice(0, 200));
+    if (!ok) {
+      return res.status(404).json({
+        error: { code: "SESSION_NOT_FOUND", message: "Session not found" },
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.delete("/api/sessions/:id", (req, res) => {
+  try {
+    const ok = deleteSession(req.params.id);
+    if (!ok) {
+      return res.status(404).json({
+        error: { code: "SESSION_NOT_FOUND", message: "Session not found" },
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.put("/api/sessions/:id/graph", (req, res) => {
+  try {
+    const { nodes, edges } = req.body || {};
+    if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+      return res.status(400).json({
+        error: { code: "INVALID_GRAPH", message: "nodes and edges arrays required" },
+      });
+    }
+    saveGraph(req.params.id, { nodes, edges });
+    res.json({ ok: true, nodes: nodes.length, edges: edges.length });
+  } catch (err) {
+    const code = err.code || "DB_ERROR";
+    res.status(err.status || 500).json({ error: { code, message: err.message } });
+  }
+});
+
 // ── Billing info ──
 app.get("/api/billing", async (_req, res) => {
   if (!HAS_API_KEY) return res.json({ oauth: true });
@@ -674,4 +766,10 @@ process.on("SIGTERM", () => {
 app.listen(PORT, () => {
   console.log(`Image Gen running at http://localhost:${PORT}`);
   console.log(`Provider policy: OAuth only (API key hard-disabled). OAuth proxy port ${OAUTH_PORT}.`);
+  try {
+    const s = ensureDefaultSession();
+    console.log(`[db] default session: ${s.id} (${s.title})`);
+  } catch (err) {
+    console.error("[db] bootstrap failed:", err.message);
+  }
 });

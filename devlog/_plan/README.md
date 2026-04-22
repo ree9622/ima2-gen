@@ -23,6 +23,18 @@
 - 서버 계약(/api/*) 변경 없음
 - 카드뉴스 등 후속 기능의 토대
 
+### 0.02 Generate UX — 생성 진행 상태 표시
+- 자세한 플랜: `devlog/0.02-generate-ux/README.md`
+- Generate 버튼 스피너 전환 제거, disabled만
+- 캔버스 하단에 "생성중 N개" 큐 표시
+- 병렬 처리, 완료순 제거 + 즉시 이미지 표시
+- n=1 요청을 n번 호출 방식 (서버 변경 없음)
+
+### 0.03 Image Display — 결과 표시 방식 설계
+- 자세한 탐색: `devlog/0.03-image-display/README.md`
+- 그리드 / 캐러셀 / 분할비교 / 타임라인 / 라이트박스 중 결정
+- 히스토리 영속성, 메타데이터 표시 범위 결정
+
 ### 0.2 글로벌 에러 핸들러
 - Express 글로벌 에러 미들웨어 추가
 - 커스텀 에러 클래스 (ValidationError, GenerationError)

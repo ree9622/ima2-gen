@@ -6,11 +6,8 @@ export function GenerateButton() {
   const generate = useAppStore((s) => s.generate);
 
   const loading = activeGenerations > 0;
-  const label = loading
-    ? `Generating (${activeGenerations})...`
-    : mode === "i2i"
-    ? "Edit Image"
-    : "Generate";
+  const base = mode === "i2i" ? "Edit Image" : "Generate";
+  const label = loading ? `${base} (${activeGenerations})` : base;
 
   return (
     <button

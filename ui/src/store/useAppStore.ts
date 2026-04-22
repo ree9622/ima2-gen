@@ -9,12 +9,14 @@ import type {
   Provider,
   Quality,
   SizePreset,
+  UIMode,
 } from "../types";
 import { isMultiResponse } from "../types";
-import { postEdit, postGenerate } from "../lib/api";
+import { postEdit, postGenerate, getHistory, postNodeGenerate } from "../lib/api";
 import { compressImage, dataUrlToBase64, readFileAsDataURL } from "../lib/image";
-import { loadHistoryFromStorage, persistHistory } from "../lib/storage";
 import { snap16 } from "../lib/size";
+import { newClientNodeId, initialPos, type ClientNodeId } from "../lib/graph";
+import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
 
 function loadRightPanelOpen(): boolean {
   try {
@@ -25,6 +27,31 @@ function loadRightPanelOpen(): boolean {
     return true;
   }
 }
+
+function loadUIMode(): UIMode {
+  try {
+    const raw = localStorage.getItem("ima2.uiMode");
+    if (raw === "node" || raw === "classic") return raw;
+  } catch {}
+  return "classic";
+}
+
+export type ImageNodeStatus = "empty" | "pending" | "ready" | "error";
+
+export type ImageNodeData = {
+  clientId: ClientNodeId;
+  serverNodeId: string | null;
+  parentServerNodeId: string | null;
+  prompt: string;
+  imageUrl: string | null;
+  status: ImageNodeStatus;
+  error?: string;
+  elapsed?: number;
+  webSearchCalls?: number;
+};
+
+export type GraphNode = FlowNode<ImageNodeData>;
+export type GraphEdge = FlowEdge;
 
 type ToastState = { message: string; error: boolean; id: number } | null;
 
@@ -41,11 +68,25 @@ type AppState = {
   prompt: string;
   sourceImageDataUrl: string | null;
   activeGenerations: number;
+  inFlight: { id: string; prompt: string }[];
   currentImage: GenerateItem | null;
   history: GenerateItem[];
   toast: ToastState;
   rightPanelOpen: boolean;
   toggleRightPanel: () => void;
+
+  uiMode: UIMode;
+  setUIMode: (m: UIMode) => void;
+
+  graphNodes: GraphNode[];
+  graphEdges: GraphEdge[];
+  setGraphNodes: (n: GraphNode[]) => void;
+  setGraphEdges: (e: GraphEdge[]) => void;
+  addRootNode: () => ClientNodeId;
+  addChildNode: (parentClientId: ClientNodeId) => ClientNodeId;
+  updateNodePrompt: (clientId: ClientNodeId, prompt: string) => void;
+  generateNode: (clientId: ClientNodeId) => Promise<void>;
+  deleteNode: (clientId: ClientNodeId) => void;
 
   setMode: (mode: Mode) => void;
   setProvider: (p: Provider) => void;
@@ -80,6 +121,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   prompt: "",
   sourceImageDataUrl: null,
   activeGenerations: 0,
+  inFlight: [],
   currentImage: null,
   history: [],
   toast: null,
@@ -92,6 +134,146 @@ export const useAppStore = create<AppState>((set, get) => ({
       } catch {}
       return { rightPanelOpen: next };
     }),
+
+  uiMode: loadUIMode(),
+  setUIMode: (m) => {
+    try { localStorage.setItem("ima2.uiMode", m); } catch {}
+    set({ uiMode: m });
+  },
+
+  graphNodes: [],
+  graphEdges: [],
+  setGraphNodes: (graphNodes) => set({ graphNodes }),
+  setGraphEdges: (graphEdges) => set({ graphEdges }),
+
+  addRootNode: () => {
+    const clientId = newClientNodeId();
+    const depth = 0;
+    const siblings = get().graphNodes.filter((n) => !n.data.parentServerNodeId).length;
+    const node: GraphNode = {
+      id: clientId,
+      type: "imageNode",
+      position: initialPos(depth, siblings),
+      data: {
+        clientId,
+        serverNodeId: null,
+        parentServerNodeId: null,
+        prompt: "",
+        imageUrl: null,
+        status: "empty",
+      },
+    };
+    set({ graphNodes: [...get().graphNodes, node] });
+    return clientId;
+  },
+
+  addChildNode: (parentClientId) => {
+    const parent = get().graphNodes.find((n) => n.id === parentClientId);
+    if (!parent) return parentClientId;
+    const clientId = newClientNodeId();
+    const siblings = get().graphEdges.filter((e) => e.source === parentClientId).length;
+    const node: GraphNode = {
+      id: clientId,
+      type: "imageNode",
+      position: { x: parent.position.x + 360, y: parent.position.y + siblings * 320 },
+      data: {
+        clientId,
+        serverNodeId: null,
+        parentServerNodeId: parent.data.serverNodeId,
+        prompt: "",
+        imageUrl: null,
+        status: "empty",
+      },
+    };
+    const edge: GraphEdge = {
+      id: `${parentClientId}->${clientId}`,
+      source: parentClientId,
+      target: clientId,
+    };
+    set({
+      graphNodes: [...get().graphNodes, node],
+      graphEdges: [...get().graphEdges, edge],
+    });
+    return clientId;
+  },
+
+  updateNodePrompt: (clientId, prompt) => {
+    set({
+      graphNodes: get().graphNodes.map((n) =>
+        n.id === clientId ? { ...n, data: { ...n.data, prompt } } : n,
+      ),
+    });
+  },
+
+  async generateNode(clientId) {
+    const node = get().graphNodes.find((n) => n.id === clientId);
+    if (!node) return;
+    const { prompt, parentServerNodeId } = node.data;
+    if (!prompt.trim()) {
+      get().showToast("Prompt required", true);
+      return;
+    }
+    const s = get();
+    const size = s.getResolvedSize();
+
+    // mark pending
+    const flightId = `fn_${clientId}`;
+    set({
+      graphNodes: get().graphNodes.map((n) =>
+        n.id === clientId ? { ...n, data: { ...n.data, status: "pending", error: undefined } } : n,
+      ),
+      activeGenerations: s.activeGenerations + 1,
+      inFlight: [...s.inFlight, { id: flightId, prompt }],
+    });
+
+    try {
+      const res = await postNodeGenerate({
+        parentNodeId: parentServerNodeId,
+        prompt,
+        quality: s.quality,
+        size,
+        format: s.format,
+      });
+      set({
+        graphNodes: get().graphNodes.map((n) =>
+          n.id === clientId
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  serverNodeId: res.nodeId,
+                  imageUrl: res.url,
+                  status: "ready",
+                  elapsed: res.elapsed,
+                  webSearchCalls: res.webSearchCalls,
+                },
+              }
+            : n,
+        ),
+      });
+      get().showToast(`Node ${res.nodeId.slice(0, 8)}… in ${res.elapsed}s`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Node generation failed";
+      set({
+        graphNodes: get().graphNodes.map((n) =>
+          n.id === clientId ? { ...n, data: { ...n.data, status: "error", error: msg } } : n,
+        ),
+      });
+      get().showToast(msg, true);
+    } finally {
+      set({
+        activeGenerations: Math.max(0, get().activeGenerations - 1),
+        inFlight: get().inFlight.filter((f) => f.id !== flightId),
+      });
+    }
+  },
+
+  deleteNode: (clientId) => {
+    set({
+      graphNodes: get().graphNodes.filter((n) => n.id !== clientId),
+      graphEdges: get().graphEdges.filter((e) => e.source !== clientId && e.target !== clientId),
+    });
+  },
 
   setMode: (mode) => set({ mode }),
   setProvider: (provider) => set({ provider }),
@@ -135,7 +317,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const size = s.getResolvedSize();
     const isEdit = s.mode === "i2i" && !!s.sourceImageDataUrl;
 
-    set({ activeGenerations: s.activeGenerations + 1 });
+    const flightId = `f_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    set({
+      activeGenerations: s.activeGenerations + 1,
+      inFlight: [...s.inFlight, { id: flightId, prompt }],
+    });
 
     try {
       const payload = {
@@ -164,6 +350,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             elapsed: res.elapsed,
             provider: res.provider,
             usage: res.usage,
+            quality: res.quality ?? s.quality,
+            size: res.size ?? size,
           };
           await addHistory(item, set, get);
         }
@@ -179,6 +367,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             elapsed: res.elapsed,
             provider: res.provider,
             usage: res.usage,
+            quality: res.quality ?? s.quality,
+            size: res.size ?? size,
           };
         } else {
           item = {
@@ -188,6 +378,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             elapsed: res.elapsed,
             provider: res.provider,
             usage: res.usage,
+            quality: res.quality ?? s.quality,
+            size: res.size ?? size,
           };
         }
         await addHistory(item, set, get);
@@ -198,15 +390,36 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().showToast(msg, true);
     } finally {
       const remaining = Math.max(0, get().activeGenerations - 1);
-      set({ activeGenerations: remaining });
+      set({
+        activeGenerations: remaining,
+        inFlight: get().inFlight.filter((f) => f.id !== flightId),
+      });
     }
   },
 
   hydrateHistory() {
-    const history = loadHistoryFromStorage();
-    if (history.length > 0) {
-      set({ history, currentImage: history[0] });
-    }
+    void (async () => {
+      try {
+        const res = await getHistory(50);
+        const history: GenerateItem[] = res.items.map((it) => ({
+          image: it.url,
+          url: it.url,
+          filename: it.filename,
+          prompt: it.prompt || undefined,
+          provider: it.provider,
+          quality: it.quality || undefined,
+          size: it.size || undefined,
+          usage: (it.usage as GenerateItem["usage"]) ?? undefined,
+          thumb: it.url,
+          createdAt: it.createdAt,
+        }));
+        if (history.length > 0) {
+          set({ history, currentImage: history[0] });
+        }
+      } catch (err) {
+        console.warn("[history] load failed:", err);
+      }
+    })();
   },
 
   showToast(message, error = false) {
@@ -220,8 +433,13 @@ async function addHistory(
   get: () => AppState,
 ): Promise<void> {
   const thumb = await compressImage(item.image).catch(() => item.image);
-  const withThumb: GenerateItem = { ...item, thumb };
+  const url = item.filename ? `/generated/${item.filename}` : item.image;
+  const withThumb: GenerateItem = {
+    ...item,
+    thumb,
+    url,
+    createdAt: item.createdAt || Date.now(),
+  };
   const history = [withThumb, ...get().history].slice(0, 50);
   set({ history, currentImage: withThumb });
-  persistHistory(history);
 }

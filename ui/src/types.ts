@@ -1,4 +1,5 @@
 export type Mode = "t2i" | "i2i";
+export type UIMode = "classic" | "node";
 export type Provider = "oauth" | "api";
 export type Quality = "low" | "medium" | "high";
 export type Format = "png" | "jpeg" | "webp";
@@ -23,12 +24,16 @@ export type SizePreset =
 
 export type GenerateItem = {
   image: string;
+  url?: string;
   filename?: string;
   prompt?: string;
   elapsed?: number;
   provider?: string;
+  quality?: string;
+  size?: string;
   usage?: { total_tokens?: number } & Record<string, unknown>;
   thumb?: string;
+  createdAt?: number;
 };
 
 export type GenerateSingleResponse = {
@@ -37,6 +42,8 @@ export type GenerateSingleResponse = {
   filename: string;
   usage?: GenerateItem["usage"];
   provider: string;
+  quality?: string;
+  size?: string;
 };
 
 export type GenerateMultiResponse = {
@@ -45,6 +52,8 @@ export type GenerateMultiResponse = {
   count: number;
   usage?: GenerateItem["usage"];
   provider: string;
+  quality?: string;
+  size?: string;
 };
 
 export type GenerateResponse = GenerateSingleResponse | GenerateMultiResponse;

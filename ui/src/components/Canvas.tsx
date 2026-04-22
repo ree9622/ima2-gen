@@ -14,12 +14,15 @@ export function Canvas() {
     showToast("Prompt copied");
   };
 
+  const displayQuality = currentImage?.quality ?? quality;
+  const displaySize = currentImage?.size ?? getResolvedSize();
+
   return (
     <main className="canvas">
       <div className={`progress-bar${activeGenerations > 0 ? " active" : ""}`} />
       {currentImage ? (
         <div className="result-container visible">
-          <img className="result-img" src={currentImage.image} alt="result" />
+          <img className="result-img" src={currentImage.url ?? currentImage.image} alt="result" />
           {currentImage.prompt ? (
             <div className="result-prompt" onClick={copyPrompt}>
               {currentImage.prompt}
@@ -31,8 +34,8 @@ export function Canvas() {
               currentImage.usage
                 ? `${currentImage.usage.total_tokens ?? "?"} tokens`
                 : null,
-              quality,
-              getResolvedSize(),
+              displayQuality,
+              displaySize,
               currentImage.provider ?? null,
             ]
               .filter((v): v is string => Boolean(v))

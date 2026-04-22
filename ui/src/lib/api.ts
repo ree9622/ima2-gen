@@ -22,8 +22,25 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-export function getInflight(): Promise<{ jobs: Array<{ requestId: string; kind: string; prompt: string; startedAt: number; phase?: string; phaseAt?: number; meta?: Record<string, unknown> }> }> {
-  return jsonFetch("/api/inflight");
+export function getInflight(params?: {
+  kind?: "classic" | "node";
+  sessionId?: string;
+}): Promise<{
+  jobs: Array<{
+    requestId: string;
+    kind: string;
+    prompt: string;
+    startedAt: number;
+    phase?: string;
+    phaseAt?: number;
+    meta?: Record<string, unknown>;
+  }>;
+}> {
+  const qs = new URLSearchParams();
+  if (params?.kind) qs.set("kind", params.kind);
+  if (params?.sessionId) qs.set("sessionId", params.sessionId);
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+  return jsonFetch(`/api/inflight${suffix}`);
 }
 
 export function getOAuthStatus(): Promise<OAuthStatus> {

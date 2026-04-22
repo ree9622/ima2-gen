@@ -289,7 +289,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       // Merge server-side phase info so the spinner label reflects real progress
       try {
-        const { jobs } = await getInflight();
+        const inflightKind = get().uiMode === "node" ? "node" : "classic";
+        const inflightSessionId =
+          inflightKind === "node" ? get().activeSessionId ?? undefined : undefined;
+        const { jobs } = await getInflight({
+          kind: inflightKind,
+          sessionId: inflightSessionId,
+        });
         const byId = new Map(jobs.map((j) => [j.requestId, j.phase] as const));
         let changed = false;
         const nextInflight = get().inFlight.map((f) => {
@@ -351,7 +357,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   reconcileInflight: async () => {
     try {
-      const { jobs } = await getInflight();
+      const inflightKind = get().uiMode === "node" ? "node" : "classic";
+      const inflightSessionId =
+        inflightKind === "node" ? get().activeSessionId ?? undefined : undefined;
+      const { jobs } = await getInflight({
+        kind: inflightKind,
+        sessionId: inflightSessionId,
+      });
       const serverIds = new Set(jobs.map((j) => j.requestId));
       const now = Date.now();
       const local = get().inFlight;

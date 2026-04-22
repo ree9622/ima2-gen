@@ -324,6 +324,11 @@ app.get("/api/inflight", (req, res) => {
   res.json({ jobs: listJobs({ kind, sessionId }) });
 });
 
+app.delete("/api/inflight/:requestId", (req, res) => {
+  finishJob(req.params.requestId, { canceled: true });
+  res.status(204).end();
+});
+
 // ── Generate image (supports parallel via n) ──
 app.post("/api/generate", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;

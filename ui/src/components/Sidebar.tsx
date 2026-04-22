@@ -1,7 +1,7 @@
 import { BillingBar } from "./BillingBar";
 import { ProviderSelect } from "./ProviderSelect";
 import { UIModeSwitch } from "./UIModeSwitch";
-import { PromptInput } from "./PromptInput";
+import { PromptComposer } from "./PromptComposer";
 import { GenerateButton } from "./GenerateButton";
 import { InFlightList } from "./InFlightList";
 import { HistoryStrip } from "./HistoryStrip";
@@ -22,7 +22,7 @@ export function Sidebar() {
         {uiMode === "classic" ? (
           <>
             <ProviderSelect />
-            <PromptInput />
+            <PromptComposer />
             <GenerateButton />
             <InFlightList />
           </>

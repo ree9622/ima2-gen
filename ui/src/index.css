@@ -617,6 +617,103 @@ body {
   padding: 4px 0;
 }
 
+/* ── Provider pills (slim) ── */
+.provider-row {
+  display: flex;
+  gap: 8px;
+}
+.provider-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.provider-pill:hover {
+  border-color: #3a3a3a;
+}
+.provider-pill.selected {
+  border-color: var(--accent);
+  background: #1a1a1a;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.status-dot--ok {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+.status-dot--bad {
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+}
+
+/* ── Modal ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  width: min(440px, 90vw);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+.modal__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.modal__body p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.modal__hint {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.modal__btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modal__btn:hover {
+  background: var(--accent-bright);
+}
+
 .option-sub {
   font-size: 10px;
   color: var(--text-dim);

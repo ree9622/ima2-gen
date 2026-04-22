@@ -17,7 +17,6 @@ export function Sidebar() {
         Image Gen
         <span className="logo-badge">gpt-image-2</span>
       </div>
-      <BillingBar />
       <UIModeSwitch />
       {uiMode === "classic" ? (
         <>

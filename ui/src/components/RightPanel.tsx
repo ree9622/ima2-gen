@@ -1,4 +1,5 @@
 import { useAppStore } from "../store/useAppStore";
+import { BillingBar } from "./BillingBar";
 import { OptionGroup } from "./OptionGroup";
 import { SizePicker } from "./SizePicker";
 import { CostEstimate } from "./CostEstimate";
@@ -65,6 +66,7 @@ export function RightPanel() {
         className="right-panel-body"
         hidden={!open}
       >
+        <BillingBar />
         <div className="section-title">Details</div>
         <OptionGroup<Quality>
           title="Quality"

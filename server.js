@@ -688,6 +688,14 @@ app.put("/api/sessions/:id/graph", (req, res) => {
         error: { code: "INVALID_GRAPH", message: "nodes and edges arrays required" },
       });
     }
+    if (nodes.length > 500 || edges.length > 1000) {
+      return res.status(413).json({
+        error: {
+          code: "GRAPH_TOO_LARGE",
+          message: `Graph too large (max 500 nodes / 1000 edges), got ${nodes.length}/${edges.length}`,
+        },
+      });
+    }
     saveGraph(req.params.id, { nodes, edges });
     res.json({ ok: true, nodes: nodes.length, edges: edges.length });
   } catch (err) {

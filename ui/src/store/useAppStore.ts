@@ -199,8 +199,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async switchSession(id) {
-    await get().flushGraphSave();
     set({ sessionLoading: true });
+    await get().flushGraphSave();
     try {
       const { session } = await apiGetSession(id);
       const graphNodes: GraphNode[] = session.nodes.map((n) => {
@@ -673,7 +673,9 @@ function doSave(get: () => AppState): Promise<void> {
 }
 
 function scheduleGraphSaveImpl(get: () => AppState) {
-  if (!get().activeSessionId) return;
+  const s = get();
+  if (!s.activeSessionId) return;
+  if (s.sessionLoading) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
@@ -691,6 +693,47 @@ async function flushGraphSaveImpl(get: () => AppState) {
   } else if (saveInFlight) {
     await saveInFlight;
   }
+}
+
+// Synchronous-ish save on page unload via sendBeacon
+// (fetch in beforeunload is not reliable in modern browsers).
+export function flushGraphSaveBeacon(get: () => AppState): void {
+  const s = get();
+  if (!s.activeSessionId) return;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  const nodes = s.graphNodes.map((n) => ({
+    id: n.id,
+    x: n.position.x,
+    y: n.position.y,
+    data: n.data as unknown as Record<string, unknown>,
+  }));
+  const edges = s.graphEdges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    data: {},
+  }));
+  const url = `/api/sessions/${encodeURIComponent(s.activeSessionId)}/graph`;
+  const body = JSON.stringify({ nodes, edges });
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      const blob = new Blob([body], { type: "application/json" });
+      navigator.sendBeacon(url, blob);
+      return;
+    }
+  } catch {}
+  // Fallback: fire-and-forget fetch with keepalive
+  try {
+    void fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    });
+  } catch {}
 }
 
 async function addHistory(

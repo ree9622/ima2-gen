@@ -26,6 +26,7 @@ function NodeCanvasInner() {
   const addChildNodeAt = useAppStore((s) => s.addChildNodeAt);
   const connectNodes = useAppStore((s) => s.connectNodes);
   const deleteNodes = useAppStore((s) => s.deleteNodes);
+  const sessionLoading = useAppStore((s) => s.sessionLoading);
 
   const { screenToFlowPosition } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -72,6 +73,7 @@ function NodeCanvasInner() {
 
   return (
     <main className="node-canvas" ref={wrapperRef}>
+      {sessionLoading && <div className="node-canvas__loading">Loading session…</div>}
       {nodes.length === 0 ? (
         <button type="button" className="node-canvas__plus" onClick={() => addRootNode()}>
           + Add first node

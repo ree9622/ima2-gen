@@ -4,12 +4,11 @@ import { Canvas } from "./components/Canvas";
 import { NodeCanvas } from "./components/NodeCanvas";
 import { RightPanel } from "./components/RightPanel";
 import { Toast } from "./components/Toast";
-import { useAppStore } from "./store/useAppStore";
+import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 
 export default function App() {
   const hydrateHistory = useAppStore((s) => s.hydrateHistory);
   const loadSessions = useAppStore((s) => s.loadSessions);
-  const flushGraphSave = useAppStore((s) => s.flushGraphSave);
   const uiMode = useAppStore((s) => s.uiMode);
 
   useEffect(() => {
@@ -19,7 +18,7 @@ export default function App() {
 
   useEffect(() => {
     const onHide = () => {
-      void flushGraphSave();
+      flushGraphSaveBeacon(useAppStore.getState);
     };
     window.addEventListener("beforeunload", onHide);
     document.addEventListener("visibilitychange", onHide);
@@ -27,7 +26,7 @@ export default function App() {
       window.removeEventListener("beforeunload", onHide);
       document.removeEventListener("visibilitychange", onHide);
     };
-  }, [flushGraphSave]);
+  }, []);
 
   return (
     <>

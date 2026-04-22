@@ -64,6 +64,7 @@ export type NodeGenerateRequest = {
   size: string;
   format: string;
   provider?: "oauth";
+  references?: string[];
 };
 
 export type NodeGenerateResponse = {

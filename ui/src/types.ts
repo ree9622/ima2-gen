@@ -70,6 +70,7 @@ export type GenerateRequest = {
   provider: Provider;
   n: number;
   image?: string;
+  references?: string[];
 };
 
 export type OAuthStatus = {

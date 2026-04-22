@@ -10,12 +10,14 @@ import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 export default function App() {
   const hydrateHistory = useAppStore((s) => s.hydrateHistory);
   const loadSessions = useAppStore((s) => s.loadSessions);
+  const startInFlightPolling = useAppStore((s) => s.startInFlightPolling);
   const uiMode = useAppStore((s) => s.uiMode);
 
   useEffect(() => {
     hydrateHistory();
     loadSessions();
-  }, [hydrateHistory, loadSessions]);
+    startInFlightPolling();
+  }, [hydrateHistory, loadSessions, startInFlightPolling]);
 
   useEffect(() => {
     const onHide = () => {

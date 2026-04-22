@@ -48,6 +48,29 @@ app.use("/generated", express.static(join(__dirname, "generated"), {
   immutable: true,
 }));
 
+// ── Reference validation ──
+const MAX_REF_B64_BYTES = 7 * 1024 * 1024; // ~5.2MB binary after base64 decode
+const BASE64_RE = /^[A-Za-z0-9+/]+=*$/;
+function validateAndNormalizeRefs(references) {
+  if (!Array.isArray(references)) return { error: "references must be an array" };
+  if (references.length > 5) return { error: "references may not exceed 5 items" };
+  const out = [];
+  for (let i = 0; i < references.length; i++) {
+    const r = references[i];
+    if (typeof r !== "string") return { error: `references[${i}] must be a string` };
+    const b64 = r.replace(/^data:[^;]+;base64,/, "");
+    if (!b64) return { error: `references[${i}] is empty` };
+    if (b64.length > MAX_REF_B64_BYTES) {
+      return { error: `references[${i}] exceeds ${MAX_REF_B64_BYTES} bytes` };
+    }
+    if (!BASE64_RE.test(b64)) {
+      return { error: `references[${i}] is not valid base64` };
+    }
+    out.push(b64);
+  }
+  return { refs: out };
+}
+
 // ── OAuth proxy: generate via Responses API (stream mode) ──
 // Research mode is ALWAYS ON for OAuth — web_search is included in tools, GPT
 // decides per-prompt whether to actually invoke it. Simple prompts skip web_search
@@ -55,12 +78,22 @@ app.use("/generated", express.static(join(__dirname, "generated"), {
 const RESEARCH_SUFFIX =
   "\n\n필요하면 먼저 웹에서 이 주제의 정확한 레퍼런스(얼굴/제품/장소/최신 정보)를 검색한 뒤 그걸 토대로 이미지를 생성해. 단순한 주제는 곧바로 생성해도 돼.";
 
-async function generateViaOAuth(prompt, quality, size) {
+async function generateViaOAuth(prompt, quality, size, references = []) {
   const tools = [
     { type: "web_search" },
     { type: "image_generation", quality, size },
   ];
-  const userContent = `Generate an image: ${prompt}${RESEARCH_SUFFIX}`;
+
+  const textPrompt = `Generate an image: ${prompt}${RESEARCH_SUFFIX}`;
+  const userContent = references.length
+    ? [
+        ...references.map((b64) => ({
+          type: "input_image",
+          image_url: `data:image/png;base64,${b64}`,
+        })),
+        { type: "input_text", text: textPrompt },
+      ]
+    : textPrompt;
 
   const res = await fetch(`${OAUTH_URL}/v1/responses`, {
     method: "POST",
@@ -278,17 +311,24 @@ app.get("/api/oauth/status", async (_req, res) => {
 // ── Generate image (supports parallel via n) ──
 app.post("/api/generate", async (req, res) => {
   try {
-    const { prompt, quality = "low", size = "1024x1024", format = "png", moderation = "low", provider = "auto", n = 1 } =
+    const { prompt, quality = "low", size = "1024x1024", format = "png", moderation = "low", provider = "auto", n = 1, references = [] } =
       req.body;
 
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
     const count = Math.min(Math.max(parseInt(n) || 1, 1), 8);
 
+    if (!Array.isArray(references) || references.length > 5) {
+      return res.status(400).json({ error: "references must be an array of up to 5 base64 strings" });
+    }
+    const refCheck = validateAndNormalizeRefs(references);
+    if (refCheck.error) return res.status(400).json({ error: refCheck.error });
+    const refB64s = refCheck.refs;
+
     if (provider === "api") {
       return res.status(403).json({ error: "API key provider is disabled. Use OAuth (Codex login).", code: "APIKEY_DISABLED" });
     }
     const useOAuth = true;
-    console.log(`[generate] provider=oauth quality=${quality} size=${size} n=${count}`);
+    console.log(`[generate] provider=oauth quality=${quality} size=${size} n=${count} refs=${refB64s.length}`);
     const startTime = Date.now();
 
     const mimeMap = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
@@ -300,7 +340,7 @@ app.post("/api/generate", async (req, res) => {
       let lastErr;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const r = await generateViaOAuth(prompt, quality, size);
+          const r = await generateViaOAuth(prompt, quality, size, refB64s);
           if (r.b64) return r;
           lastErr = new Error("Empty response (safety refusal)");
         } catch (e) {
@@ -501,7 +541,7 @@ app.post("/api/node/generate", async (req, res) => {
   const body = req.body || {};
   const parentNodeId = body.parentNodeId ?? null;
   try {
-    const { prompt, quality = "low", size = "1024x1024", format = "png" } = body;
+    const { prompt, quality = "low", size = "1024x1024", format = "png", references = [] } = body;
     const { provider = "oauth" } = body;
 
     if (provider === "api") {
@@ -516,6 +556,20 @@ app.post("/api/node/generate", async (req, res) => {
         parentNodeId,
       });
     }
+    if (!Array.isArray(references) || references.length > 5) {
+      return res.status(400).json({
+        error: { code: "INVALID_REFS", message: "references must be an array of up to 5 base64 strings" },
+        parentNodeId,
+      });
+    }
+    const refCheck = validateAndNormalizeRefs(references);
+    if (refCheck.error) {
+      return res.status(400).json({
+        error: { code: "INVALID_REFS", message: refCheck.error },
+        parentNodeId,
+      });
+    }
+    const refB64s = refCheck.refs;
 
     const startTime = Date.now();
     let parentB64 = null;
@@ -530,7 +584,7 @@ app.post("/api/node/generate", async (req, res) => {
       try {
         const r = parentB64
           ? await editViaOAuth(prompt, parentB64, quality, size)
-          : await generateViaOAuth(prompt, quality, size);
+          : await generateViaOAuth(prompt, quality, size, refB64s);
         if (r.b64) {
           b64 = r.b64;
           usage = r.usage;

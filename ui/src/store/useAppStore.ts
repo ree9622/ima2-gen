@@ -46,6 +46,34 @@ function loadUIMode(): UIMode {
   return "classic";
 }
 
+type PersistedInFlight = { id: string; prompt: string; startedAt: number };
+const INFLIGHT_TTL_MS = 180_000;
+
+function loadInFlight(): PersistedInFlight[] {
+  try {
+    const raw = localStorage.getItem("ima2.inFlight");
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const now = Date.now();
+    return arr
+      .filter(
+        (x) =>
+          x && typeof x.id === "string" && typeof x.prompt === "string" &&
+          typeof x.startedAt === "number" && now - x.startedAt < INFLIGHT_TTL_MS,
+      )
+      .map((x) => ({ id: x.id, prompt: x.prompt, startedAt: x.startedAt }));
+  } catch {
+    return [];
+  }
+}
+
+function saveInFlight(list: PersistedInFlight[]): void {
+  try {
+    localStorage.setItem("ima2.inFlight", JSON.stringify(list));
+  } catch {}
+}
+
 export type ImageNodeStatus = "empty" | "pending" | "ready" | "error";
 
 export type ImageNodeData = {
@@ -75,8 +103,15 @@ type AppState = {
   moderation: Moderation;
   count: Count;
   prompt: string;
+  referenceImages: string[];
+  addReferences: (files: File[]) => Promise<void>;
+  addReferenceDataUrl: (dataUrl: string) => void;
+  removeReference: (index: number) => void;
+  clearReferences: () => void;
+  useCurrentAsReference: () => void;
   activeGenerations: number;
-  inFlight: { id: string; prompt: string }[];
+  inFlight: PersistedInFlight[];
+  startInFlightPolling: () => void;
   currentImage: GenerateItem | null;
   history: GenerateItem[];
   toast: ToastState;
@@ -139,8 +174,104 @@ export const useAppStore = create<AppState>((set, get) => ({
   moderation: "low",
   count: 1,
   prompt: "",
-  activeGenerations: 0,
-  inFlight: [],
+  referenceImages: [],
+  addReferences: async (files) => {
+    const allowed = 5 - get().referenceImages.length;
+    const toAdd = files.slice(0, Math.max(0, allowed));
+    const dataUrls = await Promise.all(
+      toAdd.map(
+        (f) =>
+          new Promise<string | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(f);
+          }),
+      ),
+    );
+    const valid = dataUrls.filter((x): x is string => !!x);
+    set((s) => ({ referenceImages: [...s.referenceImages, ...valid].slice(0, 5) }));
+    if (files.length > allowed) {
+      get().showToast("Maximum 5 references; extras ignored", true);
+    }
+  },
+  addReferenceDataUrl: (dataUrl) => {
+    set((s) =>
+      s.referenceImages.length >= 5
+        ? s
+        : { referenceImages: [...s.referenceImages, dataUrl] },
+    );
+  },
+  removeReference: (index) => {
+    set((s) => ({
+      referenceImages: s.referenceImages.filter((_, i) => i !== index),
+    }));
+  },
+  clearReferences: () => set({ referenceImages: [] }),
+  useCurrentAsReference: () => {
+    const cur = get().currentImage;
+    if (!cur) {
+      get().showToast("No current image to use", true);
+      return;
+    }
+    if (get().referenceImages.length >= 5) {
+      get().showToast("Reference slots are full (max 5)", true);
+      return;
+    }
+    set((s) => ({ referenceImages: [...s.referenceImages, cur.image] }));
+    get().showToast("Added current image as reference");
+  },
+  activeGenerations: loadInFlight().length,
+  inFlight: loadInFlight(),
+  startInFlightPolling: () => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as { __ima2InflightTimer?: number };
+    if (w.__ima2InflightTimer) return;
+    const tick = async () => {
+      const cur = get().inFlight;
+      if (cur.length === 0) {
+        if (w.__ima2InflightTimer) {
+          clearInterval(w.__ima2InflightTimer);
+          w.__ima2InflightTimer = undefined;
+        }
+        return;
+      }
+      try {
+        const { items } = await getHistory(50);
+        const arr: GenerateItem[] = items.map((it) => ({
+          image: it.url,
+          filename: it.filename,
+          thumb: it.url,
+          prompt: it.prompt ?? undefined,
+          size: it.size ?? undefined,
+          quality: it.quality ?? undefined,
+          format: it.format as Format | undefined,
+          createdAt: it.createdAt,
+        }));
+        const existing = get().history;
+        const fresh = arr.filter(
+          (a) => !existing.some((e) => e.filename === a.filename),
+        );
+        if (fresh.length > 0) {
+          set((s) => ({ history: [...fresh, ...s.history].slice(0, 200) }));
+        }
+        // Prune strategy: TTL-based only. Do not attempt to correlate
+        // history items with inFlight entries — backend ordering may differ
+        // from local generation order under concurrency. Matching by prompt
+        // is also unreliable when the same prompt is queued twice.
+        const now = Date.now();
+        const remaining = get().inFlight.filter(
+          (f) => now - f.startedAt < INFLIGHT_TTL_MS,
+        );
+        if (remaining.length !== get().inFlight.length) {
+          saveInFlight(remaining);
+          set({ inFlight: remaining, activeGenerations: remaining.length });
+        }
+      } catch {}
+    };
+    w.__ima2InflightTimer = window.setInterval(tick, 4000) as unknown as number;
+  },
   currentImage: null,
   history: [],
   toast: null,
@@ -367,13 +498,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // mark pending
     const flightId = `fn_${clientId}`;
+    const startedAt = Date.now();
+    const nextInFlight: PersistedInFlight[] = [
+      ...s.inFlight,
+      { id: flightId, prompt, startedAt },
+    ];
+    saveInFlight(nextInFlight);
     set({
       graphNodes: get().graphNodes.map((n) =>
         n.id === clientId ? { ...n, data: { ...n.data, status: "pending", error: undefined } } : n,
       ),
       activeGenerations: s.activeGenerations + 1,
-      inFlight: [...s.inFlight, { id: flightId, prompt }],
+      inFlight: nextInFlight,
     });
+    get().startInFlightPolling();
 
     try {
       const res = await postNodeGenerate({
@@ -382,6 +520,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         quality: s.quality,
         size,
         format: s.format,
+        ...(s.referenceImages.length && !parentServerNodeId
+          ? { references: s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, "")) }
+          : {}),
       });
       set({
         graphNodes: get().graphNodes.map((n) =>
@@ -410,9 +551,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       get().showToast(msg, true);
     } finally {
+      const remaining = get().inFlight.filter((f) => f.id !== flightId);
+      saveInFlight(remaining);
       set({
         activeGenerations: Math.max(0, get().activeGenerations - 1),
-        inFlight: get().inFlight.filter((f) => f.id !== flightId),
+        inFlight: remaining,
       });
       get().scheduleGraphSave();
     }
@@ -511,10 +654,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const size = s.getResolvedSize();
 
     const flightId = `f_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const startedAt = Date.now();
+    const nextInFlight: PersistedInFlight[] = [
+      ...s.inFlight,
+      { id: flightId, prompt, startedAt },
+    ];
+    saveInFlight(nextInFlight);
     set({
       activeGenerations: s.activeGenerations + 1,
-      inFlight: [...s.inFlight, { id: flightId, prompt }],
+      inFlight: nextInFlight,
     });
+    get().startInFlightPolling();
 
     try {
       const payload = {
@@ -525,6 +675,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         moderation: s.moderation,
         provider: s.provider,
         n: s.count,
+        ...(s.referenceImages.length
+          ? { references: s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, "")) }
+          : {}),
       };
 
       const res: GenerateResponse = await postGenerate(payload);
@@ -577,10 +730,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const msg = err instanceof Error ? err.message : "Generation failed";
       get().showToast(msg, true);
     } finally {
-      const remaining = Math.max(0, get().activeGenerations - 1);
+      const remaining = get().inFlight.filter((f) => f.id !== flightId);
+      saveInFlight(remaining);
       set({
-        activeGenerations: remaining,
-        inFlight: get().inFlight.filter((f) => f.id !== flightId),
+        activeGenerations: Math.max(0, get().activeGenerations - 1),
+        inFlight: remaining,
       });
     }
   },
@@ -618,7 +772,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 // ── Graph autosave (module-level debounce) ──
 const SAVE_DEBOUNCE_MS = 800;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let saveInFlight: Promise<void> | null = null;
+let saveGraphPromise: Promise<void> | null = null;
 
 function doSave(get: () => AppState): Promise<void> {
   const id = get().activeSessionId;
@@ -650,8 +804,8 @@ function scheduleGraphSaveImpl(get: () => AppState) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    saveInFlight = doSave(get).finally(() => {
-      saveInFlight = null;
+    saveGraphPromise = doSave(get).finally(() => {
+      saveGraphPromise = null;
     });
   }, SAVE_DEBOUNCE_MS);
 }
@@ -661,8 +815,8 @@ async function flushGraphSaveImpl(get: () => AppState) {
     clearTimeout(saveTimer);
     saveTimer = null;
     await doSave(get);
-  } else if (saveInFlight) {
-    await saveInFlight;
+  } else if (saveGraphPromise) {
+    await saveGraphPromise;
   }
 }
 

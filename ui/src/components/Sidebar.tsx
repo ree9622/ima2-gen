@@ -1,4 +1,3 @@
-import { BillingBar } from "./BillingBar";
 import { ProviderSelect } from "./ProviderSelect";
 import { UIModeSwitch } from "./UIModeSwitch";
 import { PromptComposer } from "./PromptComposer";
@@ -9,7 +8,8 @@ import { SessionPicker } from "./SessionPicker";
 import { useAppStore } from "../store/useAppStore";
 
 export function Sidebar() {
-  const uiMode = useAppStore((s) => s.uiMode);
+  const uiModeRaw = useAppStore((s) => s.uiMode);
+  const uiMode = import.meta.env.DEV ? uiModeRaw : "classic";
   return (
     <aside className="sidebar">
       <div className="sidebar__scroll">

@@ -4,6 +4,8 @@ export function UIModeSwitch() {
   const uiMode = useAppStore((s) => s.uiMode);
   const setUIMode = useAppStore((s) => s.setUIMode);
 
+  if (!import.meta.env.DEV) return null;
+
   return (
     <div className="ui-mode-switch" role="tablist" aria-label="UI Mode">
       <button

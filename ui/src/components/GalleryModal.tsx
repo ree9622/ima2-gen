@@ -37,12 +37,12 @@ export function GalleryModal() {
   }, [open]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim().toLowerCase().normalize("NFC");
     if (!q) return history;
     return history.filter(
       (h) =>
-        (h.prompt ?? "").toLowerCase().includes(q) ||
-        (h.filename ?? "").toLowerCase().includes(q),
+        (h.prompt ?? "").toLowerCase().normalize("NFC").includes(q) ||
+        (h.filename ?? "").toLowerCase().normalize("NFC").includes(q),
     );
   }, [history, query]);
 

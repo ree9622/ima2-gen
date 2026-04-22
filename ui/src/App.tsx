@@ -13,7 +13,8 @@ export default function App() {
   const startInFlightPolling = useAppStore((s) => s.startInFlightPolling);
   const reconcileInflight = useAppStore((s) => s.reconcileInflight);
   const syncFromStorage = useAppStore((s) => s.syncFromStorage);
-  const uiMode = useAppStore((s) => s.uiMode);
+  const uiModeRaw = useAppStore((s) => s.uiMode);
+  const uiMode = import.meta.env.DEV ? uiModeRaw : "classic";
 
   useEffect(() => {
     hydrateHistory();

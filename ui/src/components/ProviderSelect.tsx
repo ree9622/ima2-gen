@@ -84,7 +84,6 @@ export function ProviderSelect() {
                 className={`status-dot ${ok ? "status-dot--ok" : "status-dot--bad"}`}
                 aria-hidden="true"
               />
-              <span aria-hidden="true">{ok ? "●" : "○"}</span>
               <span>{p.label}</span>
               <span className="sr-only">{ok ? "(ready)" : "(unavailable)"}</span>
             </button>

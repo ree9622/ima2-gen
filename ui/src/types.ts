@@ -71,6 +71,7 @@ export type GenerateRequest = {
   n: number;
   image?: string;
   references?: string[];
+  requestId?: string;
 };
 
 export type OAuthStatus = {

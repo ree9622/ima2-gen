@@ -22,6 +22,10 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
+export function getInflight(): Promise<{ jobs: Array<{ requestId: string; kind: string; prompt: string; startedAt: number; meta?: Record<string, unknown> }> }> {
+  return jsonFetch("/api/inflight");
+}
+
 export function getOAuthStatus(): Promise<OAuthStatus> {
   return jsonFetch<OAuthStatus>("/api/oauth/status");
 }
@@ -71,6 +75,7 @@ export type NodeGenerateRequest = {
   format: string;
   provider?: "oauth";
   references?: string[];
+  requestId?: string;
 };
 
 export type NodeGenerateResponse = {

@@ -77,12 +77,16 @@ export function ProviderSelect() {
               className={`provider-pill${selected ? " selected" : ""}`}
               onClick={() => handleClick(p.value)}
               title={ok ? `${p.label} ready` : availability[p.value].reason}
+              aria-label={`${p.label}: ${ok ? "ready" : "unavailable"}`}
+              aria-pressed={selected}
             >
               <span
                 className={`status-dot ${ok ? "status-dot--ok" : "status-dot--bad"}`}
                 aria-hidden="true"
               />
+              <span aria-hidden="true">{ok ? "●" : "○"}</span>
               <span>{p.label}</span>
+              <span className="sr-only">{ok ? "(ready)" : "(unavailable)"}</span>
             </button>
           );
         })}

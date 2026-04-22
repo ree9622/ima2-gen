@@ -14,6 +14,7 @@ import { isMultiResponse } from "../types";
 import {
   postGenerate,
   getHistory,
+  getInflight,
   postNodeGenerate,
   listSessions as apiListSessions,
   createSession as apiCreateSession,
@@ -71,7 +72,17 @@ function loadInFlight(): PersistedInFlight[] {
 function saveInFlight(list: PersistedInFlight[]): void {
   try {
     localStorage.setItem("ima2.inFlight", JSON.stringify(list));
-  } catch {}
+  } catch (err) {
+    // Quota exceeded or storage disabled. Notify the user once per tab.
+    const w = window as unknown as { __ima2QuotaWarned?: boolean };
+    if (!w.__ima2QuotaWarned) {
+      w.__ima2QuotaWarned = true;
+      console.warn("[ima2] localStorage write failed:", err);
+      try {
+        useAppStore.getState().showToast("Local storage full — recent state may not persist", true);
+      } catch {}
+    }
+  }
 }
 
 function loadSelectedFilename(): string | null {
@@ -130,6 +141,8 @@ type AppState = {
   activeGenerations: number;
   inFlight: PersistedInFlight[];
   startInFlightPolling: () => void;
+  reconcileInflight: () => Promise<void>;
+  syncFromStorage: () => void;
   currentImage: GenerateItem | null;
   history: GenerateItem[];
   toast: ToastState;
@@ -317,6 +330,46 @@ export const useAppStore = create<AppState>((set, get) => ({
       } catch {}
     };
     w.__ima2InflightTimer = window.setInterval(tick, 4000) as unknown as number;
+  },
+  reconcileInflight: async () => {
+    try {
+      const { jobs } = await getInflight();
+      const serverIds = new Set(jobs.map((j) => j.requestId));
+      const now = Date.now();
+      const local = get().inFlight;
+      // Keep local entries that are either still known to the server,
+      // or started very recently (<10s — request may be in-flight before
+      // /api/inflight registered). Drop anything else as stale.
+      const merged = local.filter(
+        (f) => serverIds.has(f.id) || now - f.startedAt < 10_000,
+      );
+      // Bring in server-only jobs (started from another tab / process)
+      const localIds = new Set(merged.map((f) => f.id));
+      for (const j of jobs) {
+        if (!localIds.has(j.requestId)) {
+          merged.push({ id: j.requestId, prompt: j.prompt || "", startedAt: j.startedAt });
+        }
+      }
+      saveInFlight(merged);
+      set({ inFlight: merged, activeGenerations: merged.length });
+      if (merged.length > 0) get().startInFlightPolling();
+    } catch {
+      // Silent — endpoint may not exist on older servers.
+    }
+  },
+  syncFromStorage: () => {
+    // Triggered by `storage` events (another tab changed localStorage).
+    const nextInflight = loadInFlight();
+    const nextSelected = loadSelectedFilename();
+    set((s) => ({
+      inFlight: nextInflight,
+      activeGenerations: nextInflight.length,
+      currentImage:
+        nextSelected && s.currentImage?.filename !== nextSelected
+          ? s.history.find((h) => h.filename === nextSelected) ?? s.currentImage
+          : s.currentImage,
+    }));
+    if (nextInflight.length > 0) get().startInFlightPolling();
   },
   currentImage: null,
   history: [],
@@ -566,6 +619,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         quality: s.quality,
         size,
         format: s.format,
+        requestId: flightId,
         ...(s.referenceImages.length && !parentServerNodeId
           ? { references: s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, "")) }
           : {}),
@@ -724,6 +778,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         moderation: s.moderation,
         provider: s.provider,
         n: s.count,
+        requestId: flightId,
         ...(s.referenceImages.length
           ? { references: s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, "")) }
           : {}),

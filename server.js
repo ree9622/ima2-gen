@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { existsSync } from "fs";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta } from "./lib/nodeStore.js";
+import { startJob, finishJob, listJobs } from "./lib/inflight.js";
 import {
   createSession,
   listSessions,
@@ -308,14 +309,21 @@ app.get("/api/oauth/status", async (_req, res) => {
   }
 });
 
+// ── Inflight registry ──
+app.get("/api/inflight", (_req, res) => {
+  res.json({ jobs: listJobs() });
+});
+
 // ── Generate image (supports parallel via n) ──
 app.post("/api/generate", async (req, res) => {
+  const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
   try {
     const { prompt, quality = "low", size = "1024x1024", format = "png", moderation = "low", provider = "auto", n = 1, references = [] } =
       req.body;
 
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
     const count = Math.min(Math.max(parseInt(n) || 1, 1), 8);
+    startJob({ requestId, kind: "classic", prompt, meta: { quality, size, n: count } });
 
     if (!Array.isArray(references) || references.length > 5) {
       return res.status(400).json({ error: "references must be an array of up to 5 base64 strings" });
@@ -408,13 +416,15 @@ app.post("/api/generate", async (req, res) => {
     };
 
     if (count === 1) {
-      res.json({ image: images[0].image, elapsed, filename: images[0].filename, ...extra });
+      res.json({ image: images[0].image, elapsed, filename: images[0].filename, requestId, ...extra });
     } else {
-      res.json({ images, elapsed, count: images.length, ...extra });
+      res.json({ images, elapsed, count: images.length, requestId, ...extra });
     }
   } catch (err) {
     console.error("Generate error:", err.message);
-    res.status(err.status || 500).json({ error: err.message, code: err.code });
+    res.status(err.status || 500).json({ error: err.message, code: err.code, requestId });
+  } finally {
+    finishJob(requestId);
   }
 });
 
@@ -540,6 +550,8 @@ app.post("/api/edit", async (req, res) => {
 app.post("/api/node/generate", async (req, res) => {
   const body = req.body || {};
   const parentNodeId = body.parentNodeId ?? null;
+  const requestId = typeof body.requestId === "string" ? body.requestId : null;
+  startJob({ requestId, kind: "node", prompt: body.prompt, meta: { parentNodeId } });
   try {
     const { prompt, quality = "low", size = "1024x1024", format = "png", references = [] } = body;
     const { provider = "oauth" } = body;
@@ -630,6 +642,7 @@ app.post("/api/node/generate", async (req, res) => {
     res.json({
       nodeId,
       parentNodeId,
+      requestId,
       image: `data:image/${format === "jpeg" ? "jpeg" : format};base64,${b64}`,
       filename,
       url: `/generated/${filename}`,
@@ -644,6 +657,8 @@ app.post("/api/node/generate", async (req, res) => {
       error: { code: err.code || "NODE_GEN_FAILED", message: err.message },
       parentNodeId,
     });
+  } finally {
+    finishJob(requestId);
   }
 });
 

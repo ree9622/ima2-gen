@@ -19,6 +19,7 @@ import {
   saveGraph,
   ensureDefaultSession,
 } from "./lib/sessionStore.js";
+import { trashAsset, restoreAsset } from "./lib/assetLifecycle.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -279,6 +280,7 @@ async function listImages(baseDir) {
   async function walk(dir, depth) {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const e of entries) {
+      if (e.name === ".trash") continue;
       const full = join(dir, e.name);
       if (e.isDirectory() && depth > 0) {
         await walk(full, depth - 1);
@@ -383,6 +385,29 @@ app.get("/api/history", async (req, res) => {
   } catch (err) {
     console.error("[history] error:", err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Asset lifecycle: soft-delete to .trash/, auto-purge after TTL ──
+app.delete("/api/history/:filename", async (req, res) => {
+  try {
+    const filename = decodeURIComponent(req.params.filename);
+    const result = await trashAsset(__dirname, filename);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message, code: err.code });
+  }
+});
+
+app.post("/api/history/:filename/restore", async (req, res) => {
+  try {
+    const filename = decodeURIComponent(req.params.filename);
+    const trashId = typeof req.body?.trashId === "string" ? req.body.trashId : null;
+    if (!trashId) return res.status(400).json({ error: "trashId required" });
+    const result = await restoreAsset(__dirname, trashId, filename);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

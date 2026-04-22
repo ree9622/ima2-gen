@@ -150,6 +150,25 @@ export function getHistoryGrouped(
   return jsonFetch(`/api/history?${qs.toString()}`);
 }
 
+export function deleteHistoryItem(filename: string): Promise<{
+  ok: boolean;
+  trashId: string;
+  filename: string;
+  unlinkAt: number;
+  sessionsTouched: number;
+  nodesTouched: number;
+}> {
+  return jsonFetch(`/api/history/${encodeURIComponent(filename)}`, { method: "DELETE" });
+}
+
+export function restoreHistoryItem(filename: string, trashId: string): Promise<{ ok: boolean }> {
+  return jsonFetch(`/api/history/${encodeURIComponent(filename)}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trashId }),
+  });
+}
+
 export type NodeGenerateRequest = {
   parentNodeId: string | null;
   prompt: string;

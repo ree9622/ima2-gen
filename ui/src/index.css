@@ -803,6 +803,87 @@ body {
   font-size: 14px;
 }
 
+/* ── Gallery 0.09.3 additions: delete + group toggle + undo ── */
+.gallery__tile-wrap {
+  position: relative;
+}
+.gallery__delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 2;
+}
+.gallery__tile-wrap:hover .gallery__delete {
+  opacity: 1;
+}
+.gallery__delete:hover {
+  background: var(--red, #e54040);
+}
+.gallery__group-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.gallery__group-toggle button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.gallery__group-toggle button.active {
+  background: var(--accent);
+  color: #000;
+}
+.gallery__undo {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+.gallery__undo button {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gallery__undo-timer {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Toast ── */
 .toast {
   position: fixed;

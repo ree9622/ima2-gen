@@ -249,6 +249,8 @@ type AppState = {
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
   selectHistory: (item: GenerateItem) => void;
+  removeFromHistory: (filename: string) => void;
+  addHistoryItem: (item: GenerateItem) => void;
   generate: () => Promise<void>;
   hydrateHistory: () => void;
   showToast: (message: string, error?: boolean) => void;
@@ -980,6 +982,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectHistory: (item) => {
     saveSelectedFilename(item.filename ?? null);
     set({ currentImage: item });
+  },
+
+  removeFromHistory: (filename) => {
+    const s = get();
+    const history = s.history.filter((h) => h.filename !== filename);
+    const stillCurrent =
+      s.currentImage && s.currentImage.filename === filename ? null : s.currentImage;
+    set({ history, currentImage: stillCurrent });
+    if (stillCurrent === null) saveSelectedFilename(null);
+  },
+
+  addHistoryItem: (item) => {
+    const s = get();
+    const exists = s.history.some(
+      (h) => item.filename && h.filename === item.filename,
+    );
+    if (exists) return;
+    const withDefaults: GenerateItem = {
+      ...item,
+      createdAt: item.createdAt || Date.now(),
+    };
+    set({ history: [withDefaults, ...s.history].slice(0, HISTORY_LIMIT) });
   },
 
   getResolvedSize: () => {

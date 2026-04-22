@@ -95,10 +95,59 @@ export type HistoryItem = {
   provider: string;
   usage: Record<string, unknown> | null;
   webSearchCalls: number;
+  sessionId?: string | null;
+  nodeId?: string | null;
+  parentNodeId?: string | null;
+  clientNodeId?: string | null;
+  kind?: string | null;
 };
 
-export function getHistory(limit = 50): Promise<{ items: HistoryItem[]; total: number }> {
-  return jsonFetch(`/api/history?limit=${limit}`);
+export type HistoryCursor = { before: number; beforeFilename: string };
+
+export type HistoryPage = {
+  items: HistoryItem[];
+  total: number;
+  nextCursor: HistoryCursor | null;
+};
+
+export type HistorySessionGroup = {
+  sessionId: string;
+  items: HistoryItem[];
+  lastUsedAt: number;
+};
+
+export type HistoryGroupedPage = {
+  sessions: HistorySessionGroup[];
+  loose: HistoryItem[];
+  total: number;
+  nextCursor: HistoryCursor | null;
+};
+
+export function getHistory(
+  params: { limit?: number; since?: number; cursor?: HistoryCursor; sessionId?: string } = {},
+): Promise<HistoryPage> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(params.limit ?? 50));
+  if (params.since != null) qs.set("since", String(params.since));
+  if (params.cursor) {
+    qs.set("before", String(params.cursor.before));
+    qs.set("beforeFilename", params.cursor.beforeFilename);
+  }
+  if (params.sessionId) qs.set("sessionId", params.sessionId);
+  return jsonFetch(`/api/history?${qs.toString()}`);
+}
+
+export function getHistoryGrouped(
+  params: { limit?: number; cursor?: HistoryCursor } = {},
+): Promise<HistoryGroupedPage> {
+  const qs = new URLSearchParams();
+  qs.set("groupBy", "session");
+  qs.set("limit", String(params.limit ?? 200));
+  if (params.cursor) {
+    qs.set("before", String(params.cursor.before));
+    qs.set("beforeFilename", params.cursor.beforeFilename);
+  }
+  return jsonFetch(`/api/history?${qs.toString()}`);
 }
 
 export type NodeGenerateRequest = {

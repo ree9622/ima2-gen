@@ -103,7 +103,7 @@ function saveSelectedFilename(filename: string | null): void {
   } catch {}
 }
 
-const HISTORY_LIMIT = 200;
+const HISTORY_LIMIT = 500;
 
 export type ImageNodeStatus =
   | "empty"
@@ -382,7 +382,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       } catch {}
       try {
-        const { items } = await getHistory(HISTORY_LIMIT);
+        const lastKnown = get().history.reduce(
+          (max, it) => (it.createdAt && it.createdAt > max ? it.createdAt : max),
+          0,
+        );
+        const { items } = await getHistory({ limit: HISTORY_LIMIT, since: lastKnown });
         const arr: GenerateItem[] = items.map((it) => ({
           image: it.url,
           url: it.url,
@@ -1080,7 +1084,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   hydrateHistory() {
     void (async () => {
       try {
-        const res = await getHistory(HISTORY_LIMIT);
+        const res = await getHistory({ limit: HISTORY_LIMIT });
         const history: GenerateItem[] = res.items.map((it) => ({
           image: it.url,
           url: it.url,

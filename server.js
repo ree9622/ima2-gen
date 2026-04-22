@@ -295,7 +295,14 @@ app.get("/api/history", async (req, res) => {
   try {
     const dir = join(__dirname, "generated");
     await mkdir(dir, { recursive: true });
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const limitRaw = parseInt(req.query.limit);
+    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50, 500);
+    const beforeTs = parseInt(req.query.before);
+    const beforeFn = typeof req.query.beforeFilename === "string" ? req.query.beforeFilename : null;
+    const sinceTs = parseInt(req.query.since);
+    const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
+    const groupBy = req.query.groupBy === "session" ? "session" : null;
+
     const imgs = await listImages(dir);
     const rows = await Promise.all(imgs.map(async ({ full, rel, name }) => {
       const st = await stat(full).catch(() => null);
@@ -317,10 +324,62 @@ app.get("/api/history", async (req, res) => {
         provider: meta?.provider || "oauth",
         usage: meta?.usage || null,
         webSearchCalls: meta?.webSearchCalls || 0,
+        sessionId: meta?.sessionId || null,
+        nodeId: meta?.nodeId || null,
+        parentNodeId: meta?.parentNodeId || null,
+        clientNodeId: meta?.clientNodeId || null,
+        kind: meta?.kind || null,
       };
     }));
-    rows.sort((a, b) => b.createdAt - a.createdAt);
-    res.json({ items: rows.slice(0, limit), total: rows.length });
+
+    // composite sort: createdAt DESC, filename DESC (stable tiebreaker)
+    rows.sort((a, b) => {
+      if (b.createdAt !== a.createdAt) return b.createdAt - a.createdAt;
+      return b.filename < a.filename ? -1 : b.filename > a.filename ? 1 : 0;
+    });
+
+    let filtered = rows;
+    if (Number.isFinite(sinceTs)) {
+      filtered = filtered.filter((r) => r.createdAt > sinceTs);
+    }
+    if (Number.isFinite(beforeTs)) {
+      filtered = filtered.filter((r) => {
+        if (r.createdAt < beforeTs) return true;
+        if (r.createdAt === beforeTs && beforeFn) return r.filename < beforeFn;
+        return false;
+      });
+    }
+    if (sessionId) {
+      filtered = filtered.filter((r) => r.sessionId === sessionId);
+    }
+
+    const page = filtered.slice(0, limit);
+    const nextCursor = page.length === limit && filtered.length > limit
+      ? { before: page[page.length - 1].createdAt, beforeFilename: page[page.length - 1].filename }
+      : null;
+
+    if (groupBy === "session") {
+      // Group by sessionId while preserving createdAt DESC order overall.
+      const groups = new Map(); // sessionId|null -> { sessionId, items, lastUsedAt }
+      const loose = [];
+      for (const r of page) {
+        if (r.sessionId) {
+          let g = groups.get(r.sessionId);
+          if (!g) {
+            g = { sessionId: r.sessionId, items: [], lastUsedAt: r.createdAt };
+            groups.set(r.sessionId, g);
+          }
+          g.items.push(r);
+          if (r.createdAt > g.lastUsedAt) g.lastUsedAt = r.createdAt;
+        } else {
+          loose.push(r);
+        }
+      }
+      const sessions = Array.from(groups.values()).sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+      return res.json({ sessions, loose, total: rows.length, nextCursor });
+    }
+
+    res.json({ items: page, total: rows.length, nextCursor });
   } catch (err) {
     console.error("[history] error:", err.message);
     res.status(500).json({ error: err.message });

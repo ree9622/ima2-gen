@@ -1,8 +1,6 @@
 import { BillingBar } from "./BillingBar";
 import { ProviderSelect } from "./ProviderSelect";
-import { ModeTabs } from "./ModeTabs";
 import { UIModeSwitch } from "./UIModeSwitch";
-import { UploadZone } from "./UploadZone";
 import { PromptInput } from "./PromptInput";
 import { GenerateButton } from "./GenerateButton";
 import { InFlightList } from "./InFlightList";
@@ -24,8 +22,6 @@ export function Sidebar() {
       {uiMode === "classic" ? (
         <>
           <ProviderSelect />
-          <ModeTabs />
-          <UploadZone />
           <PromptInput />
           <GenerateButton />
           <InFlightList />

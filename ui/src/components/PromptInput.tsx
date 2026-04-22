@@ -3,13 +3,7 @@ import { useAppStore } from "../store/useAppStore";
 export function PromptInput() {
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
-  const mode = useAppStore((s) => s.mode);
   const generate = useAppStore((s) => s.generate);
-
-  const placeholder =
-    mode === "i2i"
-      ? "Describe the edit you want to make..."
-      : "Describe the image you want to generate...";
 
   return (
     <>
@@ -17,7 +11,7 @@ export function PromptInput() {
       <textarea
         className="prompt-area"
         value={prompt}
-        placeholder={placeholder}
+        placeholder="Describe the image you want to generate..."
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {

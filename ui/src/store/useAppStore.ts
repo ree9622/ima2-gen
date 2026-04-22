@@ -4,7 +4,6 @@ import type {
   Format,
   GenerateItem,
   GenerateResponse,
-  Mode,
   Moderation,
   Provider,
   Quality,
@@ -13,7 +12,6 @@ import type {
 } from "../types";
 import { isMultiResponse } from "../types";
 import {
-  postEdit,
   postGenerate,
   getHistory,
   postNodeGenerate,
@@ -25,7 +23,7 @@ import {
   saveSessionGraph,
   type SessionSummary,
 } from "../lib/api";
-import { compressImage, dataUrlToBase64, readFileAsDataURL } from "../lib/image";
+import { compressImage } from "../lib/image";
 import { snap16 } from "../lib/size";
 import { newClientNodeId, initialPos, type ClientNodeId } from "../lib/graph";
 import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
@@ -68,7 +66,6 @@ export type GraphEdge = FlowEdge;
 type ToastState = { message: string; error: boolean; id: number } | null;
 
 type AppState = {
-  mode: Mode;
   provider: Provider;
   quality: Quality;
   sizePreset: SizePreset;
@@ -78,7 +75,6 @@ type AppState = {
   moderation: Moderation;
   count: Count;
   prompt: string;
-  sourceImageDataUrl: string | null;
   activeGenerations: number;
   inFlight: { id: string; prompt: string }[];
   currentImage: GenerateItem | null;
@@ -115,7 +111,6 @@ type AppState = {
   scheduleGraphSave: () => void;
   flushGraphSave: () => Promise<void>;
 
-  setMode: (mode: Mode) => void;
   setProvider: (p: Provider) => void;
   setQuality: (q: Quality) => void;
   setSizePreset: (s: SizePreset) => void;
@@ -124,10 +119,6 @@ type AppState = {
   setModeration: (m: Moderation) => void;
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
-  setSourceFromFile: (file: File) => Promise<void>;
-  setSourceFromDataUrl: (dataUrl: string) => void;
-  clearSource: () => void;
-  useResultAsSource: () => void;
   selectHistory: (item: GenerateItem) => void;
   generate: () => Promise<void>;
   hydrateHistory: () => void;
@@ -136,7 +127,6 @@ type AppState = {
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
-  mode: "t2i",
   provider: "oauth",
   quality: "low",
   sizePreset: "1024x1024",
@@ -146,7 +136,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   moderation: "low",
   count: 1,
   prompt: "",
-  sourceImageDataUrl: null,
   activeGenerations: 0,
   inFlight: [],
   currentImage: null,
@@ -492,7 +481,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().scheduleGraphSave();
   },
 
-  setMode: (mode) => set({ mode }),
   setProvider: (provider) => set({ provider }),
   setQuality: (quality) => set({ quality }),
   setSizePreset: (sizePreset) => set({ sizePreset }),
@@ -501,23 +489,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setModeration: (moderation) => set({ moderation }),
   setCount: (count) => set({ count }),
   setPrompt: (prompt) => set({ prompt }),
-
-  async setSourceFromFile(file) {
-    const dataUrl = await readFileAsDataURL(file);
-    set({ sourceImageDataUrl: dataUrl });
-  },
-  setSourceFromDataUrl: (dataUrl) => set({ sourceImageDataUrl: dataUrl }),
-  clearSource: () => set({ sourceImageDataUrl: null }),
-
-  useResultAsSource: () => {
-    const cur = get().currentImage;
-    if (!cur) return;
-    set({
-      sourceImageDataUrl: cur.image,
-      mode: "i2i",
-    });
-    get().showToast("Source image loaded from result");
-  },
 
   selectHistory: (item) => set({ currentImage: item }),
 
@@ -532,7 +503,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!prompt) return;
 
     const size = s.getResolvedSize();
-    const isEdit = s.mode === "i2i" && !!s.sourceImageDataUrl;
 
     const flightId = `f_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     set({
@@ -548,15 +518,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         format: s.format,
         moderation: s.moderation,
         provider: s.provider,
-        n: isEdit ? 1 : s.count,
-        ...(isEdit && s.sourceImageDataUrl
-          ? { image: dataUrlToBase64(s.sourceImageDataUrl) }
-          : {}),
+        n: s.count,
       };
 
-      const res: GenerateResponse = isEdit
-        ? await postEdit(payload)
-        : await postGenerate(payload);
+      const res: GenerateResponse = await postGenerate(payload);
 
       if (isMultiResponse(res) && res.images.length > 1) {
         for (const img of res.images) {

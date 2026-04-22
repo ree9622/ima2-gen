@@ -1,4 +1,3 @@
-export type Mode = "t2i" | "i2i";
 export type UIMode = "classic" | "node";
 export type Provider = "oauth" | "api";
 export type Quality = "low" | "medium" | "high";

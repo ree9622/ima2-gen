@@ -25,10 +25,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
 
   const onDelete = useCallback(() => deleteNode(id), [id, deleteNode]);
 
+  const isBusy = d.status === "pending" || d.status === "reconciling";
   const statusLabel = {
     empty: "empty",
     pending: "generating…",
+    reconciling: `reconciling…${d.pendingPhase ? ` · ${d.pendingPhase}` : ""}`,
     ready: `ready · ${d.elapsed ?? "?"}s${d.webSearchCalls ? ` · ws×${d.webSearchCalls}` : ""}`,
+    stale: `stale${d.error ? `: ${d.error}` : ""}`,
+    "asset-missing": `asset missing${d.error ? `: ${d.error}` : ""}`,
     error: `error: ${d.error ?? "unknown"}`,
   }[d.status];
 
@@ -38,10 +42,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
         <Handle type="target" position={Position.Left} className="image-node__handle" />
       ) : null}
       <div className="image-node__preview">
-        {d.imageUrl ? (
+        {d.imageUrl && d.status !== "asset-missing" ? (
           <img src={d.imageUrl} alt="node" />
-        ) : d.status === "pending" ? (
+        ) : isBusy ? (
           <div className="image-node__skeleton">⏳</div>
+        ) : d.status === "asset-missing" ? (
+          <div className="image-node__placeholder">missing asset</div>
+        ) : d.status === "stale" ? (
+          <div className="image-node__placeholder">stale</div>
         ) : (
           <div className="image-node__placeholder">no image</div>
         )}
@@ -53,12 +61,12 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
         onKeyDown={(e) => e.stopPropagation()}
         placeholder={d.parentServerNodeId ? "Edit prompt…" : "Prompt…"}
         rows={2}
-        disabled={d.status === "pending"}
+        disabled={isBusy}
       />
       <div className="image-node__footer">
         <span className="image-node__status">{statusLabel}</span>
         <div className="image-node__actions nodrag">
-          <button type="button" onClick={onGenerate} disabled={d.status === "pending"}>
+          <button type="button" onClick={onGenerate} disabled={isBusy}>
             {d.status === "ready" ? "Regenerate" : "Generate"}
           </button>
           {d.status === "ready" ? (

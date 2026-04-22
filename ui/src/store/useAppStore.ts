@@ -104,7 +104,14 @@ function saveSelectedFilename(filename: string | null): void {
 
 const HISTORY_LIMIT = 200;
 
-export type ImageNodeStatus = "empty" | "pending" | "ready" | "error";
+export type ImageNodeStatus =
+  | "empty"
+  | "pending"
+  | "reconciling"
+  | "ready"
+  | "stale"
+  | "asset-missing"
+  | "error";
 
 export type ImageNodeData = {
   clientId: ClientNodeId;
@@ -113,6 +120,8 @@ export type ImageNodeData = {
   prompt: string;
   imageUrl: string | null;
   status: ImageNodeStatus;
+  pendingRequestId: string | null;
+  pendingPhase?: string | null;
   error?: string;
   elapsed?: number;
   webSearchCalls?: number;
@@ -142,6 +151,8 @@ function mapSessionToGraph(session: SessionFull): {
       prompt: typeof d.prompt === "string" ? d.prompt : "",
       imageUrl,
       status: (d.status ?? (imageUrl ? "ready" : "empty")) as ImageNodeStatus,
+      pendingRequestId: (d.pendingRequestId ?? null) as string | null,
+      pendingPhase: (d.pendingPhase ?? null) as string | null,
       error: d.error as string | undefined,
       elapsed: d.elapsed as number | undefined,
       webSearchCalls: d.webSearchCalls as number | undefined,
@@ -591,15 +602,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: clientId,
       type: "imageNode",
       position: initialPos(depth, siblings),
-      data: {
-        clientId,
-        serverNodeId: null,
-        parentServerNodeId: null,
-        prompt: "",
-        imageUrl: null,
-        status: "empty",
-      },
-    };
+        data: {
+          clientId,
+          serverNodeId: null,
+          parentServerNodeId: null,
+          prompt: "",
+          imageUrl: null,
+          status: "empty",
+          pendingRequestId: null,
+          pendingPhase: null,
+        },
+      };
     set({ graphNodes: [...get().graphNodes, node] });
     get().scheduleGraphSave();
     return clientId;
@@ -614,15 +627,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: clientId,
       type: "imageNode",
       position: { x: parent.position.x + 360, y: parent.position.y + siblings * 320 },
-      data: {
-        clientId,
-        serverNodeId: null,
-        parentServerNodeId: parent.data.serverNodeId,
-        prompt: "",
-        imageUrl: null,
-        status: "empty",
-      },
-    };
+        data: {
+          clientId,
+          serverNodeId: null,
+          parentServerNodeId: parent.data.serverNodeId,
+          prompt: "",
+          imageUrl: null,
+          status: "empty",
+          pendingRequestId: null,
+          pendingPhase: null,
+        },
+      };
     const edge: GraphEdge = {
       id: `${parentClientId}->${clientId}`,
       source: parentClientId,
@@ -656,6 +671,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           prompt: source.data.prompt,
           imageUrl: null,
           status: "empty",
+          pendingRequestId: null,
+          pendingPhase: null,
         },
       };
       set({ graphNodes: [...get().graphNodes, node] });
@@ -680,6 +697,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         prompt: source.data.prompt,
         imageUrl: null,
         status: "empty",
+        pendingRequestId: null,
+        pendingPhase: null,
       },
     };
     const edge: GraphEdge = {
@@ -729,7 +748,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       graphNodes: get().graphNodes.map((n) =>
         n.id === targetClientId
-          ? { ...n, data: { ...n.data, status: "pending", error: undefined } }
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                status: "pending",
+                pendingRequestId: flightId,
+                pendingPhase: "queued",
+                error: undefined,
+              },
+            }
           : n,
       ),
       activeGenerations: s.activeGenerations + 1,
@@ -759,6 +787,8 @@ export const useAppStore = create<AppState>((set, get) => ({
                   serverNodeId: res.nodeId,
                   imageUrl: res.url,
                   status: "ready",
+                  pendingRequestId: null,
+                  pendingPhase: null,
                   elapsed: res.elapsed,
                   webSearchCalls: res.webSearchCalls,
                 },
@@ -772,7 +802,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         graphNodes: get().graphNodes.map((n) =>
           n.id === targetClientId
-            ? { ...n, data: { ...n.data, status: "error", error: msg } }
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  status: "error",
+                  pendingRequestId: null,
+                  pendingPhase: null,
+                  error: msg,
+                },
+              }
             : n,
         ),
       });
@@ -820,6 +859,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         prompt: "",
         imageUrl: null,
         status: "empty",
+        pendingRequestId: null,
+        pendingPhase: null,
       },
     };
     const edge: GraphEdge = {

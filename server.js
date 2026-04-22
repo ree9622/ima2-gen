@@ -4,7 +4,8 @@ import { writeFile, mkdir, readFile, readdir, stat } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsReadFileSync } from "fs";
+import { homedir } from "os";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64 } from "./lib/nodeStore.js";
 import { startJob, finishJob, listJobs, setJobPhase } from "./lib/inflight.js";
 import {
@@ -241,6 +242,28 @@ app.get("/api/providers", (_req, res) => {
   });
 });
 
+// ── Health (for ima2 CLI: ping, discovery verification) ──
+const __pkg = (() => {
+  try {
+    return JSON.parse(fsReadFileSync(join(__dirname, "package.json"), "utf-8"));
+  } catch {
+    return { version: "0.0.0" };
+  }
+})();
+const __startedAt = Date.now();
+
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    version: __pkg.version,
+    provider: "oauth",
+    uptimeSec: Math.round(process.uptime()),
+    activeJobs: listJobs().length,
+    pid: process.pid,
+    startedAt: __startedAt,
+  });
+});
+
 // ── History (disk-backed — authoritative source for UI history list) ──
 // Recursively list image files up to 2 levels deep (for 0.04 session/node subdirs)
 async function listImages(baseDir) {
@@ -368,7 +391,8 @@ app.post("/api/generate", async (req, res) => {
       return res.status(403).json({ error: "API key provider is disabled. Use OAuth (Codex login).", code: "APIKEY_DISABLED" });
     }
     const useOAuth = true;
-    console.log(`[generate] provider=oauth quality=${quality} size=${size} n=${count} refs=${refB64s.length}`);
+    const __client = req.get("x-ima2-client") || "ui";
+    console.log(`[generate][${__client}] provider=oauth quality=${quality} size=${size} n=${count} refs=${refB64s.length}`);
     const startTime = Date.now();
 
     const mimeMap = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
@@ -542,7 +566,7 @@ app.post("/api/edit", async (req, res) => {
     if (provider === "api") {
       return res.status(403).json({ error: "API key provider is disabled. Use OAuth (Codex login).", code: "APIKEY_DISABLED" });
     }
-    console.log(`[edit] provider=oauth quality=${quality} size=${size}`);
+    console.log(`[edit][${req.get("x-ima2-client") || "ui"}] provider=oauth quality=${quality} size=${size}`);
     const startTime = Date.now();
 
     const { b64: resultB64, usage } = await editViaOAuth(prompt, imageB64, quality, size);
@@ -921,18 +945,48 @@ function startOAuthProxy() {
 const PORT = process.env.PORT || 3333;
 const oauthChild = startOAuthProxy();
 
+// CLI discovery: advertise running server under ~/.ima2/server.json
+const __advertisePath = join(homedir(), ".ima2", "server.json");
+function __advertise() {
+  try {
+    mkdirSync(dirname(__advertisePath), { recursive: true });
+    writeFileSync(
+      __advertisePath,
+      JSON.stringify({
+        port: Number(PORT),
+        pid: process.pid,
+        startedAt: __startedAt,
+        version: __pkg.version,
+      }),
+    );
+  } catch (e) {
+    console.warn("[advertise] skipped:", e.message);
+  }
+}
+function __unadvertise() {
+  try {
+    if (!existsSync(__advertisePath)) return;
+    const cur = JSON.parse(fsReadFileSync(__advertisePath, "utf-8"));
+    if (cur.pid === process.pid) unlinkSync(__advertisePath);
+  } catch {}
+}
+
 process.on("SIGINT", () => {
+  __unadvertise();
   oauthChild.kill();
   process.exit();
 });
 process.on("SIGTERM", () => {
+  __unadvertise();
   oauthChild.kill();
   process.exit();
 });
+process.on("exit", __unadvertise);
 
 app.listen(PORT, () => {
   console.log(`Image Gen running at http://localhost:${PORT}`);
   console.log(`Provider policy: OAuth only (API key hard-disabled). OAuth proxy port ${OAUTH_PORT}.`);
+  __advertise();
   try {
     const s = ensureDefaultSession();
     console.log(`[db] default session: ${s.id} (${s.title})`);

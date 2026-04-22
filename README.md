@@ -127,17 +127,6 @@ npm run dev    # starts server with --watch for auto-reload
 npm test       # run tests
 ```
 
-## Roadmap
-
-See `devlog/` for detailed improvement plans:
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| **Phase 0** | README + CLI enhancement | In Progress |
-| **Phase 1** | Code quality & modularization | Planned |
-| **Phase 2** | Validation, logging, retry | Planned |
-| **Phase 3** | Caching, rate limiting, monitoring | Planned |
-
 ## Tech Stack
 
 - **Runtime**: Node.js (>=18)

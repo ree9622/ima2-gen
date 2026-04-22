@@ -1,0 +1,28 @@
+import { parseArgs } from "../lib/args.js";
+import { resolveServer } from "../lib/client.js";
+import { out, die, color, json, exitCodeForError } from "../lib/output.js";
+
+const SPEC = {
+  flags: {
+    json:   { type: "boolean" },
+    server: { type: "string" },
+    help:   { short: "h", type: "boolean" },
+  },
+};
+
+export default async function pingCmd(argv) {
+  const args = parseArgs(argv, SPEC);
+  if (args.help) { out("ima2 ping [--json]"); return; }
+
+  try {
+    const { base, health } = await resolveServer({ serverFlag: args.server });
+    if (args.json) {
+      json({ ok: true, base, ...health });
+    } else {
+      out(color.green("✓ ") + `${base}  v${health.version}  uptime ${health.uptimeSec}s  activeJobs ${health.activeJobs}`);
+    }
+  } catch (e) {
+    if (args.json) { json({ ok: false, error: e.message }); process.exit(exitCodeForError(e)); }
+    die(exitCodeForError(e), e.message);
+  }
+}

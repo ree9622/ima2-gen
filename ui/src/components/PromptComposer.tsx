@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { StyleChips } from "./StyleChips";
+import { EnhanceModal } from "./EnhanceModal";
+import { enhancePrompt as apiEnhance } from "../lib/api";
 
 const MAX_REFS = 5;
 
@@ -17,6 +19,7 @@ export function PromptComposer() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [enhanceOpen, setEnhanceOpen] = useState(false);
 
   const canAddMore = refs.length < MAX_REFS;
 
@@ -147,6 +150,18 @@ export function PromptComposer() {
         <button
           type="button"
           className="composer__tool"
+          onClick={() => prompt.trim() && setEnhanceOpen(true)}
+          disabled={!prompt.trim()}
+          title="프롬프트 자세히 다듬기"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <span>다듬기</span>
+        </button>
+        <button
+          type="button"
+          className="composer__tool"
           onClick={() => void useCurrentAsReference()}
           disabled={!currentImage || !canAddMore}
           title="현재 결과를 참조로 사용"
@@ -177,6 +192,14 @@ export function PromptComposer() {
           if (files.length > 0) void addReferences(files);
           e.target.value = "";
         }}
+      />
+
+      <EnhanceModal
+        open={enhanceOpen}
+        originalPrompt={prompt}
+        onClose={() => setEnhanceOpen(false)}
+        onApply={(next) => { setPrompt(next); setEnhanceOpen(false); }}
+        enhancer={async (p) => (await apiEnhance(p, "ko")).prompt}
       />
     </div>
   );

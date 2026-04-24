@@ -2158,3 +2158,104 @@ body {
   color: var(--amber);
   border-color: var(--amber);
 }
+
+.enhance-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.enhance-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: min(720px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.enhance-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.enhance-modal__title {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.enhance-modal__badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-weight: normal;
+}
+.enhance-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+.enhance-modal__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 14px;
+  overflow: auto;
+  min-height: 0;
+}
+.enhance-col { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.enhance-col__label { font-size: 11px; color: var(--text-dim); }
+.enhance-col__text {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+.enhance-col__edit {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  flex: 1 1 auto;
+  resize: none;
+  min-height: 150px;
+}
+.enhance-col__loading, .enhance-col__error {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  font-size: 13px;
+  color: var(--text-dim);
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.enhance-col__error { color: var(--red); }
+.enhance-modal__foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}

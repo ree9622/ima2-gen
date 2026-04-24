@@ -22,6 +22,7 @@ import {
 import { trashAsset, restoreAsset } from "./lib/assetLifecycle.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
+import { buildEnhancePayload, extractEnhancedText } from "./lib/enhance.js";
 import {
   validatePrompt,
   validateQuality,
@@ -967,6 +968,32 @@ app.get("/api/billing", async (_req, res) => {
     res.json(billing);
   } catch (err) {
     res.status(500).json({ error: err.message, apiKeyValid: false });
+  }
+});
+
+// ── Enhance prompt (non-streaming OAuth call) ──
+app.post("/api/enhance-prompt", async (req, res) => {
+  try {
+    const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+    const language = req.body?.language === "en" ? "en" : "ko";
+    if (!prompt) {
+      return res.status(400).json({ error: "prompt required", code: "EMPTY_PROMPT" });
+    }
+    if (prompt.length > 4000) {
+      return res.status(400).json({ error: "prompt too long", code: "PROMPT_TOO_LONG" });
+    }
+
+    const body = buildEnhancePayload(prompt, language);
+    const result = await runResponses({ url: OAUTH_URL, body });
+    const text = extractEnhancedText(result.raw);
+    if (!text) {
+      return res.status(502).json({ error: "enhancer returned no text", code: "ENHANCE_EMPTY" });
+    }
+    res.json({ prompt: text.trim(), usage: result.usage ?? null });
+  } catch (err) {
+    console.error("[enhance] error:", err.message);
+    const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 502;
+    res.status(status).json({ error: err.message, code: "ENHANCE_FAILED" });
   }
 });
 

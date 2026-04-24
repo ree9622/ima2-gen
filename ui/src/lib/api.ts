@@ -306,3 +306,16 @@ export function saveSessionGraph(
     body: JSON.stringify({ nodes, edges }),
   });
 }
+
+export async function enhancePrompt(prompt: string, language: "ko" | "en" = "ko"): Promise<{ prompt: string }> {
+  const res = await fetch("/api/enhance-prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, language }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `enhancePrompt failed: ${res.status}`);
+  }
+  return res.json();
+}

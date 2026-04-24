@@ -4,6 +4,7 @@ import { BillingBar } from "./BillingBar";
 import { OptionGroup } from "./OptionGroup";
 import { SizePicker } from "./SizePicker";
 import { CostEstimate } from "./CostEstimate";
+import { ViewControls } from "./ViewControls";
 import type { Count, Format, Quality } from "../types";
 
 const QUALITY_ITEMS = [
@@ -107,6 +108,7 @@ export function RightPanel() {
           className="right-panel-body"
           hidden={!open}
         >
+          <ViewControls />
           <BillingBar />
           <OptionGroup<Quality>
             title="품질"

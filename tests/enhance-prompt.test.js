@@ -16,6 +16,14 @@ describe("buildEnhancePayload", () => {
     assert.ok(sys);
     assert.match(JSON.stringify(sys), /English/);
   });
+  it("keeps swimwear enhancement in adult non-sexual framing", () => {
+    const body = buildEnhancePayload("swimsuit selfie", "en");
+    const sys = body.input.find((m) => m.role === "system");
+    assert.ok(sys);
+    assert.match(JSON.stringify(sys), /adult \(25\+\)/);
+    assert.match(JSON.stringify(sys), /non-sexual/);
+    assert.match(JSON.stringify(sys), /minors/);
+  });
 });
 
 describe("extractEnhancedText", () => {

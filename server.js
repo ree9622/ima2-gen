@@ -23,6 +23,7 @@ import { trashAsset, restoreAsset } from "./lib/assetLifecycle.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import { buildEnhancePayload, extractEnhancedText } from "./lib/enhance.js";
+import { buildPromptAttempts, hasCompliantRetry } from "./lib/safetyRetry.js";
 import {
   validatePrompt,
   validateQuality,
@@ -175,6 +176,41 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   throw new Error(
     `No image data received from OAuth proxy (parsed ${stream.eventCount} events)`,
   );
+}
+
+async function runPromptAttempts(prompt, invoke, label) {
+  const attempts = buildPromptAttempts(prompt);
+  if (attempts.length === 1) attempts.push(prompt);
+
+  let lastErr;
+  for (let i = 0; i < attempts.length; i++) {
+    const attemptPrompt = attempts[i];
+    const isCompliantRetry = i > 0 && attemptPrompt !== prompt;
+    try {
+      const r = await invoke(attemptPrompt);
+      if (r.b64) {
+        return {
+          ...r,
+          promptUsed: attemptPrompt,
+          promptRewrittenForSafety: isCompliantRetry,
+        };
+      }
+      lastErr = new Error("Empty response (safety refusal)");
+    } catch (e) {
+      lastErr = e;
+    }
+
+    if (i < attempts.length - 1) {
+      const mode = isCompliantRetry ? "compliant retry failed" : "retrying";
+      console.log(`[${label}] ${mode} after: ${lastErr?.message}`);
+    }
+  }
+
+  const err = new Error("Content generation refused after retries");
+  err.code = "SAFETY_REFUSAL";
+  err.status = 422;
+  err.cause = lastErr;
+  throw err;
 }
 
 // ── Provider info ──
@@ -457,39 +493,31 @@ app.post("/api/generate", async (req, res) => {
     const mime = mimeMap[format] || "image/png";
     await mkdir(join(__dirname, "generated"), { recursive: true });
 
-    const generateOne = async () => {
-      const MAX_RETRIES = 1;
-      let lastErr;
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const r = await generateViaOAuth(prompt, quality, size, moderation, refB64s, requestId);
-          if (r.b64) return r;
-          lastErr = new Error("Empty response (safety refusal)");
-        } catch (e) {
-          lastErr = e;
-        }
-        if (attempt < MAX_RETRIES) console.log(`[retry] attempt ${attempt + 1}/${MAX_RETRIES} after: ${lastErr.message}`);
-      }
-      const err = new Error("Content generation refused after retries");
-      err.code = "SAFETY_REFUSAL";
-      err.status = 422;
-      err.cause = lastErr;
-      throw err;
-    };
+    const generateOne = () =>
+      runPromptAttempts(
+        prompt,
+        (attemptPrompt) =>
+          generateViaOAuth(attemptPrompt, quality, size, moderation, refB64s, requestId),
+        "generate",
+      );
 
     const results = await Promise.allSettled(Array.from({ length: count }, generateOne));
 
     const images = [];
     let totalUsage = null;
     let totalWebSearchCalls = 0;
+    let promptRewrittenForSafety = false;
     for (const r of results) {
       if (r.status === "fulfilled" && r.value.b64) {
+        if (r.value.promptRewrittenForSafety === true) promptRewrittenForSafety = true;
         const rand = randomBytes(4).toString("hex");
         const filename = `${Date.now()}_${rand}_${images.length}.${format}`;
         await writeFile(join(__dirname, "generated", filename), Buffer.from(r.value.b64, "base64"));
         // Sidecar metadata for /api/history reconstruction
         const meta = {
           prompt,
+          promptUsed: r.value.promptUsed || prompt,
+          promptRewrittenForSafety: r.value.promptRewrittenForSafety === true,
           quality,
           size,
           format,
@@ -530,6 +558,8 @@ app.post("/api/generate", async (req, res) => {
       quality,
       size,
       moderation,
+      safetyRetryAvailable: hasCompliantRetry(prompt),
+      promptRewrittenForSafety,
     };
 
     if (count === 1) {
@@ -601,7 +631,16 @@ app.post("/api/edit", async (req, res) => {
     console.log(`[edit][${req.get("x-ima2-client") || "ui"}] provider=oauth quality=${quality} size=${size} moderation=${moderation}`);
     const startTime = Date.now();
 
-    const { b64: resultB64, usage } = await editViaOAuth(prompt, imageB64, quality, size, moderation);
+    const {
+      b64: resultB64,
+      usage,
+      promptUsed,
+      promptRewrittenForSafety,
+    } = await runPromptAttempts(
+      prompt,
+      (attemptPrompt) => editViaOAuth(attemptPrompt, imageB64, quality, size, moderation),
+      "edit",
+    );
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -610,6 +649,8 @@ app.post("/api/edit", async (req, res) => {
     await writeFile(join(__dirname, "generated", filename), Buffer.from(resultB64, "base64"));
     const meta = {
       prompt,
+      promptUsed: promptUsed || prompt,
+      promptRewrittenForSafety: promptRewrittenForSafety === true,
       quality,
       size,
       moderation,
@@ -629,6 +670,8 @@ app.post("/api/edit", async (req, res) => {
       usage,
       provider: "oauth",
       moderation,
+      safetyRetryAvailable: hasCompliantRetry(prompt),
+      promptRewrittenForSafety: promptRewrittenForSafety === true,
     });
   } catch (err) {
     console.error("Edit error:", err.message);
@@ -723,35 +766,33 @@ app.post("/api/node/generate", async (req, res) => {
       parentB64 = await loadAssetB64(__dirname, externalSrc);
     }
 
-    let b64, usage, webSearchCalls = 0;
-    const MAX_RETRIES = 1;
-    let lastErr;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const r = parentB64
-          ? await editViaOAuth(prompt, parentB64, quality, size, moderation)
-          : await generateViaOAuth(prompt, quality, size, moderation, refB64s, requestId);
-        if (r.b64) {
-          b64 = r.b64;
-          usage = r.usage;
-          webSearchCalls = r.webSearchCalls || 0;
-          break;
-        }
-        lastErr = new Error("Empty response (safety refusal)");
-      } catch (e) {
-        lastErr = e;
-      }
-      if (attempt < MAX_RETRIES) {
-        console.log(`[node] retry ${attempt + 1}: ${lastErr?.message}`);
-      }
-    }
-
-    if (!b64) {
+    let nodeResult;
+    try {
+      nodeResult = await runPromptAttempts(
+        prompt,
+        (attemptPrompt) =>
+          parentB64
+            ? editViaOAuth(attemptPrompt, parentB64, quality, size, moderation)
+            : generateViaOAuth(
+                attemptPrompt,
+                quality,
+                size,
+                moderation,
+                refB64s,
+                requestId,
+              ),
+        "node",
+      );
+    } catch (err) {
       return res.status(422).json({
-        error: { code: "SAFETY_REFUSAL", message: lastErr?.message || "Empty response after retry" },
+        error: { code: err.code || "SAFETY_REFUSAL", message: err.message },
         parentNodeId,
       });
     }
+
+    const b64 = nodeResult.b64;
+    const usage = nodeResult.usage;
+    const webSearchCalls = nodeResult.webSearchCalls || 0;
 
     const nodeId = newNodeId();
     const elapsed = +((Date.now() - startTime) / 1000).toFixed(1);
@@ -761,6 +802,8 @@ app.post("/api/node/generate", async (req, res) => {
       sessionId,
       clientNodeId,
       prompt,
+      promptUsed: nodeResult.promptUsed || prompt,
+      promptRewrittenForSafety: nodeResult.promptRewrittenForSafety === true,
       options: { quality, size, format, moderation },
       createdAt: Date.now(),
       createdAtIso: new Date().toISOString(),
@@ -787,6 +830,8 @@ app.post("/api/node/generate", async (req, res) => {
       webSearchCalls,
       provider: "oauth",
       moderation,
+      safetyRetryAvailable: hasCompliantRetry(prompt),
+      promptRewrittenForSafety: nodeResult.promptRewrittenForSafety === true,
     });
   } catch (err) {
     console.error("[node/generate] error:", err.message);

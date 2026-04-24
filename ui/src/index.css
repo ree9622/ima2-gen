@@ -2084,3 +2084,46 @@ body {
   color: var(--bg);
   border-color: var(--text);
 }
+
+.preset-manager { display: flex; flex-direction: column; gap: 6px; }
+.preset-manager__row { display: flex; gap: 6px; }
+.preset-manager__select {
+  flex: 1 1 auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.preset-manager__save,
+.preset-manager__confirm,
+.preset-manager__delete-hint {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.preset-manager__save:hover,
+.preset-manager__confirm:hover { border-color: var(--text-dim); }
+.preset-manager__name-row { display: flex; gap: 6px; }
+.preset-manager__name-input {
+  flex: 1 1 auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.preset-manager__delete-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: left;
+  background: transparent;
+  padding: 2px 0;
+  border: none;
+}

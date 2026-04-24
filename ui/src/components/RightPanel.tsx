@@ -5,6 +5,7 @@ import { OptionGroup } from "./OptionGroup";
 import { SizePicker } from "./SizePicker";
 import { CostEstimate } from "./CostEstimate";
 import { ViewControls } from "./ViewControls";
+import { PresetManager } from "./PresetManager";
 import type { Count, Format, Quality } from "../types";
 
 const QUALITY_ITEMS = [
@@ -109,6 +110,7 @@ export function RightPanel() {
           hidden={!open}
         >
           <ViewControls />
+          <PresetManager />
           <BillingBar />
           <OptionGroup<Quality>
             title="품질"

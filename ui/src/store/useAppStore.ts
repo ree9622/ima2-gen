@@ -29,6 +29,7 @@ import {
 import { compressImage } from "../lib/image";
 import { snap16 } from "../lib/size";
 import { newClientNodeId, initialPos, type ClientNodeId } from "../lib/graph";
+import type { PresetPayload } from "../lib/presets";
 import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
 
 function loadRightPanelOpen(): boolean {
@@ -249,6 +250,7 @@ type AppState = {
   setModeration: (m: Moderation) => void;
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
+  applyPreset: (payload: PresetPayload) => void;
   selectHistory: (item: GenerateItem) => void;
   removeFromHistory: (filename: string) => void;
   addHistoryItem: (item: GenerateItem) => void;
@@ -1008,6 +1010,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setModeration: (moderation) => set({ moderation }),
   setCount: (count) => set({ count }),
   setPrompt: (prompt) => set({ prompt }),
+  applyPreset: (payload: PresetPayload) => {
+    set({
+      quality: payload.quality,
+      sizePreset: payload.sizePreset,
+      format: payload.format,
+      moderation: payload.moderation,
+      count: payload.count,
+      ...(payload.sizePreset === "custom" && payload.customW && payload.customH
+        ? { customW: payload.customW, customH: payload.customH }
+        : {}),
+    });
+  },
 
   selectHistory: (item) => {
     saveSelectedFilename(item.filename ?? null);

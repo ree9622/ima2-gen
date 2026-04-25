@@ -990,9 +990,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   jumpToImageSession: async (item) => {
     const target = item ?? get().currentImage;
     if (!target) return;
+    // Close the overlay immediately so the click feels responsive even when
+    // we have to fall back to /api/history to resolve the sessionId.
+    if (get().lightboxOpen) set({ lightboxOpen: false });
     let sid = target.sessionId ?? null;
-    // History rows persisted before sessionId existed on GenerateItem fall
-    // back to a server lookup so we don't strand classic-mode images.
     if (!sid && target.filename) {
       try {
         const { items } = await getHistory({ limit: 500 });
@@ -1004,7 +1005,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().showToast("이 이미지에는 연결된 생성 세션이 없습니다.");
       return;
     }
-    set({ lightboxOpen: false });
     if (get().uiMode !== "node") get().setUIMode("node");
     if (get().activeSessionId !== sid) {
       try {

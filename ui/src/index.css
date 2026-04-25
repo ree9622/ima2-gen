@@ -826,6 +826,26 @@ body {
   border-color: var(--accent);
   transform: none;
 }
+.history-thumb--fav {
+  flex: 0 0 auto;
+  background: var(--surface-2);
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  position: sticky;
+  /* Sit immediately right of the gallery launcher (48px thumb + 6px gap = 54px).
+     Sticky so it stays reachable while the strip scrolls horizontally. */
+  left: 54px;
+  background-clip: padding-box;
+  z-index: 2;
+}
+.history-thumb--fav:hover {
+  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(251, 191, 36, 0.1);
+  transform: none;
+}
 
 /* ── Prompt composer (chat-style w/ inline references) ── */
 .composer {
@@ -2877,6 +2897,14 @@ body {
 .lightbox__btn--off {
   color: rgba(255, 255, 255, 0.55);
 }
+.lightbox__btn--fav.is-active {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.12);
+}
+.lightbox__btn--fav.is-active:hover {
+  background: rgba(251, 191, 36, 0.22);
+}
 
 .lightbox__undo {
   position: absolute;
@@ -2967,12 +2995,13 @@ body {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  cursor: zoom-in;
+  /* Click-to-jump-to-session — pointer hints at navigation, not zoom. */
+  cursor: pointer;
 }
 .lightbox--actual .lightbox__img {
   max-width: none;
   max-height: none;
-  cursor: zoom-out;
+  cursor: pointer;
 }
 
 .lightbox__caption {

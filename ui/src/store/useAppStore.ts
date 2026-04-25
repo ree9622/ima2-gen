@@ -417,13 +417,16 @@ type AppState = {
   rightPanelOpen: boolean;
   toggleRightPanel: () => void;
   galleryOpen: boolean;
-  openGallery: () => void;
+  galleryFavOnly: boolean;
+  openGallery: (opts?: { favOnly?: boolean }) => void;
   closeGallery: () => void;
+  setGalleryFavOnly: (v: boolean) => void;
   lightboxOpen: boolean;
   openLightbox: (filename?: string | null) => void;
   closeLightbox: () => void;
   lightboxNext: () => void;
   lightboxPrev: () => void;
+  jumpToImageSession: (item?: GenerateItem | null) => Promise<void>;
 
   uiMode: UIMode;
   setUIMode: (m: UIMode) => void;
@@ -743,6 +746,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           quality: it.quality ?? undefined,
           format: it.format as Format | undefined,
           createdAt: it.createdAt,
+          sessionId: it.sessionId ?? null,
+          favorite: it.favorite === true,
         }));
         const existing = get().history;
         const fresh = arr.filter(
@@ -886,6 +891,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           quality: it.quality ?? undefined,
           format: it.format as Format | undefined,
           createdAt: it.createdAt,
+          sessionId: it.sessionId ?? null,
+          favorite: it.favorite === true,
         }));
         const existing = get().history;
         const newOnes = fresh.filter((a) => !existing.some((e) => e.filename === a.filename));
@@ -944,8 +951,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { rightPanelOpen: next };
     }),
   galleryOpen: false,
-  openGallery: () => set({ galleryOpen: true }),
+  galleryFavOnly: false,
+  openGallery: (opts) => set({ galleryOpen: true, galleryFavOnly: opts?.favOnly === true }),
   closeGallery: () => set({ galleryOpen: false }),
+  setGalleryFavOnly: (v) => set({ galleryFavOnly: v }),
   lightboxOpen: false,
   openLightbox: (filename) => {
     if (filename) {
@@ -977,6 +986,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     const prevIdx = idx < 0 ? 0 : Math.max(idx - 1, 0);
     if (prevIdx === idx) return;
     get().selectHistory(hist[prevIdx]);
+  },
+  jumpToImageSession: async (item) => {
+    const target = item ?? get().currentImage;
+    if (!target) return;
+    let sid = target.sessionId ?? null;
+    // History rows persisted before sessionId existed on GenerateItem fall
+    // back to a server lookup so we don't strand classic-mode images.
+    if (!sid && target.filename) {
+      try {
+        const { items } = await getHistory({ limit: 500 });
+        const hit = items.find((h) => h.filename === target.filename);
+        sid = hit?.sessionId ?? null;
+      } catch {}
+    }
+    if (!sid) {
+      get().showToast("이 이미지에는 연결된 생성 세션이 없습니다.");
+      return;
+    }
+    set({ lightboxOpen: false });
+    if (get().uiMode !== "node") get().setUIMode("node");
+    if (get().activeSessionId !== sid) {
+      try {
+        await get().switchSession(sid);
+      } catch (err) {
+        console.warn("[ima2:lightbox] switchSession failed", err);
+        get().showToast("세션으로 이동하지 못했습니다.", true);
+      }
+    }
   },
 
   uiMode: loadUIMode(),
@@ -1819,6 +1856,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           thumb: it.url,
           createdAt: it.createdAt,
           favorite: it.favorite === true,
+          sessionId: it.sessionId ?? null,
         }));
         if (history.length > 0) {
           const selected = loadSelectedFilename();

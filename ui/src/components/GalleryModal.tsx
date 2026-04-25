@@ -41,10 +41,12 @@ export function GalleryModal() {
   const removeFromHistory = useAppStore((s) => s.removeFromHistory);
   const addHistoryItem = useAppStore((s) => s.addHistoryItem);
   const openLightbox = useAppStore((s) => s.openLightbox);
+  const initialFavOnly = useAppStore((s) => s.galleryFavOnly);
+  const setGalleryFavOnly = useAppStore((s) => s.setGalleryFavOnly);
 
   const [query, setQuery] = useState("");
   const [groupBy, setGroupBy] = useState<"date" | "session">("date");
-  const [favOnly, setFavOnly] = useState(false);
+  const [favOnly, setFavOnly] = useState(initialFavOnly);
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>([]);
   const [loose, setLoose] = useState<GenerateItem[]>([]);
   const [pending, setPending] = useState<TrashPending | null>(null);
@@ -61,10 +63,17 @@ export function GalleryModal() {
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setFavOnly(false);
       setPending(null);
+      return;
     }
-  }, [open]);
+    // Honor whatever the store says (e.g. HistoryStrip ★ button opened
+    // the gallery in favorites-only mode).
+    setFavOnly(initialFavOnly);
+  }, [open, initialFavOnly]);
+
+  useEffect(() => {
+    setGalleryFavOnly(favOnly);
+  }, [favOnly, setGalleryFavOnly]);
 
   useEffect(() => {
     if (!open || groupBy !== "session") return;

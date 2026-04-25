@@ -19,6 +19,8 @@ export function Lightbox() {
   const removeFromHistory = useAppStore((s) => s.removeFromHistory);
   const addHistoryItem = useAppStore((s) => s.addHistoryItem);
   const selectHistory = useAppStore((s) => s.selectHistory);
+  const jumpToImageSession = useAppStore((s) => s.jumpToImageSession);
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite);
 
   const [zoom, setZoom] = useState<ZoomMode>("fit");
   const [showCaption, setShowCaption] = useState<boolean>(() => {
@@ -87,12 +89,17 @@ export function Lightbox() {
         void handleDelete();
         return;
       }
+      if (e.key === "f" || e.key === "F" || e.key === "ㄹ") {
+        e.preventDefault();
+        void toggleFavorite();
+        return;
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // handleDelete is stable via useCallback below; toggleCaption too.
+    // handleDelete is stable via useCallback below; toggleCaption + toggleFavorite too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, close, next, prev, toggleCaption]);
+  }, [open, close, next, prev, toggleCaption, toggleFavorite]);
 
   // Lock background scroll while open. Body already has overflow:hidden, but
   // some mobile browsers still bounce — set inert + aria-hidden on the app
@@ -241,6 +248,23 @@ export function Lightbox() {
       <div className="lightbox__topbar">
         {counter ? <span className="lightbox__counter">{counter}</span> : <span />}
         <div className="lightbox__actions">
+          {currentImage.filename ? (
+            <button
+              type="button"
+              className={`lightbox__btn lightbox__btn--fav${currentImage.favorite ? " is-active" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void toggleFavorite();
+              }}
+              aria-pressed={currentImage.favorite === true}
+              aria-label={currentImage.favorite ? "즐겨찾기 해제" : "즐겨찾기"}
+              title={currentImage.favorite ? "즐겨찾기 해제 (F)" : "즐겨찾기 (F)"}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill={currentImage.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </button>
+          ) : null}
           <button
             type="button"
             className={`lightbox__btn${showCaption ? "" : " lightbox__btn--off"}`}
@@ -368,10 +392,11 @@ export function Lightbox() {
       <div
         className="lightbox__stage"
         onClick={(e) => {
-          // Image click toggles zoom, anywhere else closes.
+          // Image click jumps to the originating session; clicks on empty
+          // stage area still bubble to the backdrop and close.
           if ((e.target as HTMLElement).tagName === "IMG") {
             e.stopPropagation();
-            setZoom((z) => (z === "fit" ? "actual" : "fit"));
+            void jumpToImageSession();
           }
         }}
       >
@@ -380,6 +405,7 @@ export function Lightbox() {
           src={src}
           alt={currentImage.prompt ?? "전체 보기"}
           draggable={false}
+          title="클릭: 생성 세션으로 이동 · Space: 100%/맞춤"
         />
       </div>
 

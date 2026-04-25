@@ -36,6 +36,7 @@ export type GenerateItem = {
   thumb?: string;
   createdAt?: number;
   favorite?: boolean;
+  sessionId?: string | null;
 };
 
 export type GenerateSingleResponse = {

@@ -476,6 +476,10 @@ type AppState = {
   revertToOriginalPrompt: () => void;
   maxAttempts: number;
   setMaxAttempts: (n: number) => void;
+  /** Unix ms until which generate() refuses to call /api/generate. Set when
+   *  the upstream returns USAGE_LIMIT (429). null = no cool-down active. */
+  usageLimitedUntil: number | null;
+  setUsageLimitedUntil: (ts: number | null) => void;
   logModalOpen: boolean;
   openLogModal: () => void;
   closeLogModal: () => void;
@@ -503,6 +507,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   count: 1,
   prompt: "",
   maxAttempts: loadMaxAttempts(),
+  usageLimitedUntil: (() => {
+    try {
+      const raw = localStorage.getItem("ima2.usageLimitedUntil");
+      if (!raw) return null;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return null;
+      return n > Date.now() ? n : null;
+    } catch {
+      return null;
+    }
+  })(),
+  setUsageLimitedUntil: (ts) => {
+    try {
+      if (ts && ts > Date.now()) {
+        localStorage.setItem("ima2.usageLimitedUntil", String(ts));
+      } else {
+        localStorage.removeItem("ima2.usageLimitedUntil");
+      }
+    } catch {}
+    set({ usageLimitedUntil: ts && ts > Date.now() ? ts : null });
+  },
   setMaxAttempts: (n) => {
     const v = clampMaxAttempts(n);
     saveMaxAttempts(v);
@@ -1703,6 +1728,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const s = get();
     const prompt = (overrides?.overridePrompt ?? s.prompt).trim();
     if (!prompt) return;
+    // Refuse early when we already know we're rate-limited; otherwise every
+    // click burns more upstream budget for the same 429.
+    const cool = get().usageLimitedUntil;
+    if (cool && cool > Date.now()) {
+      const sec = Math.max(1, Math.ceil((cool - Date.now()) / 1000));
+      get().showToast(
+        `OpenAI 사용 한도에 도달했습니다. 약 ${sec}초 뒤 자동 해제됩니다.`,
+        true,
+      );
+      return;
+    }
     const count = overrides?.overrideCount ?? s.count;
 
     const size = s.getResolvedSize();
@@ -1815,11 +1851,19 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (unloading) return;
           failed += 1;
           const msg = err instanceof Error ? err.message : "생성에 실패했습니다.";
+          const errCode = (err as { code?: string } | null)?.code;
+          const errStatus = (err as { status?: number } | null)?.status;
           console.warn(
             `[ima2][generate][${flightId}] FAILED in ` +
-            `${Date.now() - slotStartedAt}ms:`,
+            `${Date.now() - slotStartedAt}ms code=${errCode ?? "?"} status=${errStatus ?? "?"}:`,
             err,
           );
+          // 429 / USAGE_LIMIT → start a 5-min cool-down so subsequent clicks
+          // don't replay the same upstream rejection. Persist via
+          // setUsageLimitedUntil so other tabs see it via storage event.
+          if (errCode === "USAGE_LIMIT" || errStatus === 429) {
+            get().setUsageLimitedUntil(Date.now() + 5 * 60 * 1000);
+          }
           if (firstErrMsg === null) {
             firstErrMsg = msg;
           }
@@ -1854,7 +1898,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else if (succeeded > 0 && failed > 0) {
       get().showToast(`${succeeded}/${count}장 생성 성공 (${failed}장 실패)`, true);
     } else {
-      get().showToast(firstErrMsg ?? "생성에 실패했습니다.", true);
+      const cool = get().usageLimitedUntil;
+      if (cool && cool > Date.now()) {
+        get().showToast(
+          "OpenAI 사용 한도에 도달했습니다. 5분간 새 생성을 중지합니다.",
+          true,
+        );
+      } else {
+        get().showToast(firstErrMsg ?? "생성에 실패했습니다.", true);
+      }
     }
   },
 

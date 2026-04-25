@@ -272,6 +272,19 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   );
 }
 
+// Errors we should NOT keep retrying: rate-limit / usage-cap responses from
+// upstream OpenAI come back with the body "The usage limit has been reached"
+// (or 429 / "too many requests" / "quota"). Retrying just burns more budget
+// and adds latency. Detect by message OR explicit code so future code paths
+// can set `err.code = "USAGE_LIMIT"` directly.
+const USAGE_LIMIT_RE = /usage limit|quota|too many requests|rate.?limit/i;
+function isUsageLimitError(e) {
+  if (!e) return false;
+  if (e.code === "USAGE_LIMIT" || e.status === 429) return true;
+  const msg = e.message || "";
+  return USAGE_LIMIT_RE.test(msg);
+}
+
 async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttempt = null, ctx = {}) {
   const attempts = buildAttemptSequence(prompt, maxAttempts);
   const log = [];
@@ -352,6 +365,19 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         `${tag} attempt ${i + 1}/${attempts.length} THREW after ${durationMs}ms: ` +
         `code=${e?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}`,
       );
+      // Non-retryable: usage limit / quota / 429. Stop the loop and throw
+      // a typed error so the route handler can forward it to the client.
+      if (isUsageLimitError(e)) {
+        const stop = new Error(e?.message || "OpenAI usage limit reached");
+        stop.code = "USAGE_LIMIT";
+        stop.status = 429;
+        stop.cause = e;
+        stop.attempts = log;
+        console.warn(
+          `${tag} non-retryable USAGE_LIMIT — aborting after ${i + 1}/${attempts.length}`,
+        );
+        throw stop;
+      }
     }
 
     if (i < attempts.length - 1) {
@@ -1050,6 +1076,13 @@ app.post("/api/generate", async (req, res) => {
       });
       if (firstErr?.code === "SAFETY_REFUSAL") {
         return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [] });
+      }
+      if (firstErr?.code === "USAGE_LIMIT" || firstErr?.status === 429) {
+        return res.status(429).json({
+          error: firstErr.message || "OpenAI usage limit reached",
+          code: "USAGE_LIMIT",
+          attempts: firstErr.attempts || [],
+        });
       }
       return res.status(500).json({ error: "All generation attempts failed", code: firstErr?.code || "ALL_ATTEMPTS_FAILED", attempts: firstErr?.attempts || [] });
     }

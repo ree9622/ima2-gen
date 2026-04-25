@@ -27,6 +27,13 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
     };
     err.status = res.status;
     if (typeof raw !== "string" && raw?.code) err.code = raw.code;
+    // Some routes return { error: "...", code: "USAGE_LIMIT" } as flat fields
+    // alongside a string error. Pick that up too so callers can branch on
+    // err.code without parsing the message.
+    if (!err.code) {
+      const flatCode = (data as { code?: unknown }).code;
+      if (typeof flatCode === "string") err.code = flatCode;
+    }
     if (typeof data.currentVersion === "number") {
       err.currentVersion = data.currentVersion;
     }

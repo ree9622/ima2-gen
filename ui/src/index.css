@@ -314,6 +314,13 @@ body {
   cursor: not-allowed;
   transform: none;
 }
+.generate-btn.cooling {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  opacity: 1;
+  cursor: not-allowed;
+}
 .generate-btn.loading {
   background: var(--surface-2);
   color: var(--text-dim);

@@ -272,6 +272,7 @@ function showHelp() {
     ls             List recent history            (ima2 ls --help)
     show <name>    Show one history item          (ima2 show --help)
     ps             List active jobs               (ima2 ps --help)
+    prune          Show / clean disk usage        (ima2 prune --help)
     ping           Ping running server / check health
 
   Options:
@@ -297,7 +298,7 @@ if (args.includes("-v") || args.includes("--version")) {
 }
 
 if ((!command || args.includes("-h") || args.includes("--help"))
-    && !["gen", "edit", "ls", "show", "ps", "ping"].includes(command)) {
+    && !["gen", "edit", "ls", "show", "ps", "ping", "prune"].includes(command)) {
   showHelp();
   process.exit(command ? 0 : 1);
 }
@@ -332,7 +333,8 @@ switch (command) {
   case "ls":
   case "show":
   case "ps":
-  case "ping": {
+  case "ping":
+  case "prune": {
     const { setCliVersion } = await import("./lib/client.js");
     setCliVersion(pkg.version);
     const mod = await import(`./commands/${command}.js`);

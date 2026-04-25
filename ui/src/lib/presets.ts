@@ -28,7 +28,7 @@ export const BUILTINS: ReadonlyArray<Preset> = [
     builtIn: true,
     payload: {
       quality: "high", sizePreset: "1024x1536",
-      format: "png", moderation: "auto", count: 1,
+      format: "png", moderation: "low", count: 1,
     },
   },
   {
@@ -38,7 +38,7 @@ export const BUILTINS: ReadonlyArray<Preset> = [
     builtIn: true,
     payload: {
       quality: "medium", sizePreset: "1024x1024",
-      format: "jpeg", moderation: "auto", count: 2,
+      format: "jpeg", moderation: "low", count: 2,
     },
   },
   {
@@ -48,7 +48,7 @@ export const BUILTINS: ReadonlyArray<Preset> = [
     builtIn: true,
     payload: {
       quality: "high", sizePreset: "3824x2160",
-      format: "webp", moderation: "auto", count: 1,
+      format: "webp", moderation: "low", count: 1,
     },
   },
 ];

@@ -21,8 +21,9 @@
   --amber: #f59e0b;
   --red: #ef4444;
   --radius: 10px;
-  --font: "Outfit", sans-serif;
-  --mono: "Geist Mono", monospace;
+  --font: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+  --mono: "Geist Mono", ui-monospace, monospace;
 }
 
 :root[data-theme="light"] {
@@ -52,12 +53,40 @@
   --density-gap-md: 12px;
 }
 
+html,
+body {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Thin overlay-style scrollbars across the app so containers can stay
+   bounded without showing chunky chrome scrollbars when they need to
+   scroll. Containers that opt-in to this look just inherit `auto`. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.35);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.55);
+}
+
 body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
-  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  zoom: 1;
 }
 
 .app {
@@ -80,7 +109,13 @@ body {
 .sidebar__scroll {
   flex: 1 1 auto;
   min-height: 0;
+  /* Children with `flex: 1` (composer) absorb extra height and bounded
+     children (activity log) scroll internally. We still allow `overflow-y:
+     auto` here as a safety net for users running browser zoom or extreme
+     content overflow — the global thin scrollbar styling keeps it discreet
+     and it stays hidden when content fits. */
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--density-pad-lg) var(--density-pad-md) var(--density-pad-md);
   display: flex;
   flex-direction: column;
@@ -150,8 +185,10 @@ body {
 .prompt-area {
   width: 100%;
   min-height: 80px;
-  max-height: 200px;
-  resize: vertical;
+  /* Inside the composer the textarea grows to fill the available space
+     (composer is a flex column). Removing max-height/resize keeps the
+     entire app from showing a redundant inner scrollbar. */
+  resize: none;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -323,6 +360,50 @@ body {
   flex-direction: column;
   gap: var(--density-gap-md);
   flex: 1;
+  min-height: 0;
+}
+
+/* Short viewports (typical laptop with browser chrome): tighten the right
+   panel so all option cards usually fit without a scrollbar. */
+@media (max-height: 900px) {
+  .right-panel-body {
+    padding: 10px;
+    gap: 6px;
+  }
+  .right-panel-body .section-title {
+    margin-top: 2px;
+  }
+}
+@media (max-height: 800px) {
+  .right-panel-body {
+    padding: 8px;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .right-panel-body .section-title {
+    margin-top: 0;
+    font-size: 10px;
+  }
+  .right-panel-body .option-row {
+    gap: 3px;
+  }
+  /* Square-button cards (auto / direct-input / preset row) get a slimmer
+     padding so they each shrink ~6–10 px in height. */
+  .right-panel-body button,
+  .right-panel-body .preset-manager__select,
+  .right-panel-body .preset-manager__save,
+  .right-panel-body .preset-manager__confirm,
+  .right-panel-body input[type="text"],
+  .right-panel-body input[type="number"] {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+}
+@media (max-height: 700px) {
+  .right-panel-body {
+    padding: 6px;
+    gap: 3px;
+  }
 }
 .right-panel.collapsed .right-panel-body {
   display: none;
@@ -518,6 +599,10 @@ body {
   display: none;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   gap: 10px;
   max-width: 100%;
   max-height: 100%;
@@ -527,15 +612,20 @@ body {
 }
 
 .result-img {
+  flex: 1 1 auto;
+  min-height: 0;
   max-width: 100%;
-  max-height: calc(100dvh - 260px);
+  max-height: calc(100dvh - 200px);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   object-fit: contain;
 }
 
 .result-prompt {
-  max-width: 600px;
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 720px;
   padding: 10px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -552,6 +642,44 @@ body {
 .result-prompt:hover {
   border-color: var(--text-dim);
   color: var(--text);
+}
+.result-prompt--original {
+  border-style: dashed;
+}
+.result-prompt__text {
+  max-height: 4.5em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.result-prompt__toggle {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding: 2px;
+  background: var(--border);
+  border-radius: 6px;
+}
+.result-prompt__tab {
+  padding: 2px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.result-prompt__tab:hover {
+  color: var(--text);
+}
+.result-prompt__tab.is-active {
+  background: var(--surface);
+  color: var(--text);
+}
+.result-prompt--original .result-prompt__tab.is-active {
+  color: var(--amber, #f5a524);
 }
 
 .result-meta {
@@ -710,6 +838,14 @@ body {
   border: 1px solid var(--border);
   background: var(--surface);
   transition: border-color 0.15s ease, background 0.15s ease;
+  /* Stretch within sidebar__scroll so the textarea can absorb extra height
+     instead of forcing the sidebar to scroll. min-height: 0 lets a flex
+     child shrink below its natural content height; overflow: hidden keeps
+     the textarea (which has its own min-height) from spilling into siblings
+     like the activity log on very short viewports. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 .composer--drag {
   border-color: var(--accent);
@@ -781,7 +917,11 @@ body {
   border: none;
   padding: 4px 2px;
   background: transparent;
-  min-height: 72px;
+  /* Keep at least a usable strip visible even when style-chips and other
+     siblings expand. They cap themselves with max-height + own scroll, so
+     the textarea always retains room. */
+  min-height: 60px;
+  flex: 1 1 auto;
 }
 .composer__textarea:focus,
 .composer__textarea:focus-visible {
@@ -826,6 +966,57 @@ body {
   font-size: 10px;
   color: var(--text-dim);
   opacity: 0.7;
+}
+
+/* Pre-enhance original-prompt hint, shown right under the textarea */
+.composer__enhance-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(122, 162, 255, 0.08);
+  border: 1px solid rgba(122, 162, 255, 0.35);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+.composer__enhance-hint-label {
+  flex-shrink: 0;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent, #7aa2ff);
+}
+.composer__enhance-hint-orig {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.composer__enhance-hint-action,
+.composer__enhance-hint-dismiss {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.composer__enhance-hint-action:hover {
+  background: rgba(122, 162, 255, 0.18);
+  border-color: var(--accent, #7aa2ff);
+}
+.composer__enhance-hint-dismiss {
+  padding: 2px 6px;
+  min-width: 22px;
+}
+.composer__enhance-hint-dismiss:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 .composer__dropzone {
   position: absolute;
@@ -1759,32 +1950,103 @@ body {
 .image-node__actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 .image-node__del { color: #e05050 !important; }
 
-/* In-flight prompt queue */
+/* Activity log (running + completed + failed) */
+.activity-log {
+  margin-top: 8px;
+  /* Cap height so a long history of past generations cannot push the
+     composer or other sidebar sections off-screen. The list scrolls
+     internally instead. */
+  display: flex;
+  flex-direction: column;
+  max-height: 25vh;
+  flex-shrink: 0;
+  min-height: 0;
+}
+.activity-log .in-flight-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+.activity-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.activity-log-title {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.activity-log-clear {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.activity-log-clear:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
 .in-flight-list {
   list-style: none;
   padding: 0;
-  margin: 8px 0 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .in-flight-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   padding: 6px 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 12px;
   color: var(--text-dim);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.in-flight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .in-flight-prompt {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.in-flight-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.in-flight-attempt {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent, #7aa2ff);
+  font-variant-numeric: tabular-nums;
+}
+.in-flight-attempt--retry {
+  color: var(--amber, #f5a524);
+  font-weight: 600;
+}
+.in-flight-elapsed {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #7fd17f;
 }
 .in-flight-phase {
   flex-shrink: 0;
@@ -1803,6 +2065,66 @@ body {
   color: #7fd17f;
   opacity: 1;
 }
+
+/* Status colour cues */
+.in-flight-item[data-status="success"] {
+  background: rgba(127, 209, 127, 0.12);
+  border-color: rgba(127, 209, 127, 0.45);
+  color: var(--text);
+}
+.in-flight-item[data-status="success"] .in-flight-phase {
+  color: #7fd17f;
+  opacity: 1;
+}
+.in-flight-item--clickable {
+  cursor: pointer;
+}
+.in-flight-item--clickable:hover {
+  background: rgba(127, 209, 127, 0.22);
+  border-color: rgba(127, 209, 127, 0.7);
+}
+.in-flight-item--clickable:focus-visible {
+  outline: 2px solid var(--accent, #7aa2ff);
+  outline-offset: 2px;
+}
+.in-flight-item[data-status="error"] {
+  background: rgba(224, 80, 80, 0.12);
+  border-color: rgba(224, 80, 80, 0.45);
+  color: var(--text);
+}
+.in-flight-item[data-status="error"] .in-flight-phase {
+  color: #ff8a8a;
+  opacity: 1;
+}
+
+.in-flight-error {
+  font-size: 11px;
+  color: #ffa0a0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.in-flight-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.in-flight-retry,
+.in-flight-dismiss {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.in-flight-retry:hover { background: rgba(122, 162, 255, 0.18); border-color: var(--accent, #7aa2ff); }
+.in-flight-dismiss { padding: 2px 6px; min-width: 22px; }
+.in-flight-dismiss:hover { background: rgba(224, 80, 80, 0.18); border-color: #ff8a8a; }
+
 .in-flight-spinner {
   flex-shrink: 0;
   width: 12px;
@@ -2047,6 +2369,12 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  /* Cap how tall the style-chip stack can grow inside the composer so it
+     never starves the textarea. Scrolls internally when the user expands
+     all groups. */
+  max-height: 35vh;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 .chip-group__header {
   display: flex;

@@ -7,3 +7,9 @@ devlog/
 ui/dist/
 ui/tsconfig.app.tsbuildinfo
 ui/tsconfig.node.tsbuildinfo
+
+# Ad-hoc E2E / debug artifacts (Playwright/Chrome DevTools screenshots etc.)
+_e2e_*.png
+_e2e_*.json
+_debug_*.png
+_debug_*.json

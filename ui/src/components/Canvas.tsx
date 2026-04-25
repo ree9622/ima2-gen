@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { ResultActions } from "./ResultActions";
 
@@ -9,10 +10,25 @@ export function Canvas() {
   const showToast = useAppStore((s) => s.showToast);
   const setPrompt = useAppStore((s) => s.setPrompt);
 
-  const copyPrompt = () => {
-    if (!currentImage?.prompt) return;
-    void navigator.clipboard.writeText(currentImage.prompt);
-    showToast("프롬프트를 복사했습니다");
+  const [promptView, setPromptView] = useState<"enhanced" | "original">("enhanced");
+
+  const hasOriginal = Boolean(
+    currentImage?.originalPrompt &&
+      currentImage.originalPrompt !== currentImage.prompt,
+  );
+  const showingOriginal = hasOriginal && promptView === "original";
+  const visiblePrompt = showingOriginal
+    ? currentImage?.originalPrompt
+    : currentImage?.prompt;
+
+  const copyVisible = () => {
+    if (!visiblePrompt) return;
+    void navigator.clipboard.writeText(visiblePrompt);
+    showToast(
+      showingOriginal
+        ? "원본 프롬프트를 복사했습니다"
+        : "프롬프트를 복사했습니다",
+    );
   };
 
   const displayQuality = currentImage?.quality ?? quality;
@@ -100,9 +116,39 @@ export function Canvas() {
             src={currentImage.url ?? currentImage.image}
             alt="생성 결과"
           />
-          {currentImage.prompt ? (
-            <div className="result-prompt" onClick={copyPrompt} title="클릭하여 프롬프트 복사">
-              {currentImage.prompt}
+          {visiblePrompt ? (
+            <div
+              className={`result-prompt${showingOriginal ? " result-prompt--original" : ""}`}
+              onClick={copyVisible}
+              title="클릭하여 프롬프트 복사"
+            >
+              {hasOriginal ? (
+                <div
+                  className="result-prompt__toggle"
+                  role="tablist"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={!showingOriginal}
+                    className={`result-prompt__tab${!showingOriginal ? " is-active" : ""}`}
+                    onClick={() => setPromptView("enhanced")}
+                  >
+                    다듬은
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={showingOriginal}
+                    className={`result-prompt__tab${showingOriginal ? " is-active" : ""}`}
+                    onClick={() => setPromptView("original")}
+                  >
+                    원본
+                  </button>
+                </div>
+              ) : null}
+              <div className="result-prompt__text">{visiblePrompt}</div>
             </div>
           ) : null}
           <div className="result-meta">

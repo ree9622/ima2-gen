@@ -8,7 +8,7 @@
 
 Minimal CLI + web UI for OpenAI image generation. OAuth (free via ChatGPT Plus/Pro) or API key. Parallel generation, multi-image references, CLI automation, persistent history.
 
-Current OAuth mode uses the Responses API with `gpt-5.4` plus the hosted `image_generation` tool. OpenAI's docs indicate that GPT Image models such as `gpt-image-2` can be used behind that tool, but `gpt-image-2` is not a valid `model` value for the Responses API, and the local OAuth proxy used by this app does not expose `/v1/images/generations` for direct model pinning.
+Current OAuth mode uses the Responses API with `gpt-5.5` plus the hosted `image_generation` tool. OpenAI's docs indicate that GPT Image models such as `gpt-image-2` can be used behind that tool, but `gpt-image-2` is not a valid `model` value for the Responses API, and the local OAuth proxy used by this app does not expose `/v1/images/generations` for direct model pinning.
 
 ![ima2-gen screenshot](assets/screenshot.png)
 

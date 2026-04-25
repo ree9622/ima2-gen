@@ -52,7 +52,7 @@ describe("Server: /api/health + advertisement", () => {
       }
       if (req.method === "GET" && req.url === "/v1/models") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ data: [{ id: "gpt-5.4" }] }));
+        res.end(JSON.stringify({ data: [{ id: "gpt-5.5" }] }));
         return;
       }
       res.writeHead(404).end();
@@ -147,6 +147,35 @@ describe("Server: /api/health + advertisement", () => {
     assert.ok(lastOAuthPayload, "proxy request should be captured");
     assert.strictEqual(lastOAuthPayload.tools[1].type, "image_generation");
     assert.strictEqual(lastOAuthPayload.tools[1].moderation, "auto");
+  });
+
+  it("GET /api/storage/stats returns bucket counts", async () => {
+    const r = await fetch(`http://localhost:${PORT}/api/storage/stats`);
+    assert.strictEqual(r.status, 200);
+    const body = await r.json();
+    assert.ok(body.generated);
+    assert.ok(body.trash);
+    assert.ok(body.failed);
+    assert.ok(Number.isFinite(body.totalBytes));
+    assert.ok(Number.isFinite(body.generated.bytes));
+    assert.ok(Number.isFinite(body.generated.images));
+  });
+
+  it("POST /api/storage/prune dry-run returns policy + counts without deleting", async () => {
+    const r = await fetch(`http://localhost:${PORT}/api/storage/prune`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: true, trashTtlDays: 7, failedTtlDays: 14 }),
+    });
+    assert.strictEqual(r.status, 200);
+    const body = await r.json();
+    assert.strictEqual(body.dryRun, true);
+    assert.ok(body.policy);
+    assert.strictEqual(body.policy.trashTtlDays, 7);
+    assert.strictEqual(body.policy.keepFavorites, true);
+    assert.ok(body.generated);
+    assert.ok(body.trash);
+    assert.ok(body.failed);
   });
 
   // Windows: child.kill(anything) = forceful termination per Node docs

@@ -2,6 +2,7 @@ import type {
   BillingResponse,
   GenerateRequest,
   GenerateResponse,
+  GenerationLogItem,
   OAuthStatus,
 } from "../types";
 
@@ -10,6 +11,7 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const data = (await res.json().catch(() => ({}))) as T & {
     error?: string | { code?: string; message?: string };
     currentVersion?: number;
+    attempts?: unknown;
   };
   if (!res.ok) {
     const raw = (data as { error?: string | { code?: string; message?: string } })
@@ -28,25 +30,32 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
     if (typeof data.currentVersion === "number") {
       err.currentVersion = data.currentVersion;
     }
+    console.warn(
+      `[ima2][api] ${init?.method ?? "GET"} ${url} failed: status=${res.status} ` +
+      `code=${err.code ?? "?"} msg=${message}`,
+      Array.isArray(data.attempts) ? { attempts: data.attempts } : undefined,
+    );
     throw err;
   }
   return data;
 }
 
+export type InflightJob = {
+  requestId: string;
+  kind: string;
+  prompt: string;
+  startedAt: number;
+  phase?: string;
+  phaseAt?: number;
+  attempt?: number;
+  maxAttempts?: number;
+  meta?: Record<string, unknown>;
+};
+
 export function getInflight(params?: {
   kind?: "classic" | "node";
   sessionId?: string;
-}): Promise<{
-  jobs: Array<{
-    requestId: string;
-    kind: string;
-    prompt: string;
-    startedAt: number;
-    phase?: string;
-    phaseAt?: number;
-    meta?: Record<string, unknown>;
-  }>;
-}> {
+}): Promise<{ jobs: InflightJob[] }> {
   const qs = new URLSearchParams();
   if (params?.kind) qs.set("kind", params.kind);
   if (params?.sessionId) qs.set("sessionId", params.sessionId);
@@ -89,6 +98,7 @@ export type HistoryItem = {
   url: string;
   createdAt: number;
   prompt: string | null;
+  originalPrompt?: string | null;
   quality: string | null;
   size: string | null;
   moderation?: string | null;
@@ -199,6 +209,8 @@ export type NodeGenerateRequest = {
   requestId?: string;
   sessionId?: string | null;
   clientNodeId?: string | null;
+  maxAttempts?: number;
+  originalPrompt?: string;
 };
 
 export type NodeGenerateResponse = {
@@ -304,6 +316,22 @@ export function saveSessionGraph(
       "If-Match": String(graphVersion),
     },
     body: JSON.stringify({ nodes, edges }),
+  });
+}
+
+export function getGenerationLog(
+  params: { limit?: number; status?: "success" | "failed" } = {},
+): Promise<{ items: GenerationLogItem[]; total: number }> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(params.limit ?? 100));
+  if (params.status) qs.set("status", params.status);
+  return jsonFetch(`/api/generation-log?${qs.toString()}`);
+}
+
+export function deleteFailedLogItem(id: string): Promise<{ ok: boolean; id: string }> {
+  const clean = id.replace(/^failed\//, "");
+  return jsonFetch(`/api/generation-log/failed/${encodeURIComponent(clean)}`, {
+    method: "DELETE",
   });
 }
 

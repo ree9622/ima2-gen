@@ -26,6 +26,7 @@ export type GenerateItem = {
   url?: string;
   filename?: string;
   prompt?: string;
+  originalPrompt?: string;
   elapsed?: number;
   provider?: string;
   quality?: string;
@@ -76,6 +77,43 @@ export type GenerateRequest = {
   image?: string;
   references?: string[];
   requestId?: string;
+  maxAttempts?: number;
+  // Pre-enhance original (only set when EnhanceModal applied a rewrite).
+  // Server stores it in the sidecar so history can show what the user typed
+  // before the model expanded it.
+  originalPrompt?: string;
+};
+
+export type AttemptLog = {
+  attempt: number;
+  promptUsed: string;
+  compliantVariant: boolean;
+  ok: boolean;
+  errorMessage: string | null;
+  errorCode: string | null;
+  durationMs: number;
+  startedAt: number;
+};
+
+export type GenerationLogItem = {
+  id: string;
+  status: "success" | "failed";
+  createdAt: number;
+  endpoint: "generate" | "edit" | "node";
+  prompt: string | null;
+  originalPrompt?: string | null;
+  quality: string | null;
+  size: string | null;
+  format: string | null;
+  moderation: string | null;
+  maxAttempts: number | null;
+  attempts: AttemptLog[];
+  referenceCount: number;
+  filename: string | null;
+  url: string | null;
+  sessionId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
 };
 
 export type OAuthStatus = {

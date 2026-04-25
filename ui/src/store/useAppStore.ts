@@ -51,8 +51,82 @@ function loadUIMode(): UIMode {
   return "classic";
 }
 
-type PersistedInFlight = { id: string; prompt: string; startedAt: number; phase?: string };
-const INFLIGHT_TTL_MS = 180_000;
+function clampMaxAttempts(n: number): number {
+  if (!Number.isFinite(n)) return 3;
+  const i = Math.floor(n);
+  if (i < 1) return 1;
+  if (i > 10) return 10;
+  return i;
+}
+
+function loadMaxAttempts(): number {
+  try {
+    const raw = localStorage.getItem("ima2.maxAttempts");
+    if (raw == null) return 3;
+    const n = Number(JSON.parse(raw));
+    return clampMaxAttempts(n);
+  } catch {
+    return 3;
+  }
+}
+
+function saveMaxAttempts(n: number): void {
+  try {
+    localStorage.setItem("ima2.maxAttempts", JSON.stringify(clampMaxAttempts(n)));
+  } catch {}
+}
+
+
+// Activity log entry: in-flight items used to be ephemeral, but the user wants
+// them to persist after success/failure with color cues + retry. We keep the
+// localStorage key `ima2.inFlight` for backwards compatibility with older
+// browser tabs, but the shape now carries terminal state too.
+export type ActivityStatus = "running" | "success" | "error";
+
+export type ActivityRetryPayload = {
+  kind: "classic" | "node";
+  prompt: string;
+  // classic-only:
+  count?: number;
+  // node-only:
+  clientNodeId?: ClientNodeId;
+};
+
+export type PersistedInFlight = {
+  id: string;
+  prompt: string;
+  startedAt: number;
+  phase?: string;
+  status?: ActivityStatus;
+  attempt?: number;
+  maxAttempts?: number;
+  endedAt?: number;
+  elapsedMs?: number;
+  errorMessage?: string;
+  retry?: ActivityRetryPayload;
+  // For success entries: history filename so clicking the activity item
+  // can switch the main view (classic) or focus the node (node mode).
+  filename?: string;
+  clientNodeId?: ClientNodeId;
+};
+
+const INFLIGHT_TTL_MS = 180_000;            // running TTL (legacy guard against stuck items)
+const ACTIVITY_SUCCESS_TTL_MS = 10 * 60_000; // 10 min
+const ACTIVITY_ERROR_TTL_MS = 24 * 60 * 60_000; // 24 h
+const ACTIVITY_MAX_ENTRIES = 50;
+
+function activityTtlMs(item: PersistedInFlight): number {
+  switch (item.status) {
+    case "success": return ACTIVITY_SUCCESS_TTL_MS;
+    case "error": return ACTIVITY_ERROR_TTL_MS;
+    default: return INFLIGHT_TTL_MS;
+  }
+}
+
+function isExpired(item: PersistedInFlight, now: number): boolean {
+  const stamp = item.endedAt ?? item.startedAt;
+  return now - stamp > activityTtlMs(item);
+}
 
 function loadInFlight(): PersistedInFlight[] {
   try {
@@ -61,13 +135,42 @@ function loadInFlight(): PersistedInFlight[] {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
     const now = Date.now();
-    return arr
-      .filter(
-        (x) =>
-          x && typeof x.id === "string" && typeof x.prompt === "string" &&
-          typeof x.startedAt === "number" && now - x.startedAt < INFLIGHT_TTL_MS,
-      )
-      .map((x) => ({ id: x.id, prompt: x.prompt, startedAt: x.startedAt }));
+    const items: PersistedInFlight[] = [];
+    for (const x of arr) {
+      if (!x || typeof x.id !== "string" || typeof x.prompt !== "string") continue;
+      if (typeof x.startedAt !== "number") continue;
+      const item: PersistedInFlight = {
+        id: x.id,
+        prompt: x.prompt,
+        startedAt: x.startedAt,
+        phase: typeof x.phase === "string" ? x.phase : undefined,
+        status: x.status === "success" || x.status === "error" ? x.status : "running",
+        attempt: typeof x.attempt === "number" ? x.attempt : undefined,
+        maxAttempts: typeof x.maxAttempts === "number" ? x.maxAttempts : undefined,
+        endedAt: typeof x.endedAt === "number" ? x.endedAt : undefined,
+        elapsedMs: typeof x.elapsedMs === "number" ? x.elapsedMs : undefined,
+        errorMessage: typeof x.errorMessage === "string" ? x.errorMessage : undefined,
+        filename: typeof x.filename === "string" ? x.filename : undefined,
+        clientNodeId:
+          typeof x.clientNodeId === "string" ? (x.clientNodeId as ClientNodeId) : undefined,
+        retry:
+          x.retry && typeof x.retry === "object" && typeof x.retry.prompt === "string"
+            ? {
+                kind: x.retry.kind === "node" ? "node" : "classic",
+                prompt: x.retry.prompt,
+                count: typeof x.retry.count === "number" ? x.retry.count : undefined,
+                clientNodeId:
+                  typeof x.retry.clientNodeId === "string"
+                    ? (x.retry.clientNodeId as ClientNodeId)
+                    : undefined,
+              }
+            : undefined,
+      };
+      if (!isExpired(item, now)) items.push(item);
+    }
+    // Newest first, then cap.
+    items.sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
+    return items.slice(0, ACTIVITY_MAX_ENTRIES);
   } catch {
     return [];
   }
@@ -87,6 +190,25 @@ function saveInFlight(list: PersistedInFlight[]): void {
       } catch {}
     }
   }
+}
+
+// Page-unload guard: when the user navigates away or refreshes, in-flight
+// fetches abort and would otherwise hit the generate/generateNode catch
+// blocks, marking the activity entry as "error". The server still owns
+// the request (the upstream OAuth call keeps running), so on the next
+// page load `reconcileInflight` should restore it as running. We set this
+// flag from beforeunload/visibilitychange and skip the local error-mark
+// when it's set.
+let unloading = false;
+if (typeof window !== "undefined") {
+  const markUnloading = () => { unloading = true; };
+  const clearUnloading = () => { unloading = false; };
+  window.addEventListener("beforeunload", markUnloading);
+  window.addEventListener("pagehide", markUnloading);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") markUnloading();
+    else clearUnloading();
+  });
 }
 
 function loadSelectedFilename(): string | null {
@@ -203,6 +325,11 @@ type AppState = {
   reconcileInflight: () => Promise<void>;
   reconcileGraphPending: () => Promise<void>;
   syncFromStorage: () => void;
+  dismissActivity: (id: string) => void;
+  clearActivityHistory: () => void;
+  retryActivity: (id: string) => Promise<void>;
+  cancelActivity: (id: string) => void;
+  selectActivity: (id: string) => void;
   currentImage: GenerateItem | null;
   history: GenerateItem[];
   toast: ToastState;
@@ -251,6 +378,19 @@ type AppState = {
   setModeration: (m: Moderation) => void;
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
+  // Original (pre-enhance) prompt — set by EnhanceModal.onApply, cleared on
+  // direct edits or external prompt changes. Used so generate / sidecar can
+  // record what the user originally typed before the enhance rewrite.
+  originalPrompt: string | null;
+  applyEnhancedPrompt: (original: string, enhanced: string) => void;
+  clearOriginalPrompt: () => void;
+  revertToOriginalPrompt: () => void;
+  maxAttempts: number;
+  setMaxAttempts: (n: number) => void;
+  logModalOpen: boolean;
+  openLogModal: () => void;
+  closeLogModal: () => void;
+  retryFromLog: (item: import("../types").GenerationLogItem) => Promise<void>;
   applyPreset: (payload: PresetPayload) => void;
   selectHistory: (item: GenerateItem) => void;
   removeFromHistory: (filename: string) => void;
@@ -270,9 +410,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   customW: 1920,
   customH: 1088,
   format: "png",
-  moderation: "auto",
+  moderation: "low",
   count: 1,
   prompt: "",
+  maxAttempts: loadMaxAttempts(),
+  setMaxAttempts: (n) => {
+    const v = clampMaxAttempts(n);
+    saveMaxAttempts(v);
+    set({ maxAttempts: v });
+  },
+  logModalOpen: false,
+  openLogModal: () => set({ logModalOpen: true }),
+  closeLogModal: () => set({ logModalOpen: false }),
+  retryFromLog: async (item) => {
+    if (!item?.prompt) {
+      get().showToast("재시도할 프롬프트가 없습니다.", true);
+      return;
+    }
+    const s = get();
+    set({
+      prompt: item.prompt,
+      quality: (item.quality as Quality) || s.quality,
+      sizePreset: (item.size as SizePreset) || s.sizePreset,
+      format: (item.format as Format) || s.format,
+      moderation: (item.moderation as Moderation) || s.moderation,
+      logModalOpen: false,
+    });
+    if (item.referenceCount > 0) {
+      get().showToast("참조 이미지는 재시도에 포함되지 않습니다. 필요하면 다시 첨부하세요.", true);
+    }
+    await get().generate({ overridePrompt: item.prompt, overrideCount: 1 });
+  },
   referenceImages: [],
   addReferences: async (files) => {
     const allowed = 5 - get().referenceImages.length;
@@ -340,22 +508,104 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ referenceImages: [...s.referenceImages, dataUrl] }));
     get().showToast("현재 이미지를 참조에 추가했습니다.");
   },
-  activeGenerations: loadInFlight().length,
+  activeGenerations: loadInFlight().filter((f) => (f.status ?? "running") === "running").length,
   inFlight: loadInFlight(),
+  dismissActivity: (id) => {
+    const next = get().inFlight.filter((f) => f.id !== id);
+    saveInFlight(next);
+    set({
+      inFlight: next,
+      activeGenerations: next.filter((f) => (f.status ?? "running") === "running").length,
+    });
+  },
+  clearActivityHistory: () => {
+    // Keeps in-progress entries; only clears terminal ones.
+    const next = get().inFlight.filter((f) => (f.status ?? "running") === "running");
+    saveInFlight(next);
+    set({
+      inFlight: next,
+      activeGenerations: next.length,
+    });
+  },
+  selectActivity: (id) => {
+    const item = get().inFlight.find((f) => f.id === id);
+    if (!item) return;
+    if (item.status === "success" && item.filename) {
+      const target = get().history.find((h) => h.filename === item.filename);
+      if (target) {
+        get().selectHistory(target);
+        return;
+      }
+      // History not yet hydrated for this filename — fall back to constructing
+      // a minimal item so the canvas can render the URL directly.
+      get().selectHistory({
+        image: `/generated/${item.filename}`,
+        url: `/generated/${item.filename}`,
+        filename: item.filename,
+        prompt: item.prompt,
+      });
+      return;
+    }
+    if (item.clientNodeId && get().uiMode === "node") {
+      // Node-mode click: leave focus to the existing node selection logic.
+      // (Could pan/zoom to the node here in a future pass.)
+    }
+  },
+  cancelActivity: (id) => {
+    const item = get().inFlight.find((f) => f.id === id);
+    if (!item || (item.status ?? "running") !== "running") return;
+    void cancelInflight(id);
+    const next = get().inFlight.map((f) =>
+      f.id === id
+        ? {
+            ...f,
+            status: "error" as const,
+            endedAt: Date.now(),
+            elapsedMs: Date.now() - f.startedAt,
+            errorMessage: "취소됨",
+            phase: undefined,
+          }
+        : f,
+    );
+    saveInFlight(next);
+    set({
+      inFlight: next,
+      activeGenerations: next.filter((f) => (f.status ?? "running") === "running").length,
+    });
+  },
+  retryActivity: async (id) => {
+    const item = get().inFlight.find((f) => f.id === id);
+    if (!item || !item.retry) {
+      get().showToast("재시도 정보가 없습니다", true);
+      return;
+    }
+    // Drop the failed entry first so a new one (with fresh id) replaces it.
+    get().dismissActivity(id);
+    if (item.retry.kind === "node" && item.retry.clientNodeId) {
+      await get().generateNode(item.retry.clientNodeId);
+    } else {
+      const c = (item.retry.count === 2 || item.retry.count === 4 ? item.retry.count : 1) as Count;
+      await get().generate({
+        overridePrompt: item.retry.prompt,
+        overrideCount: c,
+      });
+    }
+  },
   startInFlightPolling: () => {
     if (typeof window === "undefined") return;
     const w = window as unknown as { __ima2InflightTimer?: number };
     if (w.__ima2InflightTimer) return;
     const tick = async () => {
       const cur = get().inFlight;
-      if (cur.length === 0) {
+      const running = cur.filter((f) => (f.status ?? "running") === "running");
+      if (running.length === 0) {
         if (w.__ima2InflightTimer) {
           clearInterval(w.__ima2InflightTimer);
           w.__ima2InflightTimer = undefined;
         }
         return;
       }
-      // Merge server-side phase info so the spinner label reflects real progress
+      // Merge server-side phase + attempt info onto running entries.
       try {
         const inflightKind = get().uiMode === "node" ? "node" : "classic";
         const inflightSessionId =
@@ -364,29 +614,28 @@ export const useAppStore = create<AppState>((set, get) => ({
           kind: inflightKind,
           sessionId: inflightSessionId,
         });
-        const byId = new Map(jobs.map((j) => [j.requestId, j.phase] as const));
+        const byId = new Map(jobs.map((j) => [j.requestId, j] as const));
         let changed = false;
-        const now0 = Date.now();
-        const GRACE_MS = 5000;
-        const nextInflight: typeof cur = [];
-        for (const f of get().inFlight) {
-          // If server no longer knows this job and enough time has passed,
-          // drop it locally so the spinner does not linger after completion.
-          if (!byId.has(f.id) && now0 - f.startedAt > GRACE_MS) {
-            changed = true;
-            continue;
+        const nextInflight = get().inFlight.map((f) => {
+          // Only update entries still running locally.
+          if ((f.status ?? "running") !== "running") return f;
+          const j = byId.get(f.id);
+          if (!j) return f;
+          const newPhase = typeof j.phase === "string" ? j.phase : f.phase;
+          const newAttempt = typeof j.attempt === "number" ? j.attempt : f.attempt;
+          const newMax = typeof j.maxAttempts === "number" ? j.maxAttempts : f.maxAttempts;
+          if (newPhase === f.phase && newAttempt === f.attempt && newMax === f.maxAttempts) {
+            return f;
           }
-          const p = byId.get(f.id);
-          if (p && p !== f.phase) {
-            changed = true;
-            nextInflight.push({ ...f, phase: p });
-          } else {
-            nextInflight.push(f);
-          }
-        }
+          changed = true;
+          return { ...f, phase: newPhase, attempt: newAttempt, maxAttempts: newMax };
+        });
         if (changed) {
           saveInFlight(nextInflight);
-          set({ inFlight: nextInflight, activeGenerations: nextInflight.length });
+          set({
+            inFlight: nextInflight,
+            activeGenerations: nextInflight.filter((f) => (f.status ?? "running") === "running").length,
+          });
         }
       } catch {}
       try {
@@ -401,6 +650,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           filename: it.filename,
           thumb: it.url,
           prompt: it.prompt ?? undefined,
+          originalPrompt: it.originalPrompt ?? undefined,
           size: it.size ?? undefined,
           quality: it.quality ?? undefined,
           format: it.format as Format | undefined,
@@ -422,17 +672,15 @@ export const useAppStore = create<AppState>((set, get) => ({
             };
           });
         }
-        // Prune strategy: TTL-based only. Do not attempt to correlate
-        // history items with inFlight entries — backend ordering may differ
-        // from local generation order under concurrency. Matching by prompt
-        // is also unreliable when the same prompt is queued twice.
+        // TTL prune: drop expired terminal entries + reap stuck running entries.
         const now = Date.now();
-        const remaining = get().inFlight.filter(
-          (f) => now - f.startedAt < INFLIGHT_TTL_MS,
-        );
+        const remaining = get().inFlight.filter((f) => !isExpired(f, now));
         if (remaining.length !== get().inFlight.length) {
           saveInFlight(remaining);
-          set({ inFlight: remaining, activeGenerations: remaining.length });
+          set({
+            inFlight: remaining,
+            activeGenerations: remaining.filter((f) => (f.status ?? "running") === "running").length,
+          });
         }
       } catch {}
     };
@@ -450,22 +698,34 @@ export const useAppStore = create<AppState>((set, get) => ({
       const serverIds = new Set(jobs.map((j) => j.requestId));
       const now = Date.now();
       const local = get().inFlight;
-      // Keep local entries that are either still known to the server,
-      // or started very recently (<10s — request may be in-flight before
-      // /api/inflight registered). Drop anything else as stale.
-      const merged = local.filter(
-        (f) => serverIds.has(f.id) || now - f.startedAt < 10_000,
-      );
-      // Bring in server-only jobs (started from another tab / process)
+      // Drop running entries the server doesn't know about that are also
+      // older than 10 s; keep terminal ones so the user sees their history.
+      const merged = local.filter((f) => {
+        const status = f.status ?? "running";
+        if (status !== "running") return !isExpired(f, now);
+        return serverIds.has(f.id) || now - f.startedAt < 10_000;
+      });
       const localIds = new Set(merged.map((f) => f.id));
       for (const j of jobs) {
         if (!localIds.has(j.requestId)) {
-          merged.push({ id: j.requestId, prompt: j.prompt || "", startedAt: j.startedAt });
+          merged.push({
+            id: j.requestId,
+            prompt: j.prompt || "",
+            startedAt: j.startedAt,
+            status: "running",
+            attempt: j.attempt,
+            maxAttempts: j.maxAttempts,
+          });
         }
       }
       saveInFlight(merged);
-      set({ inFlight: merged, activeGenerations: merged.length });
-      if (merged.length > 0) get().startInFlightPolling();
+      set({
+        inFlight: merged,
+        activeGenerations: merged.filter((f) => (f.status ?? "running") === "running").length,
+      });
+      if (merged.some((f) => (f.status ?? "running") === "running")) {
+        get().startInFlightPolling();
+      }
     } catch {
       // Silent — endpoint may not exist on older servers.
     }
@@ -476,13 +736,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const nextSelected = loadSelectedFilename();
     set((s) => ({
       inFlight: nextInflight,
-      activeGenerations: nextInflight.length,
+      activeGenerations: nextInflight.filter((f) => (f.status ?? "running") === "running").length,
       currentImage:
         nextSelected && s.currentImage?.filename !== nextSelected
           ? s.history.find((h) => h.filename === nextSelected) ?? s.currentImage
           : s.currentImage,
     }));
-    if (nextInflight.length > 0) get().startInFlightPolling();
+    if (nextInflight.some((f) => (f.status ?? "running") === "running")) {
+      get().startInFlightPolling();
+    }
   },
   currentImage: null,
   history: [],
@@ -837,7 +1099,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const startedAt = Date.now();
     const nextInFlight: PersistedInFlight[] = [
       ...s.inFlight,
-      { id: flightId, prompt, startedAt },
+      {
+        id: flightId,
+        prompt,
+        startedAt,
+        status: "running",
+        attempt: 1,
+        maxAttempts: s.maxAttempts,
+        retry: { kind: "node", prompt, clientNodeId: targetClientId },
+      },
     ];
     saveInFlight(nextInFlight);
     set({
@@ -871,6 +1141,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         requestId: flightId,
         sessionId: s.activeSessionId,
         clientNodeId: targetClientId,
+        maxAttempts: s.maxAttempts,
+        ...(s.originalPrompt && s.originalPrompt !== prompt
+          ? { originalPrompt: s.originalPrompt }
+          : {}),
         ...(s.referenceImages.length && !parentServerNodeId
           ? { references: s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, "")) }
           : {}),
@@ -895,7 +1169,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       });
       get().showToast(`노드 ${res.nodeId.slice(0, 8)} 생성 완료 (${res.elapsed}초)`);
+      // Mark activity success.
+      const elapsedMs = Math.round(Number(res.elapsed) * 1000) || (Date.now() - startedAt);
+      const next = get().inFlight.map((f) =>
+        f.id === flightId
+          ? {
+              ...f,
+              status: "success" as const,
+              endedAt: Date.now(),
+              elapsedMs,
+              phase: undefined,
+              clientNodeId: targetClientId,
+            }
+          : f,
+      );
+      saveInFlight(next);
+      set({
+        inFlight: next,
+        activeGenerations: Math.max(0, get().activeGenerations - 1),
+      });
     } catch (err) {
+      // Same page-unload guard as classic generate: server keeps the request,
+      // local state should not flip to "error" just because the tab tore down.
+      if (unloading) return;
       const msg = err instanceof Error ? err.message : "노드 생성에 실패했습니다.";
       set({
         graphNodes: get().graphNodes.map((n) =>
@@ -914,14 +1210,25 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       });
       get().showToast(msg, true);
-    } finally {
-      const remaining = get().inFlight.filter((f) => f.id !== flightId);
-      saveInFlight(remaining);
+      const next = get().inFlight.map((f) =>
+        f.id === flightId
+          ? {
+              ...f,
+              status: "error" as const,
+              endedAt: Date.now(),
+              elapsedMs: Date.now() - startedAt,
+              errorMessage: msg,
+              phase: undefined,
+            }
+          : f,
+      );
+      saveInFlight(next);
       set({
+        inFlight: next,
         activeGenerations: Math.max(0, get().activeGenerations - 1),
-        inFlight: remaining,
       });
-      get().scheduleGraphSave();
+    } finally {
+      if (!unloading) get().scheduleGraphSave();
     }
   },
 
@@ -1011,7 +1318,29 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFormat: (format) => set({ format }),
   setModeration: (moderation) => set({ moderation }),
   setCount: (count) => set({ count }),
-  setPrompt: (prompt) => set({ prompt }),
+  setPrompt: (prompt) => {
+    // Direct edits invalidate the saved enhance source, unless the user is
+    // restoring the exact enhanced text again (no-op).
+    const cur = get();
+    const next: Partial<AppState> = { prompt };
+    if (cur.originalPrompt && prompt !== cur.prompt) next.originalPrompt = null;
+    set(next);
+  },
+  originalPrompt: null,
+  applyEnhancedPrompt: (original, enhanced) => {
+    const trimmed = enhanced.trim();
+    if (!trimmed) return;
+    set({
+      prompt: trimmed,
+      originalPrompt: original.trim() || null,
+    });
+  },
+  clearOriginalPrompt: () => set({ originalPrompt: null }),
+  revertToOriginalPrompt: () => {
+    const orig = get().originalPrompt;
+    if (!orig) return;
+    set({ prompt: orig, originalPrompt: null });
+  },
   applyPreset: (payload: PresetPayload) => {
     set({
       quality: payload.quality,
@@ -1094,43 +1423,81 @@ export const useAppStore = create<AppState>((set, get) => ({
     const count = overrides?.overrideCount ?? s.count;
 
     const size = s.getResolvedSize();
+    const references = s.referenceImages.length
+      ? s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, ""))
+      : null;
 
-    const flightId = `f_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const startedAt = Date.now();
-    const nextInFlight: PersistedInFlight[] = [
-      ...s.inFlight,
-      { id: flightId, prompt, startedAt },
-    ];
-    saveInFlight(nextInFlight);
-    set({
-      activeGenerations: s.activeGenerations + 1,
-      inFlight: nextInFlight,
-    });
+    const flightIds = Array.from(
+      { length: count },
+      (_, i) => `f_${startedAt}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+    );
+    const newEntries: PersistedInFlight[] = flightIds.map((id) => ({
+      id,
+      prompt,
+      startedAt,
+      status: "running" as const,
+      attempt: 1,
+      maxAttempts: s.maxAttempts,
+      retry: { kind: "classic" as const, prompt, count: 1 },
+    }));
+    set((state) => ({
+      activeGenerations: state.activeGenerations + count,
+      inFlight: [...state.inFlight, ...newEntries],
+    }));
+    saveInFlight(get().inFlight);
     get().startInFlightPolling();
 
-    try {
-      const payload = {
-        prompt,
-        quality: s.quality,
-        size,
-        format: s.format,
-        moderation: s.moderation,
-        provider: s.provider,
-        n: count,
-        requestId: flightId,
-        ...(s.referenceImages.length
-          ? { references: s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, "")) }
-          : {}),
-      };
+    let succeeded = 0;
+    let failed = 0;
+    let maxElapsed = 0;
+    let firstErrMsg: string | null = null;
 
-      const res: GenerateResponse = await postGenerate(payload);
+    console.log(
+      `[ima2][generate] start: flights=${flightIds.length} quality=${s.quality} ` +
+      `size=${size} moderation=${s.moderation} maxAttempts=${s.maxAttempts} ` +
+      `refs=${references?.length ?? 0} promptLen=${prompt.length} ` +
+      `hasOriginal=${Boolean(s.originalPrompt && s.originalPrompt !== prompt)}`,
+    );
 
-      if (isMultiResponse(res) && res.images.length > 1) {
-        for (const img of res.images) {
-          const item: GenerateItem = {
-            image: img.image,
-            filename: img.filename,
+    await Promise.all(
+      flightIds.map(async (flightId) => {
+        const slotStartedAt = Date.now();
+        console.log(`[ima2][generate][${flightId}] posting /api/generate`);
+        try {
+          const res: GenerateResponse = await postGenerate({
             prompt,
+            quality: s.quality,
+            size,
+            format: s.format,
+            moderation: s.moderation,
+            provider: s.provider,
+            n: 1,
+            requestId: flightId,
+            maxAttempts: s.maxAttempts,
+            ...(s.originalPrompt && s.originalPrompt !== prompt
+              ? { originalPrompt: s.originalPrompt }
+              : {}),
+            ...(references ? { references } : {}),
+          });
+          console.log(
+            `[ima2][generate][${flightId}] response ok in ` +
+            `${Date.now() - slotStartedAt}ms elapsed=${(res as { elapsed?: number }).elapsed}`,
+          );
+
+          // Server returns single-shape for n=1, but handle multi defensively.
+          const picked = isMultiResponse(res)
+            ? { image: res.images[0]?.image ?? "", filename: res.images[0]?.filename }
+            : { image: res.image, filename: res.filename };
+          if (!picked.image) throw new Error("빈 응답");
+
+          const item: GenerateItem = {
+            image: picked.image,
+            filename: picked.filename,
+            prompt,
+            ...(s.originalPrompt && s.originalPrompt !== prompt
+              ? { originalPrompt: s.originalPrompt }
+              : {}),
             elapsed: res.elapsed,
             provider: res.provider,
             usage: res.usage,
@@ -1138,47 +1505,73 @@ export const useAppStore = create<AppState>((set, get) => ({
             size: res.size ?? size,
           };
           await addHistory(item, set, get);
+          succeeded += 1;
+          const elapsedNum = Number(res.elapsed);
+          if (Number.isFinite(elapsedNum) && elapsedNum > maxElapsed) {
+            maxElapsed = elapsedNum;
+          }
+          const elapsedMs = Math.round(elapsedNum * 1000) || (Date.now() - slotStartedAt);
+          set((state) => ({
+            inFlight: state.inFlight.map((f) =>
+              f.id === flightId
+                ? {
+                    ...f,
+                    status: "success",
+                    endedAt: Date.now(),
+                    elapsedMs,
+                    phase: undefined,
+                    filename: picked.filename,
+                  }
+                : f,
+            ),
+          }));
+        } catch (err) {
+          // Page is being torn down — server still owns the request and
+          // reconcileInflight will restore it on the next load. Don't write
+          // a misleading "error" mark.
+          if (unloading) return;
+          failed += 1;
+          const msg = err instanceof Error ? err.message : "생성에 실패했습니다.";
+          console.warn(
+            `[ima2][generate][${flightId}] FAILED in ` +
+            `${Date.now() - slotStartedAt}ms:`,
+            err,
+          );
+          if (firstErrMsg === null) {
+            firstErrMsg = msg;
+          }
+          set((state) => ({
+            inFlight: state.inFlight.map((f) =>
+              f.id === flightId
+                ? {
+                    ...f,
+                    status: "error",
+                    endedAt: Date.now(),
+                    elapsedMs: Date.now() - slotStartedAt,
+                    errorMessage: msg,
+                    phase: undefined,
+                  }
+                : f,
+            ),
+          }));
+        } finally {
+          set((state) => ({
+            activeGenerations: Math.max(0, state.activeGenerations - 1),
+          }));
+          saveInFlight(get().inFlight);
         }
-        get().showToast(`${res.images.length}장을 ${res.elapsed}초 만에 생성했습니다.`);
-      } else {
-        let item: GenerateItem;
-        if (isMultiResponse(res)) {
-          const first = res.images[0];
-          item = {
-            image: first.image,
-            filename: first.filename,
-            prompt,
-            elapsed: res.elapsed,
-            provider: res.provider,
-            usage: res.usage,
-            quality: res.quality ?? s.quality,
-            size: res.size ?? size,
-          };
-        } else {
-          item = {
-            image: res.image,
-            filename: res.filename,
-            prompt,
-            elapsed: res.elapsed,
-            provider: res.provider,
-            usage: res.usage,
-            quality: res.quality ?? s.quality,
-            size: res.size ?? size,
-          };
-        }
-        await addHistory(item, set, get);
-        get().showToast(`${res.elapsed}초 만에 생성했습니다.`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "생성에 실패했습니다.";
-      get().showToast(msg, true);
-    } finally {
-      const remaining = get().inFlight.filter((f) => f.id !== flightId);
-      saveInFlight(remaining);
-      set({
-        activeGenerations: Math.max(0, get().activeGenerations - 1),
-        inFlight: remaining,
-      });
+      }),
+    );
+
+    if (succeeded > 0 && failed === 0) {
+      const label = count === 1
+        ? `${maxElapsed}초 만에 생성했습니다.`
+        : `${succeeded}장을 ${maxElapsed}초 만에 생성했습니다.`;
+      get().showToast(label);
+    } else if (succeeded > 0 && failed > 0) {
+      get().showToast(`${succeeded}/${count}장 생성 성공 (${failed}장 실패)`, true);
+    } else {
+      get().showToast(firstErrMsg ?? "생성에 실패했습니다.", true);
     }
   },
 
@@ -1201,6 +1594,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           url: it.url,
           filename: it.filename,
           prompt: it.prompt || undefined,
+          originalPrompt: it.originalPrompt || undefined,
           provider: it.provider,
           quality: it.quality || undefined,
           size: it.size || undefined,
@@ -1351,8 +1745,12 @@ export function flushGraphSaveBeacon(get: () => AppState): void {
 
 async function addHistory(
   item: GenerateItem,
-  set: (p: Partial<AppState>) => void,
-  get: () => AppState,
+  set: (
+    partial:
+      | Partial<AppState>
+      | ((state: AppState) => Partial<AppState>),
+  ) => void,
+  _get: () => AppState,
 ): Promise<void> {
   const thumb = await compressImage(item.image).catch(() => item.image);
   const url = item.filename ? `/generated/${item.filename}` : item.image;
@@ -1362,7 +1760,9 @@ async function addHistory(
     url,
     createdAt: item.createdAt || Date.now(),
   };
-  const history = [withThumb, ...get().history].slice(0, HISTORY_LIMIT);
   saveSelectedFilename(withThumb.filename ?? null);
-  set({ history, currentImage: withThumb });
+  set((state) => ({
+    history: [withThumb, ...state.history].slice(0, HISTORY_LIMIT),
+    currentImage: withThumb,
+  }));
 }

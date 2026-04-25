@@ -10,6 +10,10 @@ export function PromptComposer() {
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
   const generate = useAppStore((s) => s.generate);
+  const originalPrompt = useAppStore((s) => s.originalPrompt);
+  const applyEnhancedPrompt = useAppStore((s) => s.applyEnhancedPrompt);
+  const revertToOriginalPrompt = useAppStore((s) => s.revertToOriginalPrompt);
+  const clearOriginalPrompt = useAppStore((s) => s.clearOriginalPrompt);
 
   const refs = useAppStore((s) => s.referenceImages);
   const addReferences = useAppStore((s) => s.addReferences);
@@ -96,8 +100,6 @@ export function PromptComposer() {
         )}
       </div>
 
-      <StyleChips />
-
       {refs.length > 0 && (
         <div className="composer__chips">
           {refs.map((src, i) => (
@@ -137,6 +139,30 @@ export function PromptComposer() {
           }
         }}
       />
+
+      {originalPrompt && (
+        <div className="composer__enhance-hint" title={originalPrompt}>
+          <span className="composer__enhance-hint-label">다듬기 적용됨</span>
+          <span className="composer__enhance-hint-orig">{originalPrompt}</span>
+          <button
+            type="button"
+            className="composer__enhance-hint-action"
+            onClick={() => revertToOriginalPrompt()}
+            title="원본 프롬프트로 되돌리기"
+          >
+            되돌리기
+          </button>
+          <button
+            type="button"
+            className="composer__enhance-hint-dismiss"
+            onClick={() => clearOriginalPrompt()}
+            aria-label="원본 보관 해제"
+            title="이 알림 닫기 (원본은 그대로 저장됨)"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="composer__toolbar">
         <button
@@ -180,6 +206,8 @@ export function PromptComposer() {
         <span className="composer__hint">Ctrl + Enter로 생성</span>
       </div>
 
+      <StyleChips />
+
       {dragOver && (
         <div className="composer__dropzone" aria-hidden="true">
           놓아서 참조 이미지로 추가 ({MAX_REFS}장까지)
@@ -203,7 +231,10 @@ export function PromptComposer() {
         open={enhanceOpen}
         originalPrompt={prompt}
         onClose={() => setEnhanceOpen(false)}
-        onApply={(next) => { setPrompt(next); setEnhanceOpen(false); }}
+        onApply={(next) => {
+          applyEnhancedPrompt(prompt, next);
+          setEnhanceOpen(false);
+        }}
         enhancer={async (p) => (await apiEnhance(p, "ko")).prompt}
       />
     </div>

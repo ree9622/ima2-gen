@@ -21,11 +21,11 @@ const FORMAT_ITEMS = [
 ];
 
 const MOD_ITEMS = [
-  { value: "auto" as const, label: "표준", sub: "기본값" },
+  { value: "auto" as const, label: "표준", sub: "보수적" },
   {
     value: "low" as const,
     label: "완화",
-    sub: "경계선 허용",
+    sub: "기본값 · 경계선 허용",
     color: "var(--amber)",
   },
 ];
@@ -40,7 +40,7 @@ function ModerationHelp() {
   return (
     <span
       className="option-help-icon"
-      title="표준은 기본 안전 필터를, 완화는 경계선 프롬프트를 조금 더 허용합니다. 유해 콘텐츠 필터는 두 모드 모두에서 유지됩니다."
+      title="완화(기본값)는 경계선 프롬프트(수영복·강한 액션 등)를 더 많이 허용합니다. 표준은 OpenAI 기본 필터로 조금 더 보수적이며, 유해 콘텐츠(미성년자·포르노·극단적 폭력 등) 하드 차단은 두 모드 모두 동일합니다."
       aria-label="모더레이션 안내"
     >
       ?
@@ -73,6 +73,8 @@ export function RightPanel() {
   const setModeration = useAppStore((s) => s.setModeration);
   const count = useAppStore((s) => s.count);
   const setCount = useAppStore((s) => s.setCount);
+  const maxAttempts = useAppStore((s) => s.maxAttempts);
+  const setMaxAttempts = useAppStore((s) => s.setMaxAttempts);
 
   return (
     <>
@@ -156,6 +158,42 @@ export function RightPanel() {
             value={String(count)}
             onChange={(v) => setCount(Number(v) as Count)}
           />
+          <div className="option-group">
+            <div className="section-title option-title-with-help">
+              최대 재시도 횟수
+              <span
+                className="option-help-icon"
+                title="생성 실패 시 최대 몇 번까지 반복 시도할지 설정합니다. 총 시도 횟수(첫 시도 포함)이며 1~10 사이로 설정할 수 있습니다. 모든 시도가 실패하면 로그에 기록되고 재시도 버튼으로 다시 돌릴 수 있습니다."
+                aria-label="재시도 안내"
+              >
+                ?
+              </span>
+            </div>
+            <div className="option-row" style={{ alignItems: "center", gap: 8 }}>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                value={maxAttempts}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) setMaxAttempts(n);
+                }}
+                style={{
+                  width: 72,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "1px solid var(--line, #2a2a2a)",
+                  background: "var(--surface, #111)",
+                  color: "inherit",
+                  fontSize: 14,
+                }}
+                aria-label="최대 재시도 횟수"
+              />
+              <span className="option-sub">회 (총 시도)</span>
+            </div>
+          </div>
           <CostEstimate />
         </div>
       </aside>

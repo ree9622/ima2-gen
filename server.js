@@ -9,7 +9,7 @@ import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsRea
 import { homedir } from "os";
 import { randomBytes } from "crypto";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64 } from "./lib/nodeStore.js";
-import { startJob, finishJob, listJobs, setJobPhase, setJobAttempt } from "./lib/inflight.js";
+import { startJob, finishJob, listJobs, setJobPhase, setJobAttempt, getJob } from "./lib/inflight.js";
 import {
   createSession,
   listSessions,
@@ -73,11 +73,51 @@ if (HAS_API_KEY) {
 }
 
 app.use(express.json({ limit: "50mb" }));
+
+// Per-account ACL. nginx forwards Basic Auth username via X-Auth-User.
+// When the header is absent (npm package single-user mode / dev), ACL is bypassed.
+const LEGACY_OWNER = process.env.IMA2_LEGACY_OWNER || "ree9622";
+app.use((req, _res, next) => {
+  const raw = req.get("X-Auth-User") || "";
+  req.authUser = raw.trim() || null;
+  next();
+});
+function ownerOf(meta) {
+  return (meta && typeof meta.owner === "string" && meta.owner) || LEGACY_OWNER;
+}
+function canAccess(meta, authUser) {
+  if (!authUser) return true;
+  return ownerOf(meta) === authUser;
+}
+
 app.use(express.static(join(__dirname, "ui", "dist")));
-app.use("/generated", express.static(join(__dirname, "generated"), {
-  maxAge: "1y",
-  immutable: true,
-}));
+
+// /generated is owner-gated when X-Auth-User is set. Sidecar JSON drives ACL.
+const GENERATED_DIR = join(__dirname, "generated");
+const generatedStatic = express.static(GENERATED_DIR, { maxAge: "1y", immutable: true });
+app.use("/generated", async (req, res, next) => {
+  if (!req.authUser) return generatedStatic(req, res, next);
+  // Block sidecar/trash/.failed exposure regardless
+  const decoded = (() => { try { return decodeURIComponent(req.path); } catch { return req.path; } })();
+  if (decoded.endsWith(".json") || decoded.includes("/.trash/") || decoded.includes("/.failed/")) {
+    return res.status(404).end();
+  }
+  // Resolve sidecar path safely under GENERATED_DIR
+  const rel = decoded.replace(/^\/+/, "");
+  const target = join(GENERATED_DIR, rel);
+  if (target !== GENERATED_DIR && !target.startsWith(GENERATED_DIR + "/")) {
+    return res.status(403).end();
+  }
+  let meta = null;
+  try {
+    meta = JSON.parse(await readFile(target + ".json", "utf-8"));
+  } catch {
+    // node assets use <nodeId>.<ext>.json — already covered by target+".json".
+    // For a few legacy paths sidecar may be missing; treat as legacy owner.
+  }
+  if (!canAccess(meta, req.authUser)) return res.status(404).end();
+  return generatedStatic(req, res, next);
+});
 
 // -- Reference validation --
 const MAX_REF_B64_BYTES = 7 * 1024 * 1024; // ~5.2MB binary after base64 decode
@@ -342,7 +382,7 @@ function clampMaxAttempts(v, fallback = 2) {
 // Persist a failed generation attempt for the log UI + retry button.
 // Refs are NOT saved (see retry flow): refs live in the browser and are
 // re-attached when the user invokes retry from a history item that had them.
-async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0 }) {
+async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null }) {
   try {
     const dir = join(__dirname, "generated", ".failed");
     await mkdir(dir, { recursive: true });
@@ -363,6 +403,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       parentNodeId,
       clientNodeId,
       referenceCount,
+      owner: owner || LEGACY_OWNER,
       attempts: attempts || [],
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
@@ -479,7 +520,7 @@ app.get("/api/history", async (req, res) => {
     const groupBy = req.query.groupBy === "session" ? "session" : null;
 
     const imgs = await listImages(dir);
-    const rows = await Promise.all(imgs.map(async ({ full, rel, name }) => {
+    const rowsAll = await Promise.all(imgs.map(async ({ full, rel, name }) => {
       const st = await stat(full).catch(() => null);
       let meta = null;
       try {
@@ -489,6 +530,7 @@ app.get("/api/history", async (req, res) => {
         if (e.code !== "ENOENT") console.warn("[history] sidecar parse fail:", rel, e.message);
       }
       return {
+        _meta: meta,
         filename: rel,
         url: `/generated/${rel.split("/").map(encodeURIComponent).join("/")}`,
         createdAt: meta?.createdAt || st?.mtimeMs || 0,
@@ -512,6 +554,8 @@ app.get("/api/history", async (req, res) => {
         referenceCount: typeof meta?.referenceCount === "number" ? meta.referenceCount : 0,
       };
     }));
+
+    const rows = rowsAll.filter((r) => canAccess(r._meta, req.authUser)).map(({ _meta, ...rest }) => rest);
 
     // composite sort: createdAt DESC, filename DESC (stable tiebreaker)
     rows.sort((a, b) => {
@@ -568,9 +612,28 @@ app.get("/api/history", async (req, res) => {
 });
 
 // -- Asset lifecycle: soft-delete to .trash/, auto-purge after TTL --
+async function readSidecarSafe(filename) {
+  try {
+    const target = join(GENERATED_DIR, filename);
+    if (target !== GENERATED_DIR && !target.startsWith(GENERATED_DIR + "/")) return null;
+    return JSON.parse(await readFile(target + ".json", "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+async function assertHistoryAccess(req, res, filename) {
+  if (!req.authUser) return true;
+  const meta = await readSidecarSafe(filename);
+  if (canAccess(meta, req.authUser)) return true;
+  res.status(404).json({ error: "not found", code: "NOT_FOUND" });
+  return false;
+}
+
 app.delete("/api/history/:filename", async (req, res) => {
   try {
     const filename = decodeURIComponent(req.params.filename);
+    if (!(await assertHistoryAccess(req, res, filename))) return;
     const result = await trashAsset(__dirname, filename);
     res.json(result);
   } catch (err) {
@@ -583,6 +646,17 @@ app.post("/api/history/:filename/restore", async (req, res) => {
     const filename = decodeURIComponent(req.params.filename);
     const trashId = typeof req.body?.trashId === "string" ? req.body.trashId : null;
     if (!trashId) return res.status(400).json({ error: "trashId required" });
+    // Only owners can restore. The sidecar moved with the trashed asset, so check trash sidecar.
+    if (req.authUser) {
+      try {
+        const trashSidecar = JSON.parse(await readFile(join(GENERATED_DIR, ".trash", trashId + ".json"), "utf-8"));
+        if (!canAccess(trashSidecar, req.authUser)) {
+          return res.status(404).json({ error: "not found" });
+        }
+      } catch {
+        return res.status(404).json({ error: "not found" });
+      }
+    }
     const result = await restoreAsset(__dirname, trashId, filename);
     res.json(result);
   } catch (err) {
@@ -593,9 +667,9 @@ app.post("/api/history/:filename/restore", async (req, res) => {
 app.post("/api/history/:filename/favorite", async (req, res) => {
   try {
     const filename = decodeURIComponent(req.params.filename);
+    if (!(await assertHistoryAccess(req, res, filename))) return;
     const value = Boolean(req.body?.value);
-    const generatedDir = join(__dirname, "generated");
-    const result = await setFavoriteFlag(generatedDir, filename, value);
+    const result = await setFavoriteFlag(GENERATED_DIR, filename, value);
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message, code: err.code });
@@ -642,6 +716,7 @@ app.get("/api/generation-log", async (req, res) => {
         } catch (e) {
           if (e.code !== "ENOENT") continue;
         }
+        if (!canAccess(meta, req.authUser)) continue;
         items.push({
           id: rel,
           status: "success",
@@ -670,6 +745,7 @@ app.get("/api/generation-log", async (req, res) => {
       await mkdir(failedDir, { recursive: true });
       const failed = await listFailedSidecars(failedDir);
       for (const m of failed) {
+        if (!canAccess(m, req.authUser)) continue;
         items.push({
           id: `failed/${m.id || (m._file || "").replace(/\.json$/, "")}`,
           status: "failed",
@@ -706,6 +782,14 @@ app.delete("/api/generation-log/failed/:id", async (req, res) => {
     if (!id) return res.status(400).json({ error: "invalid id" });
     const path = join(__dirname, "generated", ".failed", `${id}.json`);
     if (!existsSync(path)) return res.status(404).json({ error: "not found" });
+    if (req.authUser) {
+      try {
+        const meta = JSON.parse(await readFile(path, "utf-8"));
+        if (!canAccess(meta, req.authUser)) return res.status(404).json({ error: "not found" });
+      } catch {
+        return res.status(404).json({ error: "not found" });
+      }
+    }
     unlinkSync(path);
     res.json({ ok: true, id });
   } catch (err) {
@@ -800,10 +884,14 @@ app.get("/api/inflight", (req, res) => {
     typeof req.query.sessionId === "string" && req.query.sessionId.length > 0
       ? req.query.sessionId
       : undefined;
-  res.json({ jobs: listJobs({ kind, sessionId }) });
+  res.json({ jobs: listJobs({ kind, sessionId, owner: req.authUser }) });
 });
 
 app.delete("/api/inflight/:requestId", (req, res) => {
+  if (req.authUser) {
+    const job = getJob(req.params.requestId);
+    if (job && job.owner !== req.authUser) return res.status(404).end();
+  }
   finishJob(req.params.requestId, { canceled: true });
   res.status(204).end();
 });
@@ -848,6 +936,7 @@ app.post("/api/generate", async (req, res) => {
       kind: "classic",
       prompt,
       maxAttempts,
+      owner: req.authUser || LEGACY_OWNER,
       meta: {
         kind: "classic",
         sessionId,
@@ -919,6 +1008,7 @@ app.post("/api/generate", async (req, res) => {
           attempts: Array.isArray(r.value.attempts) ? r.value.attempts : [],
           referenceCount: refB64s.length,
           sessionId,
+          owner: req.authUser || LEGACY_OWNER,
         };
         await writeFile(join(__dirname, "generated", filename + ".json"), JSON.stringify(meta)).catch(() => {});
         images.push({
@@ -950,6 +1040,7 @@ app.post("/api/generate", async (req, res) => {
         sessionId,
         clientNodeId,
         referenceCount: refB64s.length,
+        owner: req.authUser,
       });
       if (firstErr?.code === "SAFETY_REFUSAL") {
         return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [] });
@@ -1066,6 +1157,7 @@ app.post("/api/edit", async (req, res) => {
         attempts: e.attempts || [],
         error: e,
         referenceCount: 0,
+        owner: req.authUser,
       });
       throw e;
     }
@@ -1098,6 +1190,7 @@ app.post("/api/edit", async (req, res) => {
       webSearchCalls: 0,
       maxAttempts,
       attempts: Array.isArray(editAttempts) ? editAttempts : [],
+      owner: req.authUser || LEGACY_OWNER,
     };
     await writeFile(join(__dirname, "generated", filename + ".json"), JSON.stringify(meta)).catch(() => {});
 
@@ -1131,6 +1224,7 @@ app.post("/api/node/generate", async (req, res) => {
     kind: "node",
     prompt: body.prompt,
     maxAttempts: __nodeMaxAttempts,
+    owner: req.authUser || LEGACY_OWNER,
     meta: {
       kind: "node",
       sessionId,
@@ -1249,6 +1343,7 @@ app.post("/api/node/generate", async (req, res) => {
         parentNodeId,
         clientNodeId,
         referenceCount: refB64s.length,
+        owner: req.authUser,
       });
       return res.status(err.status || 422).json({
         error: { code: err.code || "SAFETY_REFUSAL", message: err.message },
@@ -1285,6 +1380,7 @@ app.post("/api/node/generate", async (req, res) => {
       maxAttempts,
       attempts: Array.isArray(nodeResult.attempts) ? nodeResult.attempts : [],
       referenceCount: refB64s.length,
+      owner: req.authUser || LEGACY_OWNER,
     };
     await mkdir(join(__dirname, "generated"), { recursive: true });
     const { filename } = await saveNode(__dirname, { nodeId, b64, meta, ext: format });
@@ -1322,6 +1418,9 @@ app.get("/api/node/:nodeId", async (req, res) => {
     if (!meta) {
       return res.status(404).json({ error: { code: "NODE_NOT_FOUND", message: "Node metadata missing" } });
     }
+    if (!canAccess(meta, req.authUser)) {
+      return res.status(404).json({ error: { code: "NODE_NOT_FOUND", message: "Node metadata missing" } });
+    }
     const ext = meta?.options?.format || meta?.format || "png";
     res.json({
       nodeId,
@@ -1336,9 +1435,14 @@ app.get("/api/node/:nodeId", async (req, res) => {
 });
 
 // -- Session DB (0.06) --
-app.get("/api/sessions", (_req, res) => {
+app.get("/api/sessions", (req, res) => {
   try {
-    res.json({ sessions: listSessions() });
+    let sessions = listSessions(req.authUser);
+    if (sessions.length === 0 && req.authUser) {
+      ensureDefaultSession(req.authUser);
+      sessions = listSessions(req.authUser);
+    }
+    res.json({ sessions });
   } catch (err) {
     res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
   }
@@ -1347,7 +1451,7 @@ app.get("/api/sessions", (_req, res) => {
 app.post("/api/sessions", (req, res) => {
   try {
     const title = (req.body?.title || "Untitled").slice(0, 200);
-    const session = createSession({ title });
+    const session = createSession({ title, owner: req.authUser || LEGACY_OWNER });
     res.status(201).json({ session });
   } catch (err) {
     res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
@@ -1356,7 +1460,7 @@ app.post("/api/sessions", (req, res) => {
 
 app.get("/api/sessions/:id", (req, res) => {
   try {
-    const session = getSession(req.params.id);
+    const session = getSession(req.params.id, req.authUser);
     if (!session) {
       return res.status(404).json({
         error: { code: "SESSION_NOT_FOUND", message: "Session not found" },
@@ -1376,7 +1480,7 @@ app.patch("/api/sessions/:id", (req, res) => {
         error: { code: "INVALID_TITLE", message: "Title required" },
       });
     }
-    const ok = renameSession(req.params.id, title.slice(0, 200));
+    const ok = renameSession(req.params.id, title.slice(0, 200), req.authUser);
     if (!ok) {
       return res.status(404).json({
         error: { code: "SESSION_NOT_FOUND", message: "Session not found" },
@@ -1390,7 +1494,7 @@ app.patch("/api/sessions/:id", (req, res) => {
 
 app.delete("/api/sessions/:id", (req, res) => {
   try {
-    const ok = deleteSession(req.params.id);
+    const ok = deleteSession(req.params.id, req.authUser);
     if (!ok) {
       return res.status(404).json({
         error: { code: "SESSION_NOT_FOUND", message: "Session not found" },
@@ -1440,6 +1544,7 @@ app.put("/api/sessions/:id/graph", (req, res) => {
       nodes,
       edges,
       expectedVersion,
+      owner: req.authUser,
     });
     res.json({
       ok: true,
@@ -1640,8 +1745,8 @@ app.listen(PORT, () => {
   console.log(`Provider policy: OAuth only (API key hard-disabled). OAuth proxy port ${OAUTH_PORT}.`);
   __advertise();
   try {
-    const s = ensureDefaultSession();
-    console.log(`[db] default session: ${s.id} (${s.title})`);
+    const s = ensureDefaultSession(LEGACY_OWNER);
+    console.log(`[db] default session: ${s.id} (${s.title}) owner=${s.owner}`);
   } catch (err) {
     console.error("[db] bootstrap failed:", err.message);
   }

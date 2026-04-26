@@ -25,7 +25,7 @@
 | 1.1 | **Server 요청 로깅 + stale asset guard** | done | `31a8bbd` | [#1](https://github.com/ree9622/ima2-gen/pull/1) | `/api/*` 요청 로깅(redact body/query, X-Request-Id echo), UI bundle cache(no-store index + immutable assets + /assets 404 fallback). 기존 console.* 마이그레이션 + generated/ TTL은 별도 이슈 |
 | 1.2 | **Validator 에러 코드** | done | `9f9fe53` `f710958` `e1b0b65` | [#2](https://github.com/ree9622/ima2-gen/pull/2) | `lib/refs.js` 추출 + REF_NOT_ARRAY/TOO_MANY/NOT_STRING/EMPTY/TOO_LARGE/NOT_BASE64. 3 callsite 의 redundant precheck 삭제, code 전파. UI compress(`compress.ts`)/토스트 라우팅은 Phase 2.1/2.2 |
 | 1.3 | **Custom size 확인 다이얼로그** | pending | `d0f8dba` | - | custom size 입력 후 생성 전 확인 |
-| 1.4 | **Session graph 저장 충돌 방어 (server-side)** | done | `c301a2b` `27a0647` | [#3](https://github.com/ree9622/ima2-gen/pull/3) | 메타 헤더(`X-Ima2-Tab-Id`/`Save-Id`/`Save-Reason`) 캡처 + `[session.graph_save]`/`graph_conflict`/`graph_error` 구조화 로그. UI side(autosave 큐, 토스트 문구)는 Phase 4.2 노드 모드에서 같이 |
+| 1.4 | **Session graph 저장 충돌 방어 (server-side)** | done | `c301a2b` `27a0647` | [#3](https://github.com/ree9622/ima2-gen/pull/3) | 메타 헤더(`X-Ima2-Tab-Id`/`Save-Id`/`Save-Reason`) 캡처 + `[session.graph_save]`/`graph_conflict`/`graph_error` 구조화 로그. UI 합본은 [#7](https://github.com/ree9622/ima2-gen/pull/7) (Phase 4.2 sub-PR 1) |
 
 ### Phase 2 — 본격 품질 향상 (M)
 
@@ -49,7 +49,7 @@
 | # | 기능 | 상태 | upstream commit | 우리 PR | PRD |
 |---|------|------|-----------------|---------|-----|
 | 4.1 | **Card news 워크스페이스** | pending | `5e2194e` `c84f1d2` `13ea601` `8327306` | - | [card-news.md](card-news.md) |
-| 4.2 | **Node mode 정식화 + 스트리밍 + 배치선택** | pending | `c5aa4ca` `04f8bf5` `a91fef4` `6e02cbc` | - | [node-mode.md](node-mode.md) |
+| 4.2 | **Node mode 정식화 + 스트리밍 + 배치선택** | in-progress | `c5aa4ca` `04f8bf5` `a91fef4` `6e02cbc` | sub-PR 1 [#7](https://github.com/ree9622/ima2-gen/pull/7) | [node-mode.md](node-mode.md) — 8개 sub-PR 분해 진행 중 |
 
 ### Phase 5 — 자잘한 UX
 

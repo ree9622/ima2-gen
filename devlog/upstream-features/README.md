@@ -8,6 +8,10 @@
 >
 > **세션 이어받기**: 이 문서의 "진행 상황 표"의 상태 컬럼이 단일 진실 출처(SSoT). 시작 전 origin pull, 작업 후 PR + 표 업데이트.
 
+> **2026-04-26 우선순위 재구성**: 사용자 결정으로 **Phase 4.2 노드 모드를 우선 격상**.
+> 의존성(`node-mode.md` § 의존성/순서)에 따라 실제 작업 순서는 `1.1 → 1.2 → 1.4 → 2.4 → 4.2 → 1.3/2.1/2.2/2.3 (잔여)`.
+> Phase 1.4 / 2.4 는 노드 모드 선행 필수이므로 server-side 만 먼저 닫고, 동반 UI 변경은 4.2 PR 묶음에 포함.
+
 ---
 
 ## 진행 상황 (단일 진실 출처)
@@ -21,7 +25,7 @@
 | 1.1 | **Server 요청 로깅 + stale asset guard** | done | `31a8bbd` | [#1](https://github.com/ree9622/ima2-gen/pull/1) | `/api/*` 요청 로깅(redact body/query, X-Request-Id echo), UI bundle cache(no-store index + immutable assets + /assets 404 fallback). 기존 console.* 마이그레이션 + generated/ TTL은 별도 이슈 |
 | 1.2 | **Validator 에러 코드** | done | `9f9fe53` `f710958` `e1b0b65` | [#2](https://github.com/ree9622/ima2-gen/pull/2) | `lib/refs.js` 추출 + REF_NOT_ARRAY/TOO_MANY/NOT_STRING/EMPTY/TOO_LARGE/NOT_BASE64. 3 callsite 의 redundant precheck 삭제, code 전파. UI compress(`compress.ts`)/토스트 라우팅은 Phase 2.1/2.2 |
 | 1.3 | **Custom size 확인 다이얼로그** | pending | `d0f8dba` | - | custom size 입력 후 생성 전 확인 |
-| 1.4 | **Session graph 저장 충돌 방어 (server-side)** | done | `c301a2b` `27a0647` | (PR 작성 중) | 메타 헤더(`X-Ima2-Tab-Id`/`Save-Id`/`Save-Reason`) 캡처 + `[session.graph_save]`/`graph_conflict`/`graph_error` 구조화 로그. UI side(autosave 큐, 토스트 문구)는 Phase 4.2 노드 모드에서 같이 |
+| 1.4 | **Session graph 저장 충돌 방어 (server-side)** | done | `c301a2b` `27a0647` | [#3](https://github.com/ree9622/ima2-gen/pull/3) | 메타 헤더(`X-Ima2-Tab-Id`/`Save-Id`/`Save-Reason`) 캡처 + `[session.graph_save]`/`graph_conflict`/`graph_error` 구조화 로그. UI side(autosave 큐, 토스트 문구)는 Phase 4.2 노드 모드에서 같이 |
 
 ### Phase 2 — 본격 품질 향상 (M)
 

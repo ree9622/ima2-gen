@@ -42,8 +42,6 @@ import {
   nodeHasImage,
   topologicalSortSelected,
   validateBatchDependencies,
-  getUnselectedDownstreamIds,
-  type NodeBatchMode,
 } from "../lib/nodeBatch";
 import type { PresetPayload } from "../lib/presets";
 import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";

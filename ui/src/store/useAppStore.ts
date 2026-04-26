@@ -241,7 +241,12 @@ function reconcileWithHistoryItems(
   const local = get().inFlight;
   let matched = 0;
   const next = local.map((f) => {
-    if ((f.status ?? "running") !== "running") return f;
+    // Promote both running AND error rows: a refresh-during-fetch can land
+    // the entry in "error" before the unloading guard sees beforeunload, but
+    // the server still finishes and writes the sidecar. We must recover that
+    // row when its requestId shows up in history. Already-success rows are
+    // left alone so a stale history slice can't downgrade newer state.
+    if (f.status === "success") return f;
     const hit = byReq.get(f.id);
     if (!hit) return f;
     matched++;
@@ -842,18 +847,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       const merged: PersistedInFlight[] = [];
       for (const f of local) {
         const status = f.status ?? "running";
-        if (status !== "running") {
+        if (status === "success") {
           if (!isExpired(f, now)) merged.push(f);
           continue;
         }
-        // 1) Server still owns it → keep.
-        if (serverIds.has(f.id)) {
+        // 1) Server still owns it → keep (running only; an "error" row
+        //    appearing in serverIds is a stale local mistake).
+        if (status === "running" && serverIds.has(f.id)) {
           merged.push(f);
           kept++;
           continue;
         }
-        // 2) History has a row with our requestId → completed while we were
-        //    away. Promote to success and link the filename.
+        // 2) History has a row with our requestId → server finished and
+        //    wrote the sidecar. Promote regardless of current local status,
+        //    because the local "error" mark may come from a fetch torn down
+        //    by refresh before the unloading guard fired.
         const histMatch = historyByRequestId.get(f.id);
         if (histMatch) {
           const successItem: PersistedInFlight = {
@@ -862,10 +870,16 @@ export const useAppStore = create<AppState>((set, get) => ({
             endedAt: histMatch.createdAt || now,
             elapsedMs: (histMatch.createdAt || now) - f.startedAt,
             filename: histMatch.filename,
+            errorMessage: undefined,
             phase: undefined,
           };
           merged.push(successItem);
           rescued++;
+          continue;
+        }
+        // Error rows that did NOT match history stay as-is until TTL.
+        if (status === "error") {
+          if (!isExpired(f, now)) merged.push(f);
           continue;
         }
         // 3) Neither in server nor history. The legacy rule dropped after

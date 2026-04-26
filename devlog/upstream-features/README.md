@@ -34,7 +34,7 @@
 | 2.1 | **에러 분류 + ErrorCard** | pending | `4b89901` | - | `lib/errorClassify.js`로 OpenAI 응답 분류 → 카드형 안내 UI. 우선순위: `MODERATION_REFUSED > AUTH_CHATGPT_EXPIRED > AUTH_API_KEY_INVALID > NETWORK_FAILED > UPSTREAM_5XX` |
 | 2.2 | **클라이언트 ref 압축** | pending | `9f9fe53` | - | canvas 리사이즈 + JPEG ladder 0.85→0.7→0.55, longest edge 4096px 캡 (iOS Safari) |
 | 2.3 | **config 중앙화** | pending | `170f29e` `355bc98` `d09f9d3` | - | `config.js` 단일 모듈, `IMA2_*` env + `config.json` 머지 |
-| 2.4 | **Inflight job 영속화 (server-side)** | done | `b9bf597` | [#4](https://github.com/ree9622/ima2-gen/pull/4) | `lib/inflight.js` SQLite-backed 전환 + schema 2→3 마이그레이션. `tb_inflight` 컬럼: owner/attempt/max_attempts 우리 필드 보존. 부팅 시 `purgeStaleJobs()` 1회. `[inflight.start/phase/attempt/finish/purge_stale]` 로깅. UI 복구 메타(`a13773d`)는 Phase 4.2 같이 |
+| 2.4 | **Inflight job 영속화 (server-side)** | done | `b9bf597` | [#4](https://github.com/ree9622/ima2-gen/pull/4) | `lib/inflight.js` SQLite-backed 전환 + schema 2→3 마이그레이션. `tb_inflight` 컬럼: owner/attempt/max_attempts 우리 필드 보존. 부팅 시 `purgeStaleJobs()` 1회. `[inflight.start/phase/attempt/finish/purge_stale]` 로깅. UI 복구 메타는 [#8](https://github.com/ree9622/ima2-gen/pull/8) (Phase 4.2 sub-PR 2) |
 
 ### Phase 3 — 큰 기능 (L)
 
@@ -49,7 +49,7 @@
 | # | 기능 | 상태 | upstream commit | 우리 PR | PRD |
 |---|------|------|-----------------|---------|-----|
 | 4.1 | **Card news 워크스페이스** | pending | `5e2194e` `c84f1d2` `13ea601` `8327306` | - | [card-news.md](card-news.md) |
-| 4.2 | **Node mode 정식화 + 스트리밍 + 배치선택** | in-progress | `c5aa4ca` `04f8bf5` `a91fef4` `6e02cbc` | sub-PR 1 [#7](https://github.com/ree9622/ima2-gen/pull/7) | [node-mode.md](node-mode.md) — 8개 sub-PR 분해 진행 중 |
+| 4.2 | **Node mode 정식화 + 스트리밍 + 배치선택** | in-progress | `c5aa4ca` `04f8bf5` `a91fef4` `6e02cbc` | sub-PR 1 [#7](https://github.com/ree9622/ima2-gen/pull/7) · sub-PR 2 [#8](https://github.com/ree9622/ima2-gen/pull/8) | [node-mode.md](node-mode.md) — 8개 sub-PR 분해 진행 중 |
 
 ### Phase 5 — 자잘한 UX
 

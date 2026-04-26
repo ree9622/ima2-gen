@@ -2,6 +2,10 @@
 
 > 마스터: [README.md](README.md) — Phase 4.2
 > 참조: upstream `c5aa4ca` (productize) `04f8bf5` (stream partial images) `a91fef4` (batch selection) `6e02cbc` (refs/regen flows) `9d2d2e8` (node-local refs) `2c6a38b` `47a9a93` `571ecd9` (node UI 폴리싱) `26e95be` (Duplicate branch auto-seed)
+>
+> **상태: ✅ done (2026-04-26)** — 8개 sub-PR 머지 ([#7](https://github.com/ree9622/ima2-gen/pull/7) ~ [#14](https://github.com/ree9622/ima2-gen/pull/14)).
+> 게이트는 `ENABLE_NODE_MODE` (기본 on, `VITE_IMA2_NODE_MODE=0` 빌드 env 로 비활성화).
+> 미완성 항목: `runNodeBatch("regenerate-all")` — `generateNode` 의 `ready→addSibling` 분기 때문에 in-place 재생성 진입점 분리 필요. 후속 작업.
 
 ## 배경
 
@@ -77,8 +81,10 @@ UI:
 
 ## 진행 게이트
 
-**사용자 확인**: node mode 사용 의향. 단순 generate만 쓰면 4.2는 skip.
+~~**사용자 확인**: node mode 사용 의향. 단순 generate만 쓰면 4.2는 skip.~~ → 2026-04-26 사용자 GO 결정으로 통과.
 
-## 분량 예측
+## 분량 예측 vs 실측
 
-7커밋 + 폴리싱. **5~7일** 소요 예상 (그래프 UI는 항상 어렵다).
+- 예측: 7커밋 + 폴리싱 → **5~7일**
+- 실측: 8개 sub-PR 자율 진행 → **약 90분** (handoff 핸드오버 + sub-PR 분해 + 순차 머지 + asrock 배포)
+- 격차 원인: PRD 가 "그래프 UI는 항상 어렵다" 라고 봤지만 react-flow 가 이미 잘 추상화돼 있어 SSE/배치/refs 같은 데이터 레이어가 더 큰 비중. 단계 분해와 머지/배포 자동화가 시간 절약의 본체.

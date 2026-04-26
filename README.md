@@ -119,7 +119,7 @@ Public roadmap — subject to change. Version numbers reflect the actual ship cy
 - **0.06** Session DB — SQLite-backed history with sidecar JSON
 - **0.07** Multi-reference — up to 5 attachments, i2i merged into unified flow
 - **0.08** Inflight tracking — refresh-safe pending state, phase tracking
-- **0.09** Node mode (dev-only) — graph-based canvas for branching generations
+- **0.09** Node mode — graph-based canvas for branching generations (productized in Phase 4.2: SSE partial streaming, batch selection, node-local refs, subtree duplicate)
 - **0.09.1** CLI integration — `gen / edit / ls / show / ps / ping` + `/api/health` + port advertisement
 
 ### 🚧 0.10 — Compare & Reuse (current cycle)
@@ -158,7 +158,8 @@ ima2 serve
   │   ├── POST /api/edit           — ref-heavy edit path
   │   ├── GET  /api/history        — paginated sidecar listing
   │   ├── GET  /api/inflight       — in-progress jobs (kind/session filters)
-  │   ├── GET  /api/sessions/*     — node-graph sessions (dev-only)
+  │   ├── GET  /api/sessions/*     — node-graph sessions
+  │   ├── POST /api/node/generate  — node-mode generation (SSE partial images on `Accept: text/event-stream`)
   │   ├── GET  /api/billing        — API credit / cost info
   │   └── Static files (public/)   — web UI
   │
@@ -166,7 +167,7 @@ ima2 serve
   └── ~/.ima2/server.json          — port advertisement for CLI auto-discovery
 ```
 
-**Node mode** is dev-only (`npm run dev`) and gated from npm publishes until the session DB + multi-user story lands.
+**Node mode** is enabled by default in packaged builds. To hide the mode tab in a release, build with `VITE_IMA2_NODE_MODE=0`.
 
 ---
 
@@ -212,7 +213,7 @@ npm test       # 51+ tests (health, CLI lib, commands, server)
 
 Frontend stack:
 - Vanilla HTML/CSS/JS (no framework in the published build)
-- Vite + React for the Node-mode canvas (dev-only, gated)
+- Vite + React for the Node-mode canvas (default-on, opt-out via `VITE_IMA2_NODE_MODE=0`)
 - Fonts: Outfit + Geist Mono
 
 ## Tech Stack

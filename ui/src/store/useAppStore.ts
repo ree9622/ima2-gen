@@ -27,6 +27,7 @@ import {
   type SessionSummary,
   type SessionFull,
   type HistoryItem,
+  type InflightJob,
 } from "../lib/api";
 import { compressImage } from "../lib/image";
 import { snap16 } from "../lib/size";
@@ -108,6 +109,12 @@ export type PersistedInFlight = {
   // For success entries: history filename so clicking the activity item
   // can switch the main view (classic) or focus the node (node mode).
   filename?: string;
+  // Recovery metadata — used after refresh to re-scope polling and rebuild
+  // node parent links. Server stores these in `meta` (see lib/inflight.js)
+  // and the SQLite-backed registry preserves them across restart.
+  kind?: "classic" | "node";
+  sessionId?: string | null;
+  parentNodeId?: string | null;
   clientNodeId?: ClientNodeId;
 };
 
@@ -152,6 +159,9 @@ function loadInFlight(): PersistedInFlight[] {
         elapsedMs: typeof x.elapsedMs === "number" ? x.elapsedMs : undefined,
         errorMessage: typeof x.errorMessage === "string" ? x.errorMessage : undefined,
         filename: typeof x.filename === "string" ? x.filename : undefined,
+        kind: x.kind === "classic" || x.kind === "node" ? x.kind : undefined,
+        sessionId: typeof x.sessionId === "string" ? x.sessionId : null,
+        parentNodeId: typeof x.parentNodeId === "string" ? x.parentNodeId : null,
         clientNodeId:
           typeof x.clientNodeId === "string" ? (x.clientNodeId as ClientNodeId) : undefined,
         retry:
@@ -191,6 +201,38 @@ function saveInFlight(list: PersistedInFlight[]): void {
       } catch {}
     }
   }
+}
+
+// Extract recovery metadata from a server inflight job. Server stores
+// kind/sessionId/parentNodeId/clientNodeId either at the top level (kind)
+// or inside `meta`. Returns undefined-where-absent so callers can spread
+// the result and only override known fields.
+function extractInflightMeta(job: InflightJob): {
+  kind?: "classic" | "node";
+  sessionId: string | null;
+  parentNodeId: string | null;
+  clientNodeId?: ClientNodeId;
+} {
+  const meta = job.meta && typeof job.meta === "object" ? job.meta : {};
+  const metaKind = (meta as { kind?: unknown }).kind;
+  const kind =
+    job.kind === "classic" || job.kind === "node"
+      ? job.kind
+      : metaKind === "classic" || metaKind === "node"
+        ? (metaKind as "classic" | "node")
+        : undefined;
+  const metaSessionId = (meta as { sessionId?: unknown }).sessionId;
+  const metaParentNodeId = (meta as { parentNodeId?: unknown }).parentNodeId;
+  const metaClientNodeId = (meta as { clientNodeId?: unknown }).clientNodeId;
+  return {
+    kind,
+    sessionId: typeof metaSessionId === "string" ? metaSessionId : null,
+    parentNodeId: typeof metaParentNodeId === "string" ? metaParentNodeId : null,
+    clientNodeId:
+      typeof metaClientNodeId === "string"
+        ? (metaClientNodeId as ClientNodeId)
+        : undefined,
+  };
 }
 
 // Centralized debug logger. Toggle via `localStorage["ima2.debug"] = "1"` or
@@ -745,11 +787,36 @@ export const useAppStore = create<AppState>((set, get) => ({
           const newPhase = typeof j.phase === "string" ? j.phase : f.phase;
           const newAttempt = typeof j.attempt === "number" ? j.attempt : f.attempt;
           const newMax = typeof j.maxAttempts === "number" ? j.maxAttempts : f.maxAttempts;
-          if (newPhase === f.phase && newAttempt === f.attempt && newMax === f.maxAttempts) {
+          // Restore recovery metadata from server in case localStorage was
+          // wiped or this entry came in via cross-tab `storage` sync without
+          // its meta block.
+          const meta = extractInflightMeta(j);
+          const newKind = meta.kind ?? f.kind;
+          const newSessionId = meta.sessionId ?? f.sessionId ?? null;
+          const newParentNodeId = meta.parentNodeId ?? f.parentNodeId ?? null;
+          const newClientNodeId = meta.clientNodeId ?? f.clientNodeId;
+          if (
+            newPhase === f.phase &&
+            newAttempt === f.attempt &&
+            newMax === f.maxAttempts &&
+            newKind === f.kind &&
+            newSessionId === (f.sessionId ?? null) &&
+            newParentNodeId === (f.parentNodeId ?? null) &&
+            newClientNodeId === f.clientNodeId
+          ) {
             return f;
           }
           changed = true;
-          return { ...f, phase: newPhase, attempt: newAttempt, maxAttempts: newMax };
+          return {
+            ...f,
+            phase: newPhase,
+            attempt: newAttempt,
+            maxAttempts: newMax,
+            kind: newKind,
+            sessionId: newSessionId,
+            parentNodeId: newParentNodeId,
+            clientNodeId: newClientNodeId,
+          };
         });
         if (changed) {
           saveInFlight(nextInflight);
@@ -832,7 +899,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         getHistory({ limit: 100 }).catch(() => ({ items: [] as HistoryItem[], total: 0, nextCursor: null })),
       ]);
       const historyItems = historyPage.items || [];
-      const serverIds = new Set(jobs.map((j) => j.requestId));
+      const serverById = new Map(jobs.map((j) => [j.requestId, j] as const));
       const historyByRequestId = new Map<string, HistoryItem>();
       for (const it of historyItems) {
         if (typeof it.requestId === "string" && it.requestId) {
@@ -852,9 +919,19 @@ export const useAppStore = create<AppState>((set, get) => ({
           continue;
         }
         // 1) Server still owns it → keep (running only; an "error" row
-        //    appearing in serverIds is a stale local mistake).
-        if (status === "running" && serverIds.has(f.id)) {
-          merged.push(f);
+        //    appearing in serverIds is a stale local mistake). Restore
+        //    recovery meta (kind/sessionId/parentNodeId/clientNodeId) from
+        //    the server so a refreshed tab can rebuild node parent links.
+        const serverJob = serverById.get(f.id);
+        if (status === "running" && serverJob) {
+          const meta = extractInflightMeta(serverJob);
+          merged.push({
+            ...f,
+            kind: meta.kind ?? f.kind,
+            sessionId: meta.sessionId ?? f.sessionId ?? null,
+            parentNodeId: meta.parentNodeId ?? f.parentNodeId ?? null,
+            clientNodeId: meta.clientNodeId ?? f.clientNodeId,
+          });
           kept++;
           continue;
         }
@@ -906,6 +983,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const localIds = new Set(merged.map((f) => f.id));
       for (const j of jobs) {
         if (!localIds.has(j.requestId)) {
+          // Server-only entry — started in another tab/process or after our
+          // localStorage was cleared. Populate full recovery meta so node
+          // parent links survive the next refresh.
+          const meta = extractInflightMeta(j);
           merged.push({
             id: j.requestId,
             prompt: j.prompt || "",
@@ -913,6 +994,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             status: "running",
             attempt: j.attempt,
             maxAttempts: j.maxAttempts,
+            kind: meta.kind,
+            sessionId: meta.sessionId,
+            parentNodeId: meta.parentNodeId,
+            clientNodeId: meta.clientNodeId,
           });
         }
       }
@@ -1429,6 +1514,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         attempt: 1,
         maxAttempts: s.maxAttempts,
         retry: { kind: "node", prompt, clientNodeId: targetClientId },
+        kind: "node",
+        sessionId: s.activeSessionId,
+        parentNodeId: parentServerNodeId ?? null,
+        clientNodeId: targetClientId,
       },
     ];
     saveInFlight(nextInFlight);
@@ -1773,6 +1862,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       attempt: 1,
       maxAttempts: s.maxAttempts,
       retry: { kind: "classic" as const, prompt, count: 1 },
+      kind: "classic" as const,
+      sessionId: s.activeSessionId,
+      parentNodeId: null,
     }));
     set((state) => ({
       activeGenerations: state.activeGenerations + count,

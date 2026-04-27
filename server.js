@@ -200,17 +200,15 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     (partialImages ? ` partial=${partialImages}` : ""),
   );
 
+  // gpt-image-2 (the actual image model dispatched by the Responses API
+  // image_generation tool) processes every input image at high fidelity
+  // automatically and rejects an explicit `input_fidelity` parameter.
+  // See: https://cookbook.openai.com/examples/generate_images_with_high_input_fidelity
   const imageTool = {
     type: "image_generation",
     quality,
     size,
     moderation,
-    // Reference-mode: max out fidelity to the attached image so the
-    // person's face and identity are preserved across pose / outfit /
-    // background variations. Costs more input tokens but is the whole
-    // point of reference mode. See:
-    // https://cookbook.openai.com/examples/generate_images_with_high_input_fidelity
-    ...(hasRefs ? { input_fidelity: "high" } : {}),
     ...(partialImages ? { partial_images: partialImages } : {}),
   };
 
@@ -1165,13 +1163,8 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
           ],
         },
       ],
-      tools: [{
-        type: "image_generation",
-        quality,
-        size,
-        moderation,
-        input_fidelity: "high",
-      }],
+      // gpt-image-2 auto-applies high fidelity; do NOT pass input_fidelity.
+      tools: [{ type: "image_generation", quality, size, moderation }],
       tool_choice: "required",
       stream: true,
     },

@@ -579,6 +579,20 @@ type AppState = {
   logModalOpen: boolean;
   openLogModal: () => void;
   closeLogModal: () => void;
+  // Prompt library (Phase 6.3) — 자주 쓰는 프롬프트 SQLite 저장 + 검색.
+  promptLibraryOpen: boolean;
+  promptLibraryItems: import("../lib/api").PromptItem[];
+  promptLibraryQuery: string;
+  promptLibraryLoading: boolean;
+  openPromptLibrary: () => void;
+  closePromptLibrary: () => void;
+  setPromptLibraryQuery: (q: string) => void;
+  loadPromptLibrary: () => Promise<void>;
+  savePromptToLibrary: (title: string, body: string) => Promise<void>;
+  applyPromptFromLibrary: (id: string) => Promise<void>;
+  deletePromptFromLibrary: (id: string) => Promise<void>;
+  togglePinPromptFromLibrary: (id: string) => Promise<void>;
+  renamePromptInLibrary: (id: string, title: string) => Promise<void>;
   retryFromLog: (item: import("../types").GenerationLogItem) => Promise<void>;
   applyPreset: (payload: PresetPayload) => void;
   selectHistory: (item: GenerateItem) => void;
@@ -632,6 +646,94 @@ export const useAppStore = create<AppState>((set, get) => ({
   logModalOpen: false,
   openLogModal: () => set({ logModalOpen: true }),
   closeLogModal: () => set({ logModalOpen: false }),
+
+  // Prompt library actions (Phase 6.3)
+  promptLibraryOpen: false,
+  promptLibraryItems: [],
+  promptLibraryQuery: "",
+  promptLibraryLoading: false,
+  openPromptLibrary: () => {
+    set({ promptLibraryOpen: true });
+    void get().loadPromptLibrary();
+  },
+  closePromptLibrary: () => set({ promptLibraryOpen: false }),
+  setPromptLibraryQuery: (q) => {
+    set({ promptLibraryQuery: q });
+    void get().loadPromptLibrary();
+  },
+  loadPromptLibrary: async () => {
+    set({ promptLibraryLoading: true });
+    try {
+      const api = await import("../lib/api");
+      const { items } = await api.listPrompts(get().promptLibraryQuery);
+      set({ promptLibraryItems: items });
+    } catch (err) {
+      console.error("[promptLibrary] load failed", err);
+      get().showToast("프롬프트 목록을 불러올 수 없습니다", true);
+    } finally {
+      set({ promptLibraryLoading: false });
+    }
+  },
+  savePromptToLibrary: async (title, body) => {
+    const trimmed = body.trim();
+    if (!trimmed) {
+      get().showToast("저장할 프롬프트가 비어있습니다", true);
+      return;
+    }
+    try {
+      const api = await import("../lib/api");
+      await api.createPrompt(title, trimmed);
+      get().showToast("프롬프트를 저장했습니다", false);
+      if (get().promptLibraryOpen) await get().loadPromptLibrary();
+    } catch (err) {
+      console.error("[promptLibrary] save failed", err);
+      get().showToast("저장 실패", true);
+    }
+  },
+  applyPromptFromLibrary: async (id) => {
+    const item = get().promptLibraryItems.find((p) => p.id === id);
+    if (!item) return;
+    set({ prompt: item.body, originalPrompt: null, promptLibraryOpen: false });
+    try {
+      const api = await import("../lib/api");
+      await api.bumpPromptUse(id);
+    } catch (err) {
+      console.warn("[promptLibrary] use bump failed (non-fatal)", err);
+    }
+  },
+  deletePromptFromLibrary: async (id) => {
+    try {
+      const api = await import("../lib/api");
+      await api.deletePrompt(id);
+      set({ promptLibraryItems: get().promptLibraryItems.filter((p) => p.id !== id) });
+      get().showToast("삭제했습니다", false);
+    } catch (err) {
+      console.error("[promptLibrary] delete failed", err);
+      get().showToast("삭제 실패", true);
+    }
+  },
+  togglePinPromptFromLibrary: async (id) => {
+    const item = get().promptLibraryItems.find((p) => p.id === id);
+    if (!item) return;
+    try {
+      const api = await import("../lib/api");
+      await api.updatePrompt(id, { pinned: !item.pinned });
+      await get().loadPromptLibrary();
+    } catch (err) {
+      console.error("[promptLibrary] pin toggle failed", err);
+      get().showToast("핀 변경 실패", true);
+    }
+  },
+  renamePromptInLibrary: async (id, title) => {
+    try {
+      const api = await import("../lib/api");
+      await api.updatePrompt(id, { title: title.trim() });
+      await get().loadPromptLibrary();
+    } catch (err) {
+      console.error("[promptLibrary] rename failed", err);
+      get().showToast("제목 변경 실패", true);
+    }
+  },
   retryFromLog: async (item) => {
     if (!item?.prompt) {
       get().showToast("재시도할 프롬프트가 없습니다.", true);

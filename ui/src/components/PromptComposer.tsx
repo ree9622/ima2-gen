@@ -21,9 +21,14 @@ export function PromptComposer() {
   const useCurrentAsReference = useAppStore((s) => s.useCurrentAsReference);
   const currentImage = useAppStore((s) => s.currentImage);
 
+  const openPromptLibrary = useAppStore((s) => s.openPromptLibrary);
+  const savePromptToLibrary = useAppStore((s) => s.savePromptToLibrary);
+
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [enhanceOpen, setEnhanceOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveTitle, setSaveTitle] = useState("");
 
   const canAddMore = refs.length < MAX_REFS;
 
@@ -98,7 +103,63 @@ export function PromptComposer() {
             참조 {refs.length}/{MAX_REFS}
           </span>
         )}
+        <div className="composer__header-spacer" />
+        <button
+          type="button"
+          className="composer__lib-btn"
+          onClick={openPromptLibrary}
+          title="저장된 프롬프트 라이브러리 열기"
+        >
+          📚 라이브러리
+        </button>
+        <button
+          type="button"
+          className="composer__lib-btn"
+          onClick={() => {
+            if (!prompt.trim()) return;
+            setSaveTitle("");
+            setSaveOpen((v) => !v);
+          }}
+          disabled={!prompt.trim()}
+          title="현재 프롬프트를 라이브러리에 저장"
+        >
+          💾 저장
+        </button>
       </div>
+
+      {saveOpen && (
+        <div className="composer__save-pop">
+          <input
+            type="text"
+            value={saveTitle}
+            onChange={(e) => setSaveTitle(e.target.value)}
+            placeholder="제목 (선택, 비워도 됨)"
+            autoFocus
+            maxLength={100}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void savePromptToLibrary(saveTitle, prompt);
+                setSaveOpen(false);
+                setSaveTitle("");
+              } else if (e.key === "Escape") {
+                setSaveOpen(false);
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              void savePromptToLibrary(saveTitle, prompt);
+              setSaveOpen(false);
+              setSaveTitle("");
+            }}
+          >
+            저장
+          </button>
+          <button type="button" onClick={() => setSaveOpen(false)}>취소</button>
+        </div>
+      )}
 
       {refs.length > 0 && (
         <div className="composer__ref-hint" role="note">

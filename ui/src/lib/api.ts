@@ -469,3 +469,59 @@ export async function enhancePrompt(
   }
   return res.json();
 }
+
+// Phase 6.3 — Prompt library
+export type PromptItem = {
+  id: string;
+  title: string;
+  body: string;
+  pinned: boolean;
+  useCount: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  owner: string | null;
+};
+
+export function listPrompts(q = ""): Promise<{ items: PromptItem[] }> {
+  const qs = new URLSearchParams();
+  if (q.trim()) qs.set("q", q.trim());
+  qs.set("limit", "200");
+  return jsonFetch(`/api/prompts?${qs.toString()}`);
+}
+
+export function createPrompt(
+  title: string,
+  body: string,
+): Promise<{ item: PromptItem }> {
+  return jsonFetch("/api/prompts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, body }),
+  });
+}
+
+export function updatePrompt(
+  id: string,
+  patch: { title?: string; body?: string; pinned?: boolean },
+): Promise<{ item: PromptItem }> {
+  return jsonFetch(`/api/prompts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deletePrompt(id: string): Promise<{ ok: true }> {
+  return jsonFetch(`/api/prompts/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function bumpPromptUse(
+  id: string,
+): Promise<{ useCount: number; lastUsedAt: number }> {
+  return jsonFetch(`/api/prompts/${encodeURIComponent(id)}/use`, {
+    method: "POST",
+  });
+}

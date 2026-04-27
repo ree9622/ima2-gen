@@ -20,6 +20,15 @@ import {
   ensureDefaultSession,
 } from "./lib/sessionStore.js";
 import { trashAsset, restoreAsset, markNodesAssetMissing } from "./lib/assetLifecycle.js";
+import {
+  listPrompts,
+  getPrompt,
+  createPrompt,
+  updatePrompt,
+  deletePrompt,
+  bumpPromptUse,
+  PROMPT_ERRORS,
+} from "./lib/promptStore.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
@@ -1643,6 +1652,86 @@ app.delete("/api/sessions/:id", (req, res) => {
       });
     }
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+// -- Prompt library (Phase 6.3) — 자주 쓰는 프롬프트 저장/검색/재사용. --
+function promptErrorStatus(code) {
+  if (code === PROMPT_ERRORS.NOT_FOUND) return 404;
+  if (code === PROMPT_ERRORS.FORBIDDEN) return 403;
+  return 400;
+}
+
+app.get("/api/prompts", (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const limitRaw = Number(req.query.limit);
+    const offsetRaw = Number(req.query.offset);
+    const items = listPrompts({
+      owner: req.authUser || LEGACY_OWNER,
+      q,
+      limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+      offset: Number.isFinite(offsetRaw) ? offsetRaw : undefined,
+    });
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.post("/api/prompts", (req, res) => {
+  try {
+    const r = createPrompt({
+      title: typeof req.body?.title === "string" ? req.body.title : "",
+      body: typeof req.body?.body === "string" ? req.body.body : "",
+      owner: req.authUser || LEGACY_OWNER,
+    });
+    if (r.error) {
+      return res.status(promptErrorStatus(r.error)).json({ error: { code: r.error, message: r.error } });
+    }
+    res.status(201).json({ item: r.item });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.patch("/api/prompts/:id", (req, res) => {
+  try {
+    const patch = {};
+    if (typeof req.body?.title === "string") patch.title = req.body.title;
+    if (typeof req.body?.body === "string") patch.body = req.body.body;
+    if (typeof req.body?.pinned === "boolean") patch.pinned = req.body.pinned;
+    const r = updatePrompt(req.params.id, patch, { owner: req.authUser || LEGACY_OWNER });
+    if (r.error) {
+      return res.status(promptErrorStatus(r.error)).json({ error: { code: r.error, message: r.error } });
+    }
+    res.json({ item: r.item });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.delete("/api/prompts/:id", (req, res) => {
+  try {
+    const r = deletePrompt(req.params.id, { owner: req.authUser || LEGACY_OWNER });
+    if (r.error) {
+      return res.status(promptErrorStatus(r.error)).json({ error: { code: r.error, message: r.error } });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+app.post("/api/prompts/:id/use", (req, res) => {
+  try {
+    const r = bumpPromptUse(req.params.id, { owner: req.authUser || LEGACY_OWNER });
+    if (r.error) {
+      return res.status(promptErrorStatus(r.error)).json({ error: { code: r.error, message: r.error } });
+    }
+    res.json({ useCount: r.useCount, lastUsedAt: r.lastUsedAt });
   } catch (err) {
     res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
   }

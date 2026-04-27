@@ -59,6 +59,32 @@
 | 5.2 | **CLI cancel + 명확한 에러** | pending | `cf727f7` `8327306` | - | asrock는 systemd 없어 부분 가치 |
 | 5.3 | **CLI GitHub star 프롬프트** | skip | `00235fb` | - | 우리 fork엔 무관 |
 
+### Phase 6 — b210f10 이후 신규 (2026-04-26~ upstream 추가분)
+
+> **방침**: 이 단계부터는 **upstream 코드 cherry-pick 금지** — 기능/기획만 보고 우리 식으로 처음부터 구현. PRD는 `devlog/upstream-features/<feature>.md`.
+
+| # | 기능 | 상태 | upstream 참조 | 우리 PR | PRD/노트 |
+|---|------|------|---------------|---------|---------|
+| 6.1 | **Reference MIME 자동 탐지** | review | `2b2b9d4` (부분) | [#15](https://github.com/ree9622/ima2-gen/pull/15) | `lib/refs.js` 매직넘버 sniff (PNG/JPEG/WEBP) + OAuth data URL 정확 라벨링 |
+| 6.2 | **이미지 메타데이터 임베드/복원** | review | `e1b72fc` | [#16](https://github.com/ree9622/ima2-gen/pull/16) | [image-metadata.md](image-metadata.md) — PNG tEXt 청크 + 클라 파싱 + PromptComposer 인라인 카드 |
+| 6.3 | **Prompt library** | review | `0bb06fc` | TBD | [prompt-library.md](prompt-library.md) — SQLite tb_prompts + 단일 모달 + 핀/사용카운트 |
+| 6.4 | **Custom generation controls** | pending | `0e29e68` | - | CountPicker + SizePicker custom slot 메모리 |
+| 6.5 | **Gallery 즐겨찾기 필터** | done(자체) | `52ab801` | - | 이미 자체 구현 |
+| 6.6 | **Gallery 키보드 네비/위치 복원/가로 휠** | pending | `0a8cd34` | - | - |
+| 6.7 | **Gallery strip → adaptive rail** | pending | `dd482fc` | - | 우리 HistoryStrip은 이미 사이드바 — 발전형 |
+| 6.8 | **노드 방향성 핸들** | pending | `863ec72` | - | - |
+| 6.9 | **노드 엣지 명시적 disconnect** | pending | `e7826f7` | - | - |
+| 6.10 | **노드 references/regen 플로우 개선** | pending | `6e02cbc` | - | - |
+| 6.11 | **노드 preview aspect ratio 보존** | pending | `571ecd9` | - | - |
+| 6.12 | **`ima2 serve --dev` + 로그 기본 warn** | pending | `f04f2ef` | - | Phase 2.3 의존 |
+| 6.13 | **Windows explorer.exe 폴더 열기** | skip | `2b32f9a` | - | 우리에게 베이스 없음 |
+| 6.14 | **CLI gen/edit → configured generatedDir** | pending | `c4ff8cc` | - | - |
+| 6.15 | **upstream validation 에러 surface** | pending | `f4eff44` | - | - |
+| 6.16 | **SAFETY_REFUSAL → EMPTY_RESPONSE 폴백** | pending | `45b7892` | - | - |
+| 6.17 | **square custom size 제한 안내** | pending | `8adf19e` | - | - |
+| 6.18 | **Astro 사이트 / Pages / FAQ** | skip | 12건 | - | fork 운영 안 함 |
+| 6.19 | **Card-news 추가 작업** | pending | 5건 | - | - |
+
 ### 중복 (이미 우리가 해결, 작업 불필요)
 
 | upstream commit | 메시지 | 우리 동등 |

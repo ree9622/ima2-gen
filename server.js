@@ -326,7 +326,7 @@ function isUsageLimitError(e) {
 }
 
 async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttempt = null, ctx = {}) {
-  const attempts = buildAttemptSequence(prompt, maxAttempts);
+  const attempts = buildAttemptSequence(prompt, maxAttempts, { hasRefs: ctx.hasRefs === true });
   const log = [];
   let lastErr;
 
@@ -1060,7 +1060,7 @@ app.post("/api/generate", async (req, res) => {
         "generate",
         maxAttempts,
         requestId ? (i, _n) => setJobAttempt(requestId, i) : null,
-        { requestId },
+        { requestId, hasRefs: refB64s.length > 0 },
       );
 
     const results = await Promise.allSettled(Array.from({ length: count }, generateOne));
@@ -1247,7 +1247,7 @@ app.post("/api/edit", async (req, res) => {
         "edit",
         maxAttempts,
         null,
-        { requestId },
+        { requestId, hasRefs: true },
       );
     } catch (e) {
       await writeFailureSidecar({
@@ -1464,7 +1464,7 @@ app.post("/api/node/generate", async (req, res) => {
         "node",
         maxAttempts,
         requestId ? (i) => setJobAttempt(requestId, i) : null,
-        { requestId },
+        { requestId, hasRefs: !!parentB64 || refB64s.length > 0 },
       );
     } catch (err) {
       await writeFailureSidecar({

@@ -125,6 +125,47 @@ describe("strong-tier rewrite (high-risk triggers)", () => {
   });
 });
 
+describe("hasRefs hint (reference-image safety guard)", () => {
+  it("adds the strong English wrapper for clean prompts when refs are attached", () => {
+    // Plain prompt with no trigger keywords — without hasRefs there's no retry.
+    const plain = "인물 고정, 복장 고정, 다른 자세, 다른 표정, 다른 배경(한국)";
+    const noRefs = buildPromptAttempts(plain);
+    assert.equal(noRefs.length, 1);
+
+    // With hasRefs:true the reference IMAGE may be sexual-classified, so we
+    // still queue the strong English wrapper as a retry tier.
+    const withRefs = buildPromptAttempts(plain, { hasRefs: true });
+    assert.ok(withRefs.length >= 2, `expected >=2 variants, got ${withRefs.length}`);
+    assert.equal(withRefs[0], plain);
+    assert.match(withRefs[withRefs.length - 1], /AI-generated synthetic character/);
+    assert.match(withRefs[withRefs.length - 1], /amateur smartphone snapshot/);
+  });
+
+  it("hasCompliantRetry honors the hasRefs hint", () => {
+    const plain = "다른 자세, 다른 배경";
+    assert.equal(hasCompliantRetry(plain), false);
+    assert.equal(hasCompliantRetry(plain, { hasRefs: true }), true);
+  });
+
+  it("buildAttemptSequence cycles through ref-mode variants", () => {
+    const plain = "다른 자세";
+    const seq = buildAttemptSequence(plain, 3, { hasRefs: true });
+    assert.equal(seq.length, 3);
+    assert.equal(seq[0], plain);
+    // Tier 2 (strong English) should appear by attempt 2 or 3.
+    assert.ok(
+      seq.slice(1).some((s) => /AI-generated synthetic character/.test(s)),
+      "strong English variant must be in the retry sequence when hasRefs is set",
+    );
+  });
+
+  it("does not force the wrapper when prompt has explicit/minor cues", () => {
+    // Even with refs, hard blockers must still bail (no rewrite path).
+    assert.equal(buildPromptAttempts("nude photo", { hasRefs: true }).length, 1);
+    assert.equal(buildPromptAttempts("여고생 사진", { hasRefs: true }).length, 1);
+  });
+});
+
 describe("buildAttemptSequence (max retry count)", () => {
   it("defaults to a single attempt when maxAttempts is 1", () => {
     const seq = buildAttemptSequence("수영복 셀카", 1);

@@ -59,6 +59,32 @@
 | 5.2 | **CLI cancel + 명확한 에러** | pending | `cf727f7` `8327306` | - | asrock는 systemd 없어 부분 가치 |
 | 5.3 | **CLI GitHub star 프롬프트** | skip | `00235fb` | - | 우리 fork엔 무관 |
 
+### Phase 6 — b210f10 이후 신규 (2026-04-26~ upstream 추가분)
+
+> **방침**: 이 단계부터는 **upstream 코드 cherry-pick 금지** — 기능/기획만 보고 우리 식으로 처음부터 구현. PRD는 `devlog/upstream-features/<feature>.md`에 우리 이름으로.
+
+| # | 기능 | 상태 | upstream 참조 | 우리 PR | PRD/노트 |
+|---|------|------|---------------|---------|---------|
+| 6.1 | **Reference MIME 자동 탐지** | review | `2b2b9d4` (부분) | [#15](https://github.com/ree9622/ima2-gen/pull/15) | `lib/refs.js` 매직넘버 sniff (PNG/JPEG/WEBP) + OAuth data URL 정확 라벨링. 4K 진단/`referenceDiagnostics`는 별도 |
+| 6.2 | **이미지 메타데이터 임베드/복원** | review | `e1b72fc` | TBD | [image-metadata.md](image-metadata.md) — 우리 식: PNG tEXt 청크 + 클라 파싱 + PromptComposer 인라인 카드 (XMP·서버 라우트 안 씀) |
+| 6.3 | **Prompt library** | pending | `0bb06fc` | - | 자주 쓰는 프롬프트 SQLite 저장/검색/재사용 |
+| 6.4 | **Custom generation controls** | pending | `0e29e68` | - | CountPicker 신규 + SizePicker custom slot 메모리. 우리에게 i18n 부재 — 한국어 직접 |
+| 6.5 | **Gallery 즐겨찾기 필터** | done(자체) | `52ab801` | - | 이미 `GalleryModal.tsx:321`에서 한국어 UI로 자체 구현 |
+| 6.6 | **Gallery 키보드 네비/위치 복원/가로 휠** | pending | `0a8cd34` | - | 모달 안 화살표·Tab + 닫고 다시 열어도 스크롤 복원 |
+| 6.7 | **Gallery strip → adaptive rail** | pending | `dd482fc` | - | 사이드바 더블 레일 (우리 HistoryStrip은 이미 사이드바 안에 있음 — 발전형) |
+| 6.8 | **노드 방향성 핸들** | pending | `863ec72` | - | NodeCanvas/ImageNode — 사용자 작업 영역과 충돌 가능 |
+| 6.9 | **노드 엣지 명시적 disconnect** | pending | `e7826f7` | - | 위와 동일 영역 |
+| 6.10 | **노드 references/regen 플로우 개선** | pending | `6e02cbc` | - | - |
+| 6.11 | **노드 preview aspect ratio 보존** | pending | `571ecd9` | - | - |
+| 6.12 | **`ima2 serve --dev` + 로그 기본 warn** | pending | `f04f2ef` | - | 우리는 `config.js` 단일 모듈 미도입 → Phase 2.3 의존 |
+| 6.13 | **Windows explorer.exe 폴더 열기** | skip | `2b32f9a` | - | 우리에게 폴더 열기 기능 자체 없음 |
+| 6.14 | **CLI gen/edit → configured generatedDir** | pending | `c4ff8cc` | - | 작은 변경 |
+| 6.15 | **upstream validation 에러 surface** | pending | `f4eff44` | - | 가려진 OpenAI 에러를 사용자에게 노출 |
+| 6.16 | **SAFETY_REFUSAL → EMPTY_RESPONSE 폴백** | pending | `45b7892` | - | `lib/safetyRetry.js` 사용자 작업 중 — 정렬 후 |
+| 6.17 | **square custom size 제한 안내** | pending | `8adf19e` | - | UI 메시지 |
+| 6.18 | **Astro 사이트 / Pages / FAQ** | skip | 12건 | - | fork에서 별도 사이트 운영 안 함 |
+| 6.19 | **Card-news 추가 작업** | pending | 5건 | - | Phase 4.1과 합치거나 별도 트랙 |
+
 ### 중복 (이미 우리가 해결, 작업 불필요)
 
 | upstream commit | 메시지 | 우리 동등 |

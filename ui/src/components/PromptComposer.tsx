@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from
 import { useAppStore } from "../store/useAppStore";
 import { StyleChips } from "./StyleChips";
 import { EnhanceModal } from "./EnhanceModal";
+import { MetadataRestoreCard } from "./MetadataRestoreCard";
 import { enhancePrompt as apiEnhance } from "../lib/api";
 
 const MAX_REFS = 5;
@@ -98,6 +99,8 @@ export function PromptComposer() {
             참조 {refs.length}/{MAX_REFS}
           </span>
         )}
+        <div className="composer__header-spacer" />
+        <MetadataRestoreCard />
       </div>
 
       {refs.length > 0 && (

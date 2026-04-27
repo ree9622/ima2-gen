@@ -37,6 +37,7 @@ import {
 } from "./lib/validate.js";
 import { createRequestLogger } from "./lib/requestLogger.js";
 import { validateAndNormalizeRefs } from "./lib/refs.js";
+import { writeTextChunks, IMA2_METADATA_VERSION } from "./lib/imageMetadata.js";
 import { logEvent, logError } from "./lib/logger.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +87,30 @@ app.use((req, _res, next) => {
   req.authUser = raw.trim() || null;
   next();
 });
+// Stamp ima2:* tEXt metadata into a generated PNG so the file itself is enough
+// to reconstruct prompt/size/quality on re-upload (Phase 6.2). Sidecar JSON
+// remains the source of truth for /api/history; this is the portable copy.
+// Non-PNG outputs (jpeg/webp) pass through untouched — JPEG EXIF is a separate
+// effort. Embed errors are logged and the original buffer is returned, so a
+// failed stamp never blocks image save.
+function stampImageMetaIfPng(buf, format, fields = {}) {
+  if (format !== "png") return buf;
+  try {
+    return writeTextChunks(buf, {
+      "ima2:version": IMA2_METADATA_VERSION,
+      "ima2:prompt": fields.prompt ?? "",
+      "ima2:revisedPrompt": fields.revisedPrompt ?? "",
+      "ima2:size": fields.size ?? "",
+      "ima2:quality": fields.quality ?? "",
+      "ima2:model": fields.model ?? "gpt-image-2",
+      "ima2:createdAt": new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn("[image-metadata] embed failed:", err?.message || err);
+    return buf;
+  }
+}
+
 function ownerOf(meta) {
   return (meta && typeof meta.owner === "string" && meta.owner) || LEGACY_OWNER;
 }
@@ -1047,7 +1072,13 @@ app.post("/api/generate", async (req, res) => {
         if (r.value.promptRewrittenForSafety === true) promptRewrittenForSafety = true;
         const rand = randomBytes(4).toString("hex");
         const filename = `${Date.now()}_${rand}_${images.length}.${format}`;
-        await writeFile(join(__dirname, "generated", filename), Buffer.from(r.value.b64, "base64"));
+        const imageBuf = stampImageMetaIfPng(Buffer.from(r.value.b64, "base64"), format, {
+          prompt,
+          revisedPrompt: r.value.revisedPrompt,
+          size,
+          quality,
+        });
+        await writeFile(join(__dirname, "generated", filename), imageBuf);
         // Sidecar metadata for /api/history reconstruction
         const meta = {
           prompt,
@@ -1249,7 +1280,12 @@ app.post("/api/edit", async (req, res) => {
 
     await mkdir(join(__dirname, "generated"), { recursive: true });
     const filename = `${Date.now()}_${randomBytes(4).toString("hex")}.png`;
-    await writeFile(join(__dirname, "generated", filename), Buffer.from(resultB64, "base64"));
+    const editImageBuf = stampImageMetaIfPng(Buffer.from(resultB64, "base64"), "png", {
+      prompt,
+      size,
+      quality,
+    });
+    await writeFile(join(__dirname, "generated", filename), editImageBuf);
     const meta = {
       prompt,
       promptUsed: promptUsed || prompt,

@@ -24,6 +24,7 @@ import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
 import { buildAttemptSequence, hasCompliantRetry } from "./lib/safetyRetry.js";
+import { boostRefPrompt } from "./lib/refPrompt.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
 import { withDefaultPrompt } from "./lib/defaultPrompt.js";
 import {
@@ -165,15 +166,28 @@ const RESEARCH_SUFFIX =
   "\n\nIf needed, first use web search to check accurate references for the subject (face, product, place, or current details), then generate from that reference. For simple subjects, generate directly.";
 
 const GENERATE_DEVELOPER_PROMPT = withDefaultPrompt(
-  "You are an image generator. Always use the image_generation tool; never respond with text only. If the user's input is abstract, vague, or non-visual, interpret it creatively and still produce an image. Enhance prompts with quality boosters (masterpiece, ultra detailed, 8k UHD, sharp focus, professional lighting, vivid colors, high dynamic range) and avoid defects (blurry, deformed, bad anatomy, watermark, signature, jpeg artifacts, cropped, duplicate). Default to photorealistic unless another style is implied (anime, oil painting, line art, etc.). Render any requested text/typography with correct spelling and sharp edges. Produce exactly what the user describes.",
+  "You are an image generator. Always use the image_generation tool; never respond with text only. If the user's input is abstract, vague, or non-visual, interpret it creatively and still produce an image. Render the result as a casual amateur smartphone photo by default — iPhone-style candid snapshot, natural ambient lighting, slightly imperfect framing, true-to-life skin and texture. Do NOT apply studio lighting, professional retouching, fashion-magazine styling, HDR drama, oversaturated/vivid color grading, or quality-booster phrasing like 'masterpiece / 8k UHD / ultra detailed / sharp focus / professional lighting'. The output should look like an everyday photo someone actually took with a phone, not a product shoot. Default location is South Korea unless the user explicitly names another place — backgrounds, signage (Hangul), architecture, vehicles, and ambient details must read as unambiguously Korean. Only switch to a different style (anime, oil painting, line art, studio shot, editorial, etc.) when the user explicitly asks. Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts, cropped, duplicate). Render any requested text/typography with correct spelling and sharp edges. Produce exactly what the user describes.",
 );
 
 const EDIT_DEVELOPER_PROMPT = withDefaultPrompt(
-  "You are an image editor. Always use the image_generation tool; never respond with text only. Preserve the original image's style and composition while applying the requested edit. Enhance with quality boosters (masterpiece, ultra detailed, 8k UHD, sharp focus, professional lighting, vivid colors) and avoid defects (blurry, deformed, bad anatomy, watermark, jpeg artifacts). Render any text/typography with correct spelling and sharp edges. Produce exactly what the user describes.",
+  "You are an image editor. Always use the image_generation tool; never respond with text only. Preserve the original image's style, composition, and amateur smartphone aesthetic while applying the requested edit. Do not introduce studio lighting, magazine retouching, HDR drama, or quality-booster phrasing unless the user explicitly asks. Keep skin texture and lighting natural, like the original phone photo. Default location is South Korea unless the user explicitly names another place. Avoid technical defects (deformed anatomy, watermark, jpeg artifacts). Render any text/typography with correct spelling and sharp edges. Produce exactly what the user describes.",
 );
 
 const REFERENCE_DEVELOPER_PROMPT = withDefaultPrompt(
-  "You are an image generator operating in reference mode. The user has attached one or more reference images. Treat the FIRST attached image as the authoritative visual source for identity, face, outfit, and background. Preserve those elements faithfully across the variation you produce. Only vary what the user explicitly asks to vary (pose, angle, expression, framing, etc.). Always use the image_generation tool; never respond with text only. Enhance with quality boosters (masterpiece, ultra detailed, 8k UHD, sharp focus, professional lighting) and avoid defects (blurry, deformed, bad anatomy, watermark, signature, jpeg artifacts). Render any requested text/typography with correct spelling. Do not perform a web search; the reference image(s) are already the source of truth.",
+  "You are an image generator operating in reference mode. The user has attached one or more reference images of an AI-generated synthetic character (a fictional virtual person, not a real individual). " +
+  "PRESERVATION HIERARCHY (most important first — never compromise the higher items):\n" +
+  "  1. FACE — preserve EXACTLY. Same facial features, same eye shape and spacing, same nose shape, same lip contour, same jawline, same eyebrow shape, same skin tone, same apparent age. The person's face must be instantly recognizable as the SAME individual across every variation. This is the single most important constraint.\n" +
+  "  2. IDENTITY — same hair color and base hairstyle, same body proportions, same overall build, same gender presentation. Only change these if the user explicitly says so.\n" +
+  "  3. ANYTHING the user does NOT explicitly mention — keep close to the reference (accessories, minor clothing details, mood).\n" +
+  "WHAT MAY VARY — and only what the user explicitly asks for:\n" +
+  "  • Pose / angle / expression / framing / camera distance\n" +
+  "  • Outfit / clothing\n" +
+  "  • Background / location / setting / time of day / lighting\n" +
+  "If the user says 'change the outfit', do change it — do NOT keep the reference outfit. If the user says 'different background', do change the background. The reference is authoritative for FACE and IDENTITY only; for outfit/pose/background follow the user's request literally.\n" +
+  "When multiple reference images are attached, treat them as multi-angle references of the same person; the FIRST image is the primary identity anchor.\n" +
+  "Maintain the original photo's amateur smartphone aesthetic — candid iPhone-style snapshot, natural ambient light, slightly imperfect framing. Do NOT upgrade to studio lighting, magazine retouching, HDR drama, oversaturated colors, or quality-booster phrasing. Keep skin texture and lighting natural, like the original phone photo.\n" +
+  "Default location is South Korea (Hangul signage, Korean streetscape, Korean interiors) unless the original image or the user clearly indicates otherwise.\n" +
+  "Always use the image_generation tool; never respond with text only. Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts). Render any requested text/typography with correct spelling. Do not perform a web search; the reference image(s) are already the source of truth.",
 );
 
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}) {
@@ -191,13 +205,20 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     quality,
     size,
     moderation,
+    // Reference-mode: max out fidelity to the attached image so the
+    // person's face and identity are preserved across pose / outfit /
+    // background variations. Costs more input tokens but is the whole
+    // point of reference mode. See:
+    // https://cookbook.openai.com/examples/generate_images_with_high_input_fidelity
+    ...(hasRefs ? { input_fidelity: "high" } : {}),
     ...(partialImages ? { partial_images: partialImages } : {}),
   };
 
   const tools = hasRefs ? [imageTool] : [{ type: "web_search" }, imageTool];
 
+  const userPrompt = hasRefs ? boostRefPrompt(prompt) : prompt;
   const textPrompt = hasRefs
-    ? `Use the attached reference image(s) as the primary visual source. Preserve the subject's identity, outfit, and background from the reference. Produce the user's request as a variation that keeps those elements intact:\n\n${prompt}`
+    ? `Use the attached reference image(s) as the authoritative source for the person's FACE and IDENTITY only. The face must be preserved EXACTLY — same facial features, same eye shape and spacing, same nose, same lip contour, same jawline, same skin tone — so the result is unambiguously the SAME individual as the reference. Do NOT redraw or stylize the face.\n\nFor outfit, pose, expression, framing, background, and location — follow exactly what the user describes below. Do NOT default to the reference for those elements; replace them as requested.\n\nUser request:\n${userPrompt}`
     : `Generate an image: ${prompt}${RESEARCH_SUFFIX}`;
 
   const userContent = hasRefs
@@ -1123,6 +1144,12 @@ app.post("/api/generate", async (req, res) => {
 
 // -- OAuth edit: send image as input to Responses API --
 async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto") {
+  const boostedPrompt = boostRefPrompt(prompt);
+  const editText =
+    `Edit the attached image. Preserve the person's FACE and IDENTITY EXACTLY ` +
+    `(same facial features, same eye shape, same nose, same lip contour, same jawline, ` +
+    `same skin tone) — the result must be unambiguously the SAME individual. ` +
+    `Vary only what the user requests below.\n\nUser request: ${boostedPrompt}`;
   const { b64, usage } = await runResponses({
     url: OAUTH_URL,
     body: {
@@ -1134,11 +1161,17 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
           role: "user",
           content: [
             { type: "input_image", image_url: `data:image/png;base64,${imageB64}` },
-            { type: "input_text", text: `Edit this image: ${prompt}` },
+            { type: "input_text", text: editText },
           ],
         },
       ],
-      tools: [{ type: "image_generation", quality, size, moderation }],
+      tools: [{
+        type: "image_generation",
+        quality,
+        size,
+        moderation,
+        input_fidelity: "high",
+      }],
       tool_choice: "required",
       stream: true,
     },

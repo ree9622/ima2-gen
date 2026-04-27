@@ -891,6 +891,15 @@ body {
   font-size: 11px;
   color: var(--text-dim);
 }
+.composer__ref-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  line-height: 1.4;
+}
 .composer__chips {
   display: flex;
   flex-wrap: wrap;

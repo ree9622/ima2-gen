@@ -101,6 +101,14 @@ export function PromptComposer() {
       </div>
 
       {refs.length > 0 && (
+        <div className="composer__ref-hint" role="note">
+          {refs.length === 1
+            ? "💡 같은 인물의 정면/측면/상반신 등 2~3장을 추가하면 얼굴 일관성이 더 잘 유지돼요"
+            : "✓ 다각도 참조 — 얼굴은 자동으로 그대로 유지됩니다. 포즈/의상/배경만 바꿔주세요"}
+        </div>
+      )}
+
+      {refs.length > 0 && (
         <div className="composer__chips">
           {refs.map((src, i) => (
             <div key={i} className="composer__chip" title={`참조 이미지 ${i + 1}`}>

@@ -321,6 +321,28 @@ export function Lightbox() {
           {currentImage.filename ? (
             <button
               type="button"
+              className="lightbox__btn"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await navigator.clipboard.writeText(window.location.href);
+                  showToast("이 이미지의 URL을 복사했어요");
+                } catch {
+                  showToast("URL 복사에 실패했어요", true);
+                }
+              }}
+              aria-label="이미지 URL 복사"
+              title="이 이미지로 바로 가는 URL 복사"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </button>
+          ) : null}
+          {currentImage.filename ? (
+            <button
+              type="button"
               className="lightbox__btn lightbox__btn--danger"
               onClick={(e) => {
                 e.stopPropagation();
@@ -412,6 +434,42 @@ export function Lightbox() {
       {currentImage.prompt && showCaption ? (
         <div className="lightbox__caption" onClick={(e) => e.stopPropagation()}>
           <span className="lightbox__caption-text">{currentImage.prompt}</span>
+        </div>
+      ) : null}
+
+      {currentImage.references && currentImage.references.length > 0 ? (
+        <div className="lightbox__refs" onClick={(e) => e.stopPropagation()}>
+          <span className="lightbox__refs-label">참조 사진</span>
+          <div className="lightbox__refs-row">
+            {currentImage.references.map((ref) => {
+              const clickable = ref.kind === "history" && !!ref.filename;
+              const title = clickable
+                ? `이 참조 이미지로 이동 (${ref.filename})`
+                : "외부 업로드 참조 이미지";
+              return (
+                <button
+                  key={ref.hash}
+                  type="button"
+                  className={`lightbox__ref-thumb${clickable ? " is-clickable" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (clickable && ref.filename) {
+                      useAppStore.getState().openLightbox(ref.filename);
+                    }
+                  }}
+                  disabled={!clickable}
+                  title={title}
+                >
+                  <img src={ref.sourceUrl} alt="참조 이미지" loading="lazy" />
+                  {ref.kind === "uploaded" ? (
+                    <span className="lightbox__ref-tag" aria-label="외부 업로드">📎</span>
+                  ) : (
+                    <span className="lightbox__ref-tag is-history" aria-label="히스토리에서 가져옴">↗</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 

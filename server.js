@@ -25,6 +25,7 @@ import { runResponses } from "./lib/oauthStream.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
 import { buildAttemptSequence, hasCompliantRetry } from "./lib/safetyRetry.js";
 import { boostRefPrompt } from "./lib/refPrompt.js";
+import { resolveRefLineage } from "./lib/refLineage.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
 import { withDefaultPrompt } from "./lib/defaultPrompt.js";
 import {
@@ -130,6 +131,14 @@ app.use("/generated", async (req, res, next) => {
   const decoded = (() => { try { return decodeURIComponent(req.path); } catch { return req.path; } })();
   if (decoded.endsWith(".json") || decoded.includes("/.trash/") || decoded.includes("/.failed/")) {
     return res.status(404).end();
+  }
+  // Reference-image archive: hashed blobs stored in /.refs/ are content-
+  // addressed thumbnails for lineage display. They have no sidecar and
+  // belong to whoever uploaded them, but the hash is non-enumerable, so
+  // skipping the owner check is safe and keeps the Lightbox lineage
+  // thumbnails visible across sessions.
+  if (decoded.startsWith("/.refs/")) {
+    return generatedStatic(req, res, next);
   }
   // Resolve sidecar path safely under GENERATED_DIR
   const rel = decoded.replace(/^\/+/, "");
@@ -610,6 +619,7 @@ app.get("/api/history", async (req, res) => {
         maxAttempts: typeof meta?.maxAttempts === "number" ? meta.maxAttempts : null,
         attempts: Array.isArray(meta?.attempts) ? meta.attempts : [],
         referenceCount: typeof meta?.referenceCount === "number" ? meta.referenceCount : 0,
+        references: Array.isArray(meta?.references) ? meta.references : [],
         requestId: typeof meta?.requestId === "string" ? meta.requestId : null,
       };
     }));
@@ -790,6 +800,7 @@ app.get("/api/generation-log", async (req, res) => {
           maxAttempts: typeof meta?.maxAttempts === "number" ? meta.maxAttempts : null,
           attempts: Array.isArray(meta?.attempts) ? meta.attempts : [],
           referenceCount: typeof meta?.referenceCount === "number" ? meta.referenceCount : 0,
+          references: Array.isArray(meta?.references) ? meta.references : [],
           filename: rel,
           url: `/generated/${rel.split("/").map(encodeURIComponent).join("/")}`,
           sessionId: meta?.sessionId || null,
@@ -965,7 +976,7 @@ app.post("/api/generate", async (req, res) => {
       typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
     const clientNodeId =
       typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
-    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt } =
+    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt } =
       req.body;
     const maxAttempts = clampMaxAttempts(rawMaxAttempts, 2);
     const originalPrompt =
@@ -1025,6 +1036,22 @@ app.post("/api/generate", async (req, res) => {
     const mime = mimeMap[format] || "image/png";
     await mkdir(join(__dirname, "generated"), { recursive: true });
 
+    // Resolve reference lineage once per request — every generated image in
+    // this batch shares the same parents. Persists never-before-seen uploads
+    // to generated/.refs/<hash>.<ext> for later Lightbox display.
+    let refLineage = [];
+    if (refB64s.length > 0) {
+      try {
+        refLineage = await resolveRefLineage(refB64s, {
+          generatedDir: join(__dirname, "generated"),
+          hint: Array.isArray(rawReferenceMeta) ? rawReferenceMeta : [],
+        });
+      } catch (err) {
+        console.warn("[generate] refLineage failed:", err?.message || err);
+        refLineage = [];
+      }
+    }
+
     const generateOne = () =>
       runPromptAttempts(
         prompt,
@@ -1065,6 +1092,7 @@ app.post("/api/generate", async (req, res) => {
           maxAttempts,
           attempts: Array.isArray(r.value.attempts) ? r.value.attempts : [],
           referenceCount: refB64s.length,
+          references: refLineage,
           sessionId,
           owner: req.authUser || LEGACY_OWNER,
           requestId,
@@ -1073,6 +1101,7 @@ app.post("/api/generate", async (req, res) => {
         images.push({
           image: `data:${mime};base64,${r.value.b64}`,
           filename,
+          references: refLineage,
         });
         if (r.value.usage) {
           if (!totalUsage) totalUsage = { ...r.value.usage };

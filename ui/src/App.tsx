@@ -10,6 +10,7 @@ import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { Lightbox } from "./components/Lightbox";
 import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 import { ENABLE_NODE_MODE } from "./lib/devMode";
+import { useLightboxUrlSync } from "./lib/urlSync";
 
 export default function App() {
   const hydrateHistory = useAppStore((s) => s.hydrateHistory);
@@ -26,6 +27,8 @@ export default function App() {
     reconcileInflight();
     startInFlightPolling();
   }, [hydrateHistory, loadSessions, reconcileInflight, startInFlightPolling]);
+
+  useLightboxUrlSync();
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {

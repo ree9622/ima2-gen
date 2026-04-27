@@ -21,6 +21,20 @@ export type SizePreset =
   | "auto"
   | "custom";
 
+// Lineage of a single reference image used to produce a generated result.
+//   kind: "history"  — the ref was an existing /generated/<filename> image
+//                      (e.g. "현재 결과 사용"), so clicking the thumbnail
+//                      can navigate the lightbox to that history item.
+//   kind: "uploaded" — the ref was a fresh upload, persisted on the server
+//                      under /generated/.refs/<hash>.png. Clicking just
+//                      previews the image; no navigation target exists.
+export type ReferenceImageRef = {
+  kind: "history" | "uploaded";
+  hash: string;
+  filename?: string;
+  sourceUrl: string;
+};
+
 export type GenerateItem = {
   image: string;
   url?: string;
@@ -37,6 +51,16 @@ export type GenerateItem = {
   createdAt?: number;
   favorite?: boolean;
   sessionId?: string | null;
+  references?: ReferenceImageRef[];
+};
+
+// Hint sent to the server alongside `references` so it can label each
+// uploaded reference as either "from a history file" or "fresh upload".
+// The server still re-hashes every byte to verify, so a wrong/missing
+// hint is harmless — it just falls back to the uploaded path.
+export type ReferenceMetaHint = {
+  kind: "history" | "uploaded";
+  filename?: string;
 };
 
 export type GenerateSingleResponse = {
@@ -51,7 +75,7 @@ export type GenerateSingleResponse = {
 };
 
 export type GenerateMultiResponse = {
-  images: Array<{ image: string; filename: string }>;
+  images: Array<{ image: string; filename: string; references?: ReferenceImageRef[] }>;
   elapsed: number;
   count: number;
   usage?: GenerateItem["usage"];
@@ -77,6 +101,9 @@ export type GenerateRequest = {
   n: number;
   image?: string;
   references?: string[];
+  // Lineage hint per reference. Index-aligned with `references`. Server
+  // re-hashes to verify, so a wrong hint is harmless.
+  referenceMeta?: ReferenceMetaHint[];
   requestId?: string;
   maxAttempts?: number;
   // Pre-enhance original (only set when EnhanceModal applied a rewrite).

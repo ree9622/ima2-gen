@@ -31,6 +31,7 @@ import {
 } from "../lib/api";
 import { compressImage } from "../lib/image";
 import { snap16 } from "../lib/size";
+import { syncImageToUrl } from "../lib/urlSync";
 import { newClientNodeId, type ClientNodeId } from "../lib/graph";
 import { getNextRootPosition, getNextChildPosition } from "../lib/nodeLayout";
 import {
@@ -470,6 +471,10 @@ type AppState = {
   count: Count;
   prompt: string;
   referenceImages: string[];
+  // Lineage hint per reference, index-aligned with referenceImages. The store
+  // keeps the two arrays in lock-step (length always equal). null entries
+  // mean we have no hint and the server should treat the ref as uploaded.
+  referenceMetaHints: (import("../types").ReferenceMetaHint | null)[];
   addReferences: (files: File[]) => Promise<void>;
   addReferenceDataUrl: (dataUrl: string) => void;
   removeReference: (index: number) => void;
@@ -647,6 +652,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().generate({ overridePrompt: item.prompt, overrideCount: 1 });
   },
   referenceImages: [],
+  referenceMetaHints: [],
   addReferences: async (files) => {
     const allowed = 5 - get().referenceImages.length;
     const toAdd = files.slice(0, Math.max(0, allowed));
@@ -663,7 +669,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       ),
     );
     const valid = dataUrls.filter((x): x is string => !!x);
-    set((s) => ({ referenceImages: [...s.referenceImages, ...valid].slice(0, 5) }));
+    const newHints = valid.map(() => ({ kind: "uploaded" as const }));
+    set((s) => ({
+      referenceImages: [...s.referenceImages, ...valid].slice(0, 5),
+      referenceMetaHints: [...s.referenceMetaHints, ...newHints].slice(0, 5),
+    }));
     if (files.length > allowed) {
       get().showToast("참조 이미지는 최대 5장까지 추가할 수 있습니다. 초과한 이미지는 제외되었습니다.", true);
     }
@@ -672,15 +682,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) =>
       s.referenceImages.length >= 5
         ? s
-        : { referenceImages: [...s.referenceImages, dataUrl] },
+        : {
+            referenceImages: [...s.referenceImages, dataUrl],
+            referenceMetaHints: [...s.referenceMetaHints, { kind: "uploaded" }],
+          },
     );
   },
   removeReference: (index) => {
     set((s) => ({
       referenceImages: s.referenceImages.filter((_, i) => i !== index),
+      referenceMetaHints: s.referenceMetaHints.filter((_, i) => i !== index),
     }));
   },
-  clearReferences: () => set({ referenceImages: [] }),
+  clearReferences: () => set({ referenceImages: [], referenceMetaHints: [] }),
   useCurrentAsReference: async () => {
     const cur = get().currentImage;
     if (!cur) {
@@ -710,7 +724,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
     }
-    set((s) => ({ referenceImages: [...s.referenceImages, dataUrl] }));
+    const hint = cur.filename
+      ? ({ kind: "history" as const, filename: cur.filename })
+      : ({ kind: "uploaded" as const });
+    set((s) => ({
+      referenceImages: [...s.referenceImages, dataUrl],
+      referenceMetaHints: [...s.referenceMetaHints, hint],
+    }));
     get().showToast("현재 이미지를 참조에 추가했습니다.");
   },
   activeGenerations: loadInFlight().filter((f) => (f.status ?? "running") === "running").length,
@@ -889,6 +909,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           createdAt: it.createdAt,
           sessionId: it.sessionId ?? null,
           favorite: it.favorite === true,
+          ...(it.references && it.references.length > 0
+            ? { references: it.references }
+            : {}),
         }));
         const existing = get().history;
         const fresh = arr.filter(
@@ -1061,6 +1084,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           createdAt: it.createdAt,
           sessionId: it.sessionId ?? null,
           favorite: it.favorite === true,
+          ...(it.references && it.references.length > 0
+            ? { references: it.references }
+            : {}),
         }));
         const existing = get().history;
         const newOnes = fresh.filter((a) => !existing.some((e) => e.filename === a.filename));
@@ -1130,9 +1156,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (target) get().selectHistory(target);
     }
     if (!get().currentImage) return;
+    const wasOpen = get().lightboxOpen;
     set({ lightboxOpen: true });
+    const cur = get().currentImage;
+    if (cur?.filename) {
+      // First open → push history entry so back button closes the modal.
+      // Subsequent opens (filename change while open) → replace.
+      syncImageToUrl(cur.filename, wasOpen);
+    }
   },
-  closeLightbox: () => set({ lightboxOpen: false }),
+  closeLightbox: () => {
+    set({ lightboxOpen: false });
+    syncImageToUrl(null, false);
+  },
   lightboxNext: () => {
     const cur = get().currentImage;
     const hist = get().history;
@@ -1143,6 +1179,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const nextIdx = idx < 0 ? 0 : Math.min(idx + 1, hist.length - 1);
     if (nextIdx === idx) return;
     get().selectHistory(hist[nextIdx]);
+    const next = get().currentImage;
+    if (next?.filename) syncImageToUrl(next.filename, true);
   },
   lightboxPrev: () => {
     const cur = get().currentImage;
@@ -1154,6 +1192,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const prevIdx = idx < 0 ? 0 : Math.max(idx - 1, 0);
     if (prevIdx === idx) return;
     get().selectHistory(hist[prevIdx]);
+    const prev = get().currentImage;
+    if (prev?.filename) syncImageToUrl(prev.filename, true);
   },
   jumpToImageSession: async (item) => {
     const target = item ?? get().currentImage;
@@ -2200,6 +2240,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const references = s.referenceImages.length
       ? s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, ""))
       : null;
+    // Index-aligned lineage hints; trimmed to whatever references we send.
+    const referenceMeta = s.referenceImages.length
+      ? s.referenceMetaHints
+          .slice(0, s.referenceImages.length)
+          .map((h) => h ?? { kind: "uploaded" as const })
+      : null;
 
     const startedAt = Date.now();
     const flightIds = Array.from(
@@ -2256,6 +2302,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               ? { originalPrompt: s.originalPrompt }
               : {}),
             ...(references ? { references } : {}),
+            ...(referenceMeta ? { referenceMeta } : {}),
           });
           console.log(
             `[ima2][generate][${flightId}] response ok in ` +
@@ -2264,8 +2311,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
           // Server returns single-shape for n=1, but handle multi defensively.
           const picked = isMultiResponse(res)
-            ? { image: res.images[0]?.image ?? "", filename: res.images[0]?.filename }
-            : { image: res.image, filename: res.filename };
+            ? {
+                image: res.images[0]?.image ?? "",
+                filename: res.images[0]?.filename,
+                references: res.images[0]?.references,
+              }
+            : {
+                image: res.image,
+                filename: res.filename,
+                references: (res as { references?: GenerateItem["references"] }).references,
+              };
           if (!picked.image) throw new Error("빈 응답");
 
           const item: GenerateItem = {
@@ -2280,6 +2335,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             usage: res.usage,
             quality: res.quality ?? s.quality,
             size: res.size ?? size,
+            ...(picked.references && picked.references.length > 0
+              ? { references: picked.references }
+              : {}),
           };
           await addHistory(item, set, get);
           succeeded += 1;
@@ -2396,6 +2454,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           createdAt: it.createdAt,
           favorite: it.favorite === true,
           sessionId: it.sessionId ?? null,
+          ...(it.references && it.references.length > 0
+            ? { references: it.references }
+            : {}),
         }));
         if (history.length > 0) {
           const selected = loadSelectedFilename();

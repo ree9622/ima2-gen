@@ -123,6 +123,9 @@ export type HistoryItem = {
    *  client reconcile a pending in-flight entry after a refresh by matching
    *  history rows against `inFlight[].id`. */
   requestId?: string | null;
+  /** Reference-image lineage: which images were used as visual references
+   *  when this image was generated. Empty for unconditional generations. */
+  references?: import("../types").ReferenceImageRef[];
 };
 
 export type HistoryCursor = { before: number; beforeFilename: string };

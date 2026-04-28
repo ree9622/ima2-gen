@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from
 import { useAppStore } from "../store/useAppStore";
 import { StyleChips } from "./StyleChips";
 import { EnhanceModal } from "./EnhanceModal";
+import { SexyTuneModal } from "./SexyTuneModal";
+import { RefBundlesModal } from "./RefBundlesModal";
 import { enhancePrompt as apiEnhance } from "../lib/api";
 
 const MAX_REFS = 5;
@@ -24,6 +26,8 @@ export function PromptComposer() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [enhanceOpen, setEnhanceOpen] = useState(false);
+  const [sexyTuneOpen, setSexyTuneOpen] = useState(false);
+  const [bundlesOpen, setBundlesOpen] = useState(false);
 
   const canAddMore = refs.length < MAX_REFS;
 
@@ -189,6 +193,25 @@ export function PromptComposer() {
         <button
           type="button"
           className="composer__tool"
+          onClick={() => setBundlesOpen(true)}
+          title="참조 이미지 묶음 저장/불러오기"
+        >
+          <span aria-hidden="true">📦</span>
+          <span>묶음</span>
+        </button>
+        <button
+          type="button"
+          className="composer__tool"
+          onClick={() => setSexyTuneOpen(true)}
+          disabled={refs.length === 0}
+          title="참고 이미지로 N장 자동 생성 (각 다른 의상)"
+        >
+          <span aria-hidden="true">🎲</span>
+          <span>섹시 다듬기</span>
+        </button>
+        <button
+          type="button"
+          className="composer__tool"
           onClick={() => prompt.trim() && setEnhanceOpen(true)}
           disabled={!prompt.trim()}
           title="프롬프트 자세히 다듬기"
@@ -234,6 +257,10 @@ export function PromptComposer() {
           e.target.value = "";
         }}
       />
+
+      <SexyTuneModal open={sexyTuneOpen} onClose={() => setSexyTuneOpen(false)} />
+
+      <RefBundlesModal open={bundlesOpen} onClose={() => setBundlesOpen(false)} />
 
       <EnhanceModal
         open={enhanceOpen}

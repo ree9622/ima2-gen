@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { writeFile, mkdir, readFile, readdir, stat } from "fs/promises";
+import { writeFile, mkdir, readFile, readdir, stat, rename } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
@@ -24,6 +24,12 @@ import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
 import { buildAttemptSequence, hasCompliantRetry } from "./lib/safetyRetry.js";
+import {
+  OUTFIT_PRESETS,
+  OUTFIT_CATEGORIES,
+  sampleOutfitPrompts,
+  weightsFromStats,
+} from "./lib/outfitPresets.js";
 import { boostRefPrompt } from "./lib/refPrompt.js";
 import { resolveRefLineage } from "./lib/refLineage.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
@@ -124,14 +130,19 @@ app.use("/assets", (_req, res) => {
 
 // /generated is owner-gated when X-Auth-User is set. Sidecar JSON drives ACL.
 const GENERATED_DIR = join(__dirname, "generated");
-const generatedStatic = express.static(GENERATED_DIR, { maxAge: "1y", immutable: true });
+// dotfiles: "allow" lets serve-static deliver `.refs/<hash>.<ext>` (uploaded
+// reference thumbnails saved by resolveRefLineage). Without it the default
+// "ignore" returns 404 and the Lightbox lineage panel shows broken thumbs
+// for any externally-uploaded reference (2026-04-28 user report).
+// Dangerous dot dirs (.trash / .failed) are blocked explicitly below.
+const generatedStatic = express.static(GENERATED_DIR, { maxAge: "1y", immutable: true, dotfiles: "allow" });
 app.use("/generated", async (req, res, next) => {
-  if (!req.authUser) return generatedStatic(req, res, next);
-  // Block sidecar/trash/.failed exposure regardless
+  // Sidecar JSON and trash/failed dirs are blocked regardless of auth.
   const decoded = (() => { try { return decodeURIComponent(req.path); } catch { return req.path; } })();
   if (decoded.endsWith(".json") || decoded.includes("/.trash/") || decoded.includes("/.failed/")) {
     return res.status(404).end();
   }
+  if (!req.authUser) return generatedStatic(req, res, next);
   // Reference-image archive: hashed blobs stored in /.refs/ are content-
   // addressed thumbnails for lineage display. They have no sidecar and
   // belong to whoever uploaded them, but the hash is non-enumerable, so
@@ -361,6 +372,9 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           errorCode: null,
           durationMs,
           startedAt,
+          reasoningSummary: r.reasoningSummary || null,
+          refusalText: r.refusalText || null,
+          eventTypeCounts: r.eventTypeCounts || null,
         });
         console.log(
           `${tag} attempt ${i + 1}/${attempts.length} SUCCESS in ${durationMs}ms ` +
@@ -384,7 +398,16 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         errorCode: lastErr.code,
         durationMs,
         startedAt,
+        reasoningSummary: r?.reasoningSummary || null,
+        refusalText: r?.refusalText || null,
+        eventTypeCounts: r?.eventTypeCounts || null,
       });
+      if (r?.reasoningSummary || r?.refusalText) {
+        console.warn(
+          `${tag} attempt ${i + 1} reasoning/refusal capture: ` +
+          `reasoningLen=${r.reasoningSummary?.length || 0} refusalLen=${r.refusalText?.length || 0}`,
+        );
+      }
       console.warn(
         `${tag} attempt ${i + 1}/${attempts.length} EMPTY (safety refusal) after ${durationMs}ms`,
       );
@@ -448,7 +471,7 @@ function clampMaxAttempts(v, fallback = 2) {
 // Persist a failed generation attempt for the log UI + retry button.
 // Refs are NOT saved (see retry flow): refs live in the browser and are
 // re-attached when the user invokes retry from a history item that had them.
-async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null }) {
+async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null }) {
   try {
     const dir = join(__dirname, "generated", ".failed");
     await mkdir(dir, { recursive: true });
@@ -474,6 +497,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       attempts: attempts || [],
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
+      ...(outfitModule ? { outfitModule } : {}),
     };
     await writeFile(join(dir, `${id}.json`), JSON.stringify(record));
     return id;
@@ -482,6 +506,279 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
     return null;
   }
 }
+
+// -- Outfit pool (sexy-tune batch generator) --
+//
+// GET /api/outfit/categories
+//   → { categories: string[], presets: { id, label, category, risk }[] }
+//   List metadata only — used by the UI to render category filter chips.
+//
+// POST /api/outfit/sample
+//   body: { count, maxRisk?, categories?, aspectRatio? }
+//   → { variants: { id, label, category, risk, prompt }[] }
+//   Returns N composed prompts ready to feed straight into /api/generate.
+//   Each variant is a different outfit module from the curated pool.
+app.get("/api/outfit/categories", (_req, res) => {
+  res.json({
+    categories: OUTFIT_CATEGORIES,
+    presets: OUTFIT_PRESETS.map(({ id, label, category, risk }) => ({
+      id,
+      label,
+      category,
+      risk,
+    })),
+  });
+});
+
+// Compute per-module pass-rate stats from sidecar history. Walks both the
+// success and failure directories. Cached briefly so a flurry of modal opens
+// doesn't re-scan the disk every time.
+let __outfitStatsCache = null;
+let __outfitStatsCachedAt = 0;
+const OUTFIT_STATS_TTL_MS = 30_000;
+
+async function computeOutfitStats() {
+  const now = Date.now();
+  if (__outfitStatsCache && now - __outfitStatsCachedAt < OUTFIT_STATS_TTL_MS) {
+    return __outfitStatsCache;
+  }
+  /** @type {Record<string, { success: number; fail: number; lastUsed: number; label: string|null; category: string|null; risk: string|null }>} */
+  const stats = {};
+  const bump = (m, ok, ts) => {
+    if (!m?.id) return;
+    const e = stats[m.id] || (stats[m.id] = {
+      success: 0,
+      fail: 0,
+      lastUsed: 0,
+      label: m.label || null,
+      category: m.category || null,
+      risk: m.risk || null,
+    });
+    if (ok) e.success++;
+    else e.fail++;
+    if (ts > e.lastUsed) e.lastUsed = ts;
+    if (!e.label && m.label) e.label = m.label;
+    if (!e.category && m.category) e.category = m.category;
+    if (!e.risk && m.risk) e.risk = m.risk;
+  };
+
+  // Success sidecars (top-level *.json files, excluding the .failed dir)
+  const genDir = join(__dirname, "generated");
+  const successFiles = await readdir(genDir, { withFileTypes: true }).catch(() => []);
+  for (const f of successFiles) {
+    if (!f.isFile() || !f.name.endsWith(".json")) continue;
+    try {
+      const m = JSON.parse(await readFile(join(genDir, f.name), "utf-8"));
+      if (m?.outfitModule) bump(m.outfitModule, true, m.createdAt || 0);
+    } catch {}
+  }
+
+  // Failure sidecars
+  const failedDir = join(genDir, ".failed");
+  const failedFiles = await readdir(failedDir, { withFileTypes: true }).catch(() => []);
+  for (const f of failedFiles) {
+    if (!f.isFile() || !f.name.endsWith(".json")) continue;
+    try {
+      const m = JSON.parse(await readFile(join(failedDir, f.name), "utf-8"));
+      if (m?.outfitModule) bump(m.outfitModule, false, m.createdAt || 0);
+    } catch {}
+  }
+
+  __outfitStatsCache = stats;
+  __outfitStatsCachedAt = now;
+  return stats;
+}
+
+// GET /api/outfit/stats → { stats: { [moduleId]: { success, fail, passRate, lastUsed, label, category, risk } } }
+app.get("/api/outfit/stats", async (_req, res) => {
+  try {
+    const raw = await computeOutfitStats();
+    const out = {};
+    for (const [id, s] of Object.entries(raw)) {
+      const total = s.success + s.fail;
+      out[id] = {
+        ...s,
+        total,
+        passRate: total > 0 ? s.success / total : null,
+      };
+    }
+    res.json({ stats: out, presetCount: OUTFIT_PRESETS.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/outfit/sample", express.json({ limit: "256kb" }), async (req, res) => {
+  const body = req.body || {};
+  const countRaw = Number(body.count);
+  const count = Math.max(
+    1,
+    Math.min(8, Number.isFinite(countRaw) ? Math.floor(countRaw) : 4),
+  );
+  const maxRisk = ["low", "medium", "high"].includes(body.maxRisk)
+    ? body.maxRisk
+    : "medium";
+  const categories = Array.isArray(body.categories) && body.categories.length > 0
+    ? body.categories.filter((c) => typeof c === "string")
+    : undefined;
+  const excludeIds = Array.isArray(body.excludeIds)
+    ? body.excludeIds.filter((s) => typeof s === "string")
+    : undefined;
+  const aspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : "1:1";
+  const cameraTone = body.cameraTone === "iphone" ? "iphone" : "canon";
+  const includeMirror = body.includeMirror === true;
+  const includeFlirty = body.includeFlirty !== false; // default true
+  const useWeights = body.useWeights !== false; // default true
+  const framingMode = body.framingMode === "full-body" || body.framingMode === "half-body"
+    ? body.framingMode
+    : "mixed";
+
+  let weights;
+  if (useWeights) {
+    try {
+      const stats = await computeOutfitStats();
+      weights = weightsFromStats(stats);
+    } catch {
+      // best-effort; fall back to uniform sampling
+    }
+  }
+
+  const variants = sampleOutfitPrompts({
+    count,
+    maxRisk,
+    categories,
+    excludeIds,
+    weights,
+    aspectRatio,
+    cameraTone,
+    includeMirror,
+    includeFlirty,
+    framingMode,
+  });
+  res.json({ variants, framingMode });
+});
+
+// -- Reference bundles --
+// Save a named set of reference images so the user can re-attach them later
+// without re-uploading. Storage = single JSON file in the config dir; binary
+// thumbnails are content-addressed in generated/.refs/<hash>.<ext> (already
+// written by resolveRefLineage). Bundles store only { hash, ext, sourceUrl }
+// per item, so the file stays small and survives restart.
+const BUNDLES_DIR = process.env.IMA2_CONFIG_DIR || join(homedir(), ".ima2");
+const BUNDLES_FILE = join(BUNDLES_DIR, "refBundles.json");
+
+async function loadBundles() {
+  try {
+    const raw = await readFile(BUNDLES_FILE, "utf-8");
+    const j = JSON.parse(raw);
+    return Array.isArray(j?.bundles) ? j.bundles : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveBundles(bundles) {
+  await mkdir(BUNDLES_DIR, { recursive: true });
+  const tmp = BUNDLES_FILE + ".tmp";
+  await writeFile(tmp, JSON.stringify({ bundles }, null, 2));
+  // Atomic rename so a crash mid-write can't truncate the file.
+  await rename(tmp, BUNDLES_FILE);
+}
+
+function bundleVisibleTo(bundle, authUser) {
+  if (!authUser) return true;
+  return (bundle.owner || LEGACY_OWNER) === authUser;
+}
+
+// GET /api/ref-bundles → { bundles: [{ id, name, items, createdAt }] }
+app.get("/api/ref-bundles", async (req, res) => {
+  try {
+    const all = await loadBundles();
+    const visible = all
+      .filter((b) => bundleVisibleTo(b, req.authUser))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json({ bundles: visible });
+  } catch (err) {
+    res.status(500).json({ error: { code: "BUNDLE_READ_FAIL", message: err.message } });
+  }
+});
+
+// POST /api/ref-bundles { name, references: [b64...] } → { bundle }
+// Hashes references via resolveRefLineage so blobs land in /generated/.refs/.
+app.post("/api/ref-bundles", express.json({ limit: "50mb" }), async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: { code: "BUNDLE_NAME_REQUIRED", message: "이름을 입력해 주세요." } });
+    const refs = Array.isArray(req.body?.references) ? req.body.references : [];
+    if (refs.length === 0) {
+      return res.status(400).json({ error: { code: "BUNDLE_NO_REFS", message: "참조 이미지가 비어 있습니다." } });
+    }
+    const refCheck = validateAndNormalizeRefs(refs);
+    if (refCheck.error) return send400(res, refCheck);
+    const lineage = await resolveRefLineage(refCheck.refs, {
+      generatedDir: GENERATED_DIR,
+      hint: Array.isArray(req.body?.referenceMeta) ? req.body.referenceMeta : [],
+    });
+    const items = lineage.map((l) => ({
+      hash: l.hash,
+      sourceUrl: l.sourceUrl,
+      kind: l.kind,
+      ...(l.filename ? { filename: l.filename } : {}),
+    }));
+    const bundle = {
+      id: `b_${Date.now()}_${randomBytes(4).toString("hex")}`,
+      name,
+      owner: req.authUser || LEGACY_OWNER,
+      items,
+      createdAt: Date.now(),
+    };
+    const all = await loadBundles();
+    all.push(bundle);
+    await saveBundles(all);
+    res.json({ bundle });
+  } catch (err) {
+    console.error("[ref-bundles] save failed:", err);
+    res.status(500).json({ error: { code: "BUNDLE_SAVE_FAIL", message: err.message } });
+  }
+});
+
+// DELETE /api/ref-bundles/:id → { ok: true }
+app.delete("/api/ref-bundles/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const all = await loadBundles();
+    const target = all.find((b) => b.id === id);
+    if (!target) return res.status(404).json({ error: { code: "BUNDLE_NOT_FOUND", message: "묶음을 찾을 수 없습니다." } });
+    if (!bundleVisibleTo(target, req.authUser)) {
+      return res.status(403).json({ error: { code: "BUNDLE_FORBIDDEN", message: "권한이 없습니다." } });
+    }
+    const next = all.filter((b) => b.id !== id);
+    await saveBundles(next);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: { code: "BUNDLE_DELETE_FAIL", message: err.message } });
+  }
+});
+
+// PATCH /api/ref-bundles/:id { name } → { bundle }
+app.patch("/api/ref-bundles/:id", express.json({ limit: "16kb" }), async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const name = String(req.body?.name || "").trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: { code: "BUNDLE_NAME_REQUIRED", message: "이름을 입력해 주세요." } });
+    const all = await loadBundles();
+    const target = all.find((b) => b.id === id);
+    if (!target) return res.status(404).json({ error: { code: "BUNDLE_NOT_FOUND", message: "묶음을 찾을 수 없습니다." } });
+    if (!bundleVisibleTo(target, req.authUser)) {
+      return res.status(403).json({ error: { code: "BUNDLE_FORBIDDEN", message: "권한이 없습니다." } });
+    }
+    target.name = name;
+    await saveBundles(all);
+    res.json({ bundle: target });
+  } catch (err) {
+    res.status(500).json({ error: { code: "BUNDLE_PATCH_FAIL", message: err.message } });
+  }
+});
 
 // -- Provider info --
 app.get("/api/providers", (_req, res) => {
@@ -556,12 +853,19 @@ app.get("/api/health", async (req, res) => {
 
 // -- History (disk-backed authoritative source for UI history list) --
 // Recursively list image files up to 2 levels deep (for 0.04 session/node subdirs)
+// Skip helper directories that aren't generation outputs:
+//   .trash    soft-deleted images
+//   .failed   failure sidecars
+//   .refs     reference-image content archive (hashed blobs)
+// These leaked into /api/history and rendered as "프롬프트 없음" placeholders.
+const SKIP_DIRS = new Set([".trash", ".failed", ".refs"]);
+
 async function listImages(baseDir) {
   const out = [];
   async function walk(dir, depth) {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const e of entries) {
-      if (e.name === ".trash") continue;
+      if (SKIP_DIRS.has(e.name)) continue;
       const full = join(dir, e.name);
       if (e.isDirectory() && depth > 0) {
         await walk(full, depth - 1);
@@ -621,6 +925,7 @@ app.get("/api/history", async (req, res) => {
         referenceCount: typeof meta?.referenceCount === "number" ? meta.referenceCount : 0,
         references: Array.isArray(meta?.references) ? meta.references : [],
         requestId: typeof meta?.requestId === "string" ? meta.requestId : null,
+        outfitModule: meta?.outfitModule || null,
       };
     }));
 
@@ -807,6 +1112,7 @@ app.get("/api/generation-log", async (req, res) => {
           requestId: typeof meta?.requestId === "string" ? meta.requestId : null,
           errorCode: null,
           errorMessage: null,
+          outfitModule: meta?.outfitModule || null,
         });
       }
     }
@@ -836,6 +1142,7 @@ app.get("/api/generation-log", async (req, res) => {
           requestId: typeof m.requestId === "string" ? m.requestId : null,
           errorCode: m.errorCode || null,
           errorMessage: m.errorMessage || null,
+          outfitModule: m.outfitModule || null,
         });
       }
     }
@@ -976,8 +1283,17 @@ app.post("/api/generate", async (req, res) => {
       typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
     const clientNodeId =
       typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
-    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt } =
+    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt, outfitModule: rawOutfitModule } =
       req.body;
+    const outfitModule = rawOutfitModule && typeof rawOutfitModule === "object"
+      && typeof rawOutfitModule.id === "string"
+      ? {
+          id: String(rawOutfitModule.id).slice(0, 80),
+          label: typeof rawOutfitModule.label === "string" ? rawOutfitModule.label.slice(0, 80) : null,
+          category: typeof rawOutfitModule.category === "string" ? rawOutfitModule.category.slice(0, 40) : null,
+          risk: ["low", "medium", "high"].includes(rawOutfitModule.risk) ? rawOutfitModule.risk : null,
+        }
+      : null;
     const maxAttempts = clampMaxAttempts(rawMaxAttempts, 2);
     const originalPrompt =
       typeof rawOriginalPrompt === "string" && rawOriginalPrompt.trim().length > 0
@@ -1096,6 +1412,7 @@ app.post("/api/generate", async (req, res) => {
           sessionId,
           owner: req.authUser || LEGACY_OWNER,
           requestId,
+          ...(outfitModule ? { outfitModule } : {}),
         };
         await writeFile(join(__dirname, "generated", filename + ".json"), JSON.stringify(meta)).catch(() => {});
         images.push({
@@ -1130,6 +1447,7 @@ app.post("/api/generate", async (req, res) => {
         referenceCount: refB64s.length,
         owner: req.authUser,
         requestId,
+        outfitModule,
       });
       if (firstErr?.code === "SAFETY_REFUSAL") {
         return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [] });

@@ -30,10 +30,16 @@ import {
   type InflightJob,
 } from "../lib/api";
 import { compressImage } from "../lib/image";
+import { resizeDataUrlForRef } from "../lib/refResize";
 import { snap16 } from "../lib/size";
 import { syncImageToUrl } from "../lib/urlSync";
 import { newClientNodeId, type ClientNodeId } from "../lib/graph";
-import { getNextRootPosition, getNextChildPosition } from "../lib/nodeLayout";
+import {
+  getNextRootPosition,
+  getNextChildPosition,
+  layoutGraph,
+  type LayoutDirection,
+} from "../lib/nodeLayout";
 import {
   applyComponentSelection,
   applySelectedNodeIds,
@@ -45,6 +51,12 @@ import {
   validateBatchDependencies,
 } from "../lib/nodeBatch";
 import type { PresetPayload } from "../lib/presets";
+import {
+  loadTrash,
+  saveTrash,
+  makeTrashItem,
+  type TrashItem,
+} from "../lib/nodeTrash";
 import type { Node as FlowNode, Edge as FlowEdge } from "@xyflow/react";
 
 function loadRightPanelOpen(): boolean {
@@ -401,7 +413,26 @@ export type ImageNodeData = {
   // so a node can be regenerated standalone without depending on the
   // session's transient referenceImages slot.
   referenceImages?: string[];
+  // When true, all descendant nodes (and the edges leading to them) are
+  // hidden in the canvas. Persisted with the graph so the collapsed state
+  // survives reload / session switch.
+  collapsed?: boolean;
+  // Optional color tag for grouping ("실험 1", "실험 2" etc.). Persisted.
+  // Undefined / "" means no tag. Validated against COLOR_TAGS at hydrate.
+  colorTag?: ColorTag;
 };
+
+export type ColorTag = "red" | "amber" | "green" | "blue" | "purple";
+
+export const COLOR_TAGS: { value: ColorTag; label: string; hex: string }[] = [
+  { value: "red", label: "빨강", hex: "#ef4444" },
+  { value: "amber", label: "주황", hex: "#f59e0b" },
+  { value: "green", label: "초록", hex: "#22c55e" },
+  { value: "blue", label: "파랑", hex: "#3b82f6" },
+  { value: "purple", label: "보라", hex: "#a855f7" },
+];
+
+const COLOR_TAG_VALUES = new Set(COLOR_TAGS.map((t) => t.value));
 
 export type GraphNode = FlowNode<ImageNodeData>;
 export type GraphEdge = FlowEdge;
@@ -438,6 +469,11 @@ function mapSessionToGraph(session: SessionFull): {
             (r): r is string => typeof r === "string" && r.startsWith("data:"),
           )
         : undefined,
+      collapsed: d.collapsed === true ? true : undefined,
+      colorTag:
+        typeof d.colorTag === "string" && COLOR_TAG_VALUES.has(d.colorTag as ColorTag)
+          ? (d.colorTag as ColorTag)
+          : undefined,
     };
     return {
       id: n.id,
@@ -460,6 +496,21 @@ function mapSessionToGraph(session: SessionFull): {
 
 type ToastState = { message: string; error: boolean; id: number } | null;
 
+export type RefBundleItem = {
+  hash: string;
+  sourceUrl: string;
+  kind?: "history" | "uploaded";
+  filename?: string;
+};
+
+export type RefBundle = {
+  id: string;
+  name: string;
+  owner?: string;
+  items: RefBundleItem[];
+  createdAt: number;
+};
+
 type AppState = {
   provider: Provider;
   quality: Quality;
@@ -476,10 +527,18 @@ type AppState = {
   // mean we have no hint and the server should treat the ref as uploaded.
   referenceMetaHints: (import("../types").ReferenceMetaHint | null)[];
   addReferences: (files: File[]) => Promise<void>;
-  addReferenceDataUrl: (dataUrl: string) => void;
+  addReferenceDataUrl: (dataUrl: string) => Promise<void>;
   removeReference: (index: number) => void;
   clearReferences: () => void;
   useCurrentAsReference: () => Promise<void>;
+  // Reference bundles: save current refs by name, reapply later.
+  refBundles: RefBundle[];
+  refBundlesLoading: boolean;
+  loadRefBundles: () => Promise<void>;
+  saveRefBundle: (name: string) => Promise<RefBundle | null>;
+  applyRefBundle: (id: string, opts?: { append?: boolean }) => Promise<void>;
+  deleteRefBundle: (id: string) => Promise<void>;
+  renameRefBundle: (id: string, name: string) => Promise<void>;
   activeGenerations: number;
   inFlight: PersistedInFlight[];
   startInFlightPolling: () => void;
@@ -515,6 +574,26 @@ type AppState = {
   graphEdges: GraphEdge[];
   setGraphNodes: (n: GraphNode[]) => void;
   setGraphEdges: (e: GraphEdge[]) => void;
+  autoLayoutGraph: (direction?: LayoutDirection) => void;
+  toggleNodeCollapsed: (clientId: ClientNodeId) => void;
+  setNodeColorTag: (clientId: ClientNodeId, tag: ColorTag | null) => void;
+
+  // Search / filter (client-side only — does not hit the server). Empty
+  // text + empty status set means "no filter active".
+  nodeFilterText: string;
+  nodeFilterStatuses: ImageNodeStatus[];
+  setNodeFilterText: (text: string) => void;
+  toggleNodeFilterStatus: (status: ImageNodeStatus) => void;
+  clearNodeFilters: () => void;
+
+  // Trash (client-side, localStorage-backed). Lets users undo accidental
+  // deletes within 7 days without bringing in a full undo/redo system.
+  trashedItems: TrashItem[];
+  trashOpen: boolean;
+  setTrashOpen: (open: boolean) => void;
+  restoreFromTrash: (trashId: string) => void;
+  purgeTrashItem: (trashId: string) => void;
+  emptyTrash: () => void;
   addRootNode: () => ClientNodeId;
   addChildNode: (parentClientId: ClientNodeId) => ClientNodeId;
   addSiblingNode: (sourceClientId: ClientNodeId) => ClientNodeId;
@@ -528,6 +607,9 @@ type AppState = {
   removeNodeReference: (clientId: ClientNodeId, index: number) => void;
   clearNodeReferences: (clientId: ClientNodeId) => void;
   generateNode: (clientId: ClientNodeId) => Promise<void>;
+  // Fan-out: clone a parent node's prompt into N fresh children and run
+  // them in parallel. Lets users explore variants without 3 manual clicks.
+  fanOutFromNode: (parentClientId: ClientNodeId, count?: number) => Promise<void>;
   deleteNode: (clientId: ClientNodeId) => void;
   deleteNodes: (clientIds: ClientNodeId[]) => void;
 
@@ -585,7 +667,26 @@ type AppState = {
   removeFromHistory: (filename: string) => void;
   addHistoryItem: (item: GenerateItem) => void;
   toggleFavorite: (filename?: string) => Promise<void>;
-  generate: (overrides?: { overridePrompt?: string; overrideCount?: Count }) => Promise<void>;
+  generate: (overrides?: {
+    overridePrompt?: string;
+    overrideCount?: Count;
+    outfitModule?: import("../types").OutfitModuleMeta;
+    overrideReferences?: string[];
+    overrideSize?: string;
+    overrideQuality?: Quality;
+  }) => Promise<void>;
+  runSexyTuneBatch: (opts: {
+    count: number;
+    maxRisk?: "low" | "medium" | "high";
+    categories?: string[];
+    aspectRatio?: string;
+    cameraTone?: "iphone" | "canon";
+    includeMirror?: boolean;
+    includeFlirty?: boolean;
+    autoFillOnFail?: boolean;
+    maxResolution?: boolean;
+    framingMode?: "mixed" | "full-body" | "half-body";
+  }) => Promise<void>;
   varyCurrentResult: () => Promise<void>;
   hydrateHistory: () => void;
   showToast: (message: string, error?: boolean) => void;
@@ -651,6 +752,148 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     await get().generate({ overridePrompt: item.prompt, overrideCount: 1 });
   },
+  runSexyTuneBatch: async (opts) => {
+    const s = get();
+    if (s.referenceImages.length === 0) {
+      s.showToast("참고 이미지를 먼저 첨부하세요.", true);
+      return;
+    }
+    const count = Math.max(1, Math.min(8, Math.floor(opts.count) || 4));
+    const autoFill = opts.autoFillOnFail !== false; // default true
+
+    // SNAPSHOT references at batch-start. The user may close the modal
+    // immediately and switch to a different reference image (b → c → ...),
+    // but this batch must keep using the refs that were attached when
+    // they pressed start. generate() honors overrideReferences over store
+    // state.
+    const refSnapshot = s.referenceImages.map((d) =>
+      d.replace(/^data:[^;]+;base64,/, ""),
+    );
+
+    // Resolve max-resolution preset based on the requested aspect ratio.
+    // Pool template's [퀄리티] tag stays in sync via aspectRatio anyway.
+    let overrideSize: string | undefined;
+    if (opts.maxResolution) {
+      const ar = opts.aspectRatio ?? "1:1";
+      // Pixel budget cap is ~8.3M; preset map (from ui/src/lib/size.ts):
+      //   1:1   → 2048x2048   (4.2M, 2K square)
+      //   16:9  → 3824x2160   (8.3M, 4K landscape)
+      //   9:16  → 2160x3824   (8.3M, 4K portrait)
+      //   3:4   → 1024x1360 max preset (3:4 doesn't have a 2K+ preset)
+      //   2:3   → 1024x1536
+      //   4:3   → 1360x1024
+      //   3:2   → 1536x1024
+      const map: Record<string, string> = {
+        "1:1": "2048x2048",
+        "16:9": "3824x2160",
+        "9:16": "2160x3824",
+        "3:4": "1152x1536",
+        "4:3": "1536x1152",
+        "2:3": "1024x1536",
+        "3:2": "1536x1024",
+      };
+      overrideSize = map[ar] ?? "2048x2048";
+    }
+    const overrideQuality: Quality | undefined = opts.maxResolution ? "high" : undefined;
+
+    type Variant = {
+      id: string;
+      label: string;
+      category: string;
+      risk: "low" | "medium" | "high";
+      prompt: string;
+    };
+
+    const fetchVariants = async (n: number, excludeIds: string[]): Promise<Variant[]> => {
+      const res = await fetch("/api/outfit/sample", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          count: n,
+          maxRisk: opts.maxRisk ?? "medium",
+          categories: opts.categories,
+          excludeIds,
+          aspectRatio: opts.aspectRatio ?? "1:1",
+          cameraTone: opts.cameraTone ?? "canon",
+          includeMirror: opts.includeMirror ?? false,
+          includeFlirty: opts.includeFlirty ?? true,
+          framingMode: opts.framingMode ?? "mixed",
+          useWeights: true,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return Array.isArray(data?.variants) ? data.variants : [];
+    };
+
+    let variants: Variant[];
+    try {
+      variants = await fetchVariants(count, []);
+    } catch (e) {
+      s.showToast(`섹시 다듬기 풀 조회 실패: ${(e as Error).message}`, true);
+      return;
+    }
+    if (variants.length === 0) {
+      s.showToast("샘플링 결과가 비어 있습니다 (필터 조건 확인).", true);
+      return;
+    }
+
+    s.showToast(`섹시 다듬기 ${variants.length}장 시작 (각 다른 의상).`);
+    console.log(
+      `[ima2][sexy-tune] starting batch: count=${variants.length} ` +
+      `labels=${variants.map((v) => v.label).join(" / ")}`,
+    );
+
+    // Snapshot history size BEFORE the batch so we can derive how many
+    // generates actually produced an image. Per-call detection is unreliable
+    // under Promise.all because other concurrent calls also bump history.
+    const fireOne = async (v: Variant): Promise<void> => {
+      await get().generate({
+        overridePrompt: v.prompt,
+        overrideCount: 1,
+        outfitModule: {
+          id: v.id,
+          label: v.label,
+          category: v.category,
+          risk: v.risk,
+        },
+        overrideReferences: refSnapshot,
+        ...(overrideSize ? { overrideSize } : {}),
+        ...(overrideQuality ? { overrideQuality } : {}),
+      });
+    };
+
+    const beforeAll = get().history.length;
+    await Promise.all(variants.map(fireOne));
+    const afterAll = get().history.length;
+    const succeeded = Math.max(0, afterAll - beforeAll);
+    const failedCount = Math.max(0, variants.length - succeeded);
+
+    console.log(
+      `[ima2][sexy-tune] batch result: ${succeeded}/${variants.length} succeeded ` +
+      `(${failedCount} failed)`,
+    );
+
+    if (autoFill && failedCount > 0) {
+      const usedIds = variants.map((v) => v.id);
+      console.log(
+        `[ima2][sexy-tune] ${failedCount}장 실패 → 다른 의상으로 자동 보충 시도`,
+      );
+      try {
+        const refill = await fetchVariants(failedCount, usedIds);
+        if (refill.length > 0) {
+          s.showToast(`${refill.length}장 자동 보충 (다른 의상으로 재시도).`);
+          await Promise.all(refill.map(fireOne));
+          const finalCount = get().history.length - beforeAll;
+          console.log(
+            `[ima2][sexy-tune] after auto-fill: ${finalCount} total succeeded`,
+          );
+        }
+      } catch (e) {
+        console.warn(`[ima2][sexy-tune] 보충 실패: ${(e as Error).message}`);
+      }
+    }
+  },
   referenceImages: [],
   referenceMetaHints: [],
   addReferences: async (files) => {
@@ -661,8 +904,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         (f) =>
           new Promise<string | null>((resolve) => {
             const reader = new FileReader();
-            reader.onload = () =>
-              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onload = async () => {
+              if (typeof reader.result !== "string") {
+                resolve(null);
+                return;
+              }
+              try {
+                resolve(await resizeDataUrlForRef(reader.result));
+              } catch {
+                resolve(reader.result);
+              }
+            };
             reader.onerror = () => resolve(null);
             reader.readAsDataURL(f);
           }),
@@ -678,12 +930,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().showToast("참조 이미지는 최대 5장까지 추가할 수 있습니다. 초과한 이미지는 제외되었습니다.", true);
     }
   },
-  addReferenceDataUrl: (dataUrl) => {
+  addReferenceDataUrl: async (dataUrl) => {
+    if (get().referenceImages.length >= 5) return;
+    let url = dataUrl;
+    try {
+      url = await resizeDataUrlForRef(dataUrl);
+    } catch {
+      // fall through with the original — server may still reject if huge
+    }
     set((s) =>
       s.referenceImages.length >= 5
         ? s
         : {
-            referenceImages: [...s.referenceImages, dataUrl],
+            referenceImages: [...s.referenceImages, url],
             referenceMetaHints: [...s.referenceMetaHints, { kind: "uploaded" }],
           },
     );
@@ -695,6 +954,143 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
   clearReferences: () => set({ referenceImages: [], referenceMetaHints: [] }),
+
+  refBundles: [],
+  refBundlesLoading: false,
+  loadRefBundles: async () => {
+    set({ refBundlesLoading: true });
+    try {
+      const res = await fetch("/api/ref-bundles");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      set({ refBundles: Array.isArray(j?.bundles) ? j.bundles : [] });
+    } catch (e) {
+      get().showToast(`묶음 불러오기 실패: ${(e as Error).message}`, true);
+    } finally {
+      set({ refBundlesLoading: false });
+    }
+  },
+  saveRefBundle: async (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      get().showToast("묶음 이름을 입력하세요.", true);
+      return null;
+    }
+    const refs = get().referenceImages;
+    if (refs.length === 0) {
+      get().showToast("저장할 참조 이미지가 없습니다.", true);
+      return null;
+    }
+    try {
+      const referencesB64 = refs.map((d) => d.replace(/^data:[^;]+;base64,/, ""));
+      const referenceMeta = get().referenceMetaHints.map((h) => h ?? { kind: "uploaded" });
+      const res = await fetch("/api/ref-bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed, references: referencesB64, referenceMeta }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      const j = await res.json();
+      const bundle = j.bundle as RefBundle;
+      set((s) => ({ refBundles: [bundle, ...s.refBundles] }));
+      get().showToast(`묶음 "${bundle.name}" 저장됨 (${bundle.items.length}장).`);
+      return bundle;
+    } catch (e) {
+      get().showToast(`묶음 저장 실패: ${(e as Error).message}`, true);
+      return null;
+    }
+  },
+  applyRefBundle: async (id, opts = {}) => {
+    const bundle = get().refBundles.find((b) => b.id === id);
+    if (!bundle) {
+      get().showToast("묶음을 찾을 수 없습니다.", true);
+      return;
+    }
+    const append = opts.append === true;
+    const startCount = append ? get().referenceImages.length : 0;
+    const room = 5 - startCount;
+    if (room <= 0) {
+      get().showToast("참조 이미지 슬롯이 가득 찼습니다.", true);
+      return;
+    }
+    const items = bundle.items.slice(0, room);
+    const dataUrls: string[] = [];
+    const hints: { kind: "history" | "uploaded"; filename?: string }[] = [];
+    for (const item of items) {
+      try {
+        const r = await fetch(item.sourceUrl);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const blob = await r.blob();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(String(fr.result));
+          fr.onerror = () => reject(fr.error);
+          fr.readAsDataURL(blob);
+        });
+        dataUrls.push(dataUrl);
+        hints.push(
+          item.kind === "history" && item.filename
+            ? { kind: "history", filename: item.filename }
+            : { kind: "uploaded" },
+        );
+      } catch (e) {
+        console.warn(`[refBundle] failed to load ${item.sourceUrl}:`, e);
+      }
+    }
+    if (dataUrls.length === 0) {
+      get().showToast("묶음에서 이미지를 불러오지 못했습니다.", true);
+      return;
+    }
+    set((s) => ({
+      referenceImages: append
+        ? [...s.referenceImages, ...dataUrls].slice(0, 5)
+        : dataUrls,
+      referenceMetaHints: append
+        ? [...s.referenceMetaHints, ...hints].slice(0, 5)
+        : hints,
+    }));
+    get().showToast(`묶음 "${bundle.name}" 적용 (${dataUrls.length}장).`);
+  },
+  deleteRefBundle: async (id) => {
+    try {
+      const res = await fetch(`/api/ref-bundles/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      set((s) => ({ refBundles: s.refBundles.filter((b) => b.id !== id) }));
+      get().showToast("묶음을 삭제했습니다.");
+    } catch (e) {
+      get().showToast(`묶음 삭제 실패: ${(e as Error).message}`, true);
+    }
+  },
+  renameRefBundle: async (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      get().showToast("묶음 이름을 입력하세요.", true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/ref-bundles/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      const j = await res.json();
+      const next = j.bundle as RefBundle;
+      set((s) => ({ refBundles: s.refBundles.map((b) => (b.id === id ? next : b)) }));
+    } catch (e) {
+      get().showToast(`이름 변경 실패: ${(e as Error).message}`, true);
+    }
+  },
+
   useCurrentAsReference: async () => {
     const cur = get().currentImage;
     if (!cur) {
@@ -723,6 +1119,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         get().showToast("현재 이미지를 불러오지 못했습니다.", true);
         return;
       }
+    }
+    // gpt-image results commonly weigh 8-12MB raw PNG, which trips the
+    // server's 7MB base64 cap. Down-scale to 1536px JPEG (≤6MB base64)
+    // before pushing it into the reference slots.
+    try {
+      dataUrl = await resizeDataUrlForRef(dataUrl);
+    } catch {
+      // best-effort — server will surface a clear error if still too big
     }
     const hint = cur.filename
       ? ({ kind: "history" as const, filename: cur.filename })
@@ -1268,6 +1672,91 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGraphEdges: (graphEdges) => {
     set({ graphEdges });
     get().scheduleGraphSave();
+  },
+  autoLayoutGraph: (direction = "LR") => {
+    const { graphNodes, graphEdges } = get();
+    if (graphNodes.length === 0) return;
+    const next = layoutGraph(graphNodes, graphEdges, direction);
+    set({ graphNodes: next });
+    get().scheduleGraphSave();
+  },
+  toggleNodeCollapsed: (clientId) => {
+    const next = get().graphNodes.map((n) =>
+      n.id === clientId
+        ? { ...n, data: { ...n.data, collapsed: n.data.collapsed !== true } }
+        : n,
+    );
+    set({ graphNodes: next });
+    get().scheduleGraphSave();
+  },
+  setNodeColorTag: (clientId, tag) => {
+    const next = get().graphNodes.map((n) =>
+      n.id === clientId
+        ? { ...n, data: { ...n.data, colorTag: tag ?? undefined } }
+        : n,
+    );
+    set({ graphNodes: next });
+    get().scheduleGraphSave();
+  },
+
+  nodeFilterText: "",
+  nodeFilterStatuses: [],
+  setNodeFilterText: (nodeFilterText) => set({ nodeFilterText }),
+  toggleNodeFilterStatus: (status) => {
+    const cur = get().nodeFilterStatuses;
+    const next = cur.includes(status)
+      ? cur.filter((s) => s !== status)
+      : [...cur, status];
+    set({ nodeFilterStatuses: next });
+  },
+  clearNodeFilters: () => set({ nodeFilterText: "", nodeFilterStatuses: [] }),
+
+  trashedItems: typeof window === "undefined" ? [] : loadTrash(),
+  trashOpen: false,
+  setTrashOpen: (trashOpen) => set({ trashOpen }),
+  restoreFromTrash: (trashId) => {
+    const item = get().trashedItems.find((it) => it.id === trashId);
+    if (!item) return;
+
+    // Re-id collisions: if a node id in the trash already exists in the
+    // current graph (rare but possible after import/export), drop the dup.
+    // Keeping the simpler "skip on collision" path so we never overwrite a
+    // live node that the user might still depend on.
+    const existingIds = new Set(get().graphNodes.map((n) => n.id));
+    const restorableNodes = item.nodes.filter((n) => !existingIds.has(n.id));
+    const restorableNodeIds = new Set(restorableNodes.map((n) => n.id));
+    const restorableEdges = item.edges.filter((e) => {
+      const sourceOk = existingIds.has(e.source) || restorableNodeIds.has(e.source);
+      const targetOk = restorableNodeIds.has(e.target);
+      // Edge must point to a restored node — otherwise it's dangling. Source
+      // can be either a still-live parent or another restored node.
+      return sourceOk && targetOk;
+    });
+
+    if (restorableNodes.length === 0) {
+      get().showToast("이미 같은 ID의 노드가 그래프에 있어 복구할 수 없습니다.", true);
+      return;
+    }
+
+    const nextTrash = get().trashedItems.filter((it) => it.id !== trashId);
+    saveTrash(nextTrash);
+
+    set({
+      graphNodes: [...get().graphNodes, ...restorableNodes],
+      graphEdges: [...get().graphEdges, ...restorableEdges],
+      trashedItems: nextTrash,
+    });
+    get().scheduleGraphSave();
+    get().showToast(`${restorableNodes.length}개 노드를 복구했습니다.`);
+  },
+  purgeTrashItem: (trashId) => {
+    const next = get().trashedItems.filter((it) => it.id !== trashId);
+    saveTrash(next);
+    set({ trashedItems: next });
+  },
+  emptyTrash: () => {
+    saveTrash([]);
+    set({ trashedItems: [] });
   },
 
   sessions: [],
@@ -1939,29 +2428,68 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  async fanOutFromNode(parentClientId, count = 3) {
+    const parent = get().graphNodes.find((n) => n.id === parentClientId);
+    if (!parent) return;
+    const promptToUse = (parent.data.prompt ?? "").trim();
+    if (!promptToUse) {
+      get().showToast("부모 노드에 프롬프트가 없습니다.", true);
+      return;
+    }
+    const safeCount = Math.max(1, Math.min(8, Math.floor(count)));
+    const childIds: ClientNodeId[] = [];
+    for (let i = 0; i < safeCount; i++) {
+      const cid = get().addChildNode(parentClientId);
+      get().updateNodePrompt(cid, promptToUse);
+      childIds.push(cid);
+    }
+    // Schedule generates concurrently — server registers each via requestId
+    // so partial failures don't abort the rest. We surface a single toast at
+    // the end with success/failure counts.
+    const results = await Promise.allSettled(
+      childIds.map((id) => get().generateNode(id)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === 0) {
+      get().showToast(`변형 ${safeCount}개 생성 시작.`);
+    } else {
+      get().showToast(
+        `변형 ${safeCount - failed}/${safeCount}개만 시작됨 (${failed}개 실패).`,
+        true,
+      );
+    }
+  },
+
   deleteNode: (clientId) => {
-    const doomed = get().graphNodes.find((n) => n.id === clientId);
-    const reqId = doomed?.data?.pendingRequestId;
-    if (reqId) void cancelInflight(reqId);
-    set({
-      graphNodes: get().graphNodes.filter((n) => n.id !== clientId),
-      graphEdges: get().graphEdges.filter((e) => e.source !== clientId && e.target !== clientId),
-    });
-    get().scheduleGraphSave();
+    get().deleteNodes([clientId]);
   },
 
   deleteNodes: (clientIds) => {
-    const set_ = new Set(clientIds);
-    for (const n of get().graphNodes) {
-      if (set_.has(n.id) && n.data?.pendingRequestId) {
-        void cancelInflight(n.data.pendingRequestId);
-      }
+    const ids = new Set(clientIds);
+    const nodes = get().graphNodes;
+    const edges = get().graphEdges;
+    const removedNodes = nodes.filter((n) => ids.has(n.id));
+    if (removedNodes.length === 0) return;
+    const removedEdges = edges.filter((e) => ids.has(e.source) || ids.has(e.target));
+
+    for (const n of removedNodes) {
+      const reqId = n.data?.pendingRequestId;
+      if (reqId) void cancelInflight(reqId);
     }
+
+    const trashItem = makeTrashItem(removedNodes, removedEdges);
+    const nextTrash = [trashItem, ...get().trashedItems];
+    saveTrash(nextTrash);
+
     set({
-      graphNodes: get().graphNodes.filter((n) => !set_.has(n.id)),
-      graphEdges: get().graphEdges.filter((e) => !set_.has(e.source) && !set_.has(e.target)),
+      graphNodes: nodes.filter((n) => !ids.has(n.id)),
+      graphEdges: edges.filter((e) => !ids.has(e.source) && !ids.has(e.target)),
+      trashedItems: nextTrash,
     });
     get().scheduleGraphSave();
+    get().showToast(
+      `${removedNodes.length}개 노드를 휴지통으로 이동했습니다. (7일 보관)`,
+    );
   },
 
   addChildNodeAt: (parentClientId, position) => {
@@ -2236,16 +2764,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     const count = overrides?.overrideCount ?? s.count;
 
-    const size = s.getResolvedSize();
-    const references = s.referenceImages.length
-      ? s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, ""))
-      : null;
+    const size = overrides?.overrideSize ?? s.getResolvedSize();
+    const quality = overrides?.overrideQuality ?? s.quality;
+    // Reference snapshot (overrideReferences) lets sexy-tune lock the refs
+    // at batch start so the user can close the modal and queue another
+    // batch with different refs without poisoning in-flight calls.
+    const references = overrides?.overrideReferences
+      ? overrides.overrideReferences
+      : s.referenceImages.length
+        ? s.referenceImages.map((d) => d.replace(/^data:[^;]+;base64,/, ""))
+        : null;
     // Index-aligned lineage hints; trimmed to whatever references we send.
-    const referenceMeta = s.referenceImages.length
-      ? s.referenceMetaHints
-          .slice(0, s.referenceImages.length)
-          .map((h) => h ?? { kind: "uploaded" as const })
-      : null;
+    const referenceMeta = overrides?.overrideReferences
+      ? overrides.overrideReferences.map(() => ({ kind: "uploaded" as const }))
+      : s.referenceImages.length
+        ? s.referenceMetaHints
+            .slice(0, s.referenceImages.length)
+            .map((h) => h ?? { kind: "uploaded" as const })
+        : null;
 
     const startedAt = Date.now();
     const flightIds = Array.from(
@@ -2290,7 +2826,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
           const res: GenerateResponse = await postGenerate({
             prompt,
-            quality: s.quality,
+            quality,
             size,
             format: s.format,
             moderation: s.moderation,
@@ -2303,6 +2839,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               : {}),
             ...(references ? { references } : {}),
             ...(referenceMeta ? { referenceMeta } : {}),
+            ...(overrides?.outfitModule ? { outfitModule: overrides.outfitModule } : {}),
           });
           console.log(
             `[ima2][generate][${flightId}] response ok in ` +
@@ -2679,17 +3216,42 @@ async function addHistory(
   ) => void,
   _get: () => AppState,
 ): Promise<void> {
-  const thumb = await compressImage(item.image).catch(() => item.image);
+  // Insert into history IMMEDIATELY using the full image as a placeholder
+  // thumbnail. compressImage on a 2K/4K base64 PNG can take 1–3 seconds,
+  // and during that wait the inflight poller may finish the request on the
+  // server side — leading to "큐에서 빠졌는데 갤러리에 늦게 추가" race.
+  // We patch the real thumbnail in once compression completes.
   const url = item.filename ? `/generated/${item.filename}` : item.image;
-  const withThumb: GenerateItem = {
+  const withUrl: GenerateItem = {
     ...item,
-    thumb,
+    thumb: item.image ?? "",
     url,
     createdAt: item.createdAt || Date.now(),
   };
-  saveSelectedFilename(withThumb.filename ?? null);
+  saveSelectedFilename(withUrl.filename ?? null);
   set((state) => ({
-    history: [withThumb, ...state.history].slice(0, HISTORY_LIMIT),
-    currentImage: withThumb,
+    history: [withUrl, ...state.history].slice(0, HISTORY_LIMIT),
+    currentImage: withUrl,
   }));
+
+  // Background-compress and patch the thumbnail in place. Targets the item
+  // by filename (which is the stable identifier) so concurrent batches
+  // don't update each other's rows.
+  compressImage(item.image)
+    .then((thumb) => {
+      if (!thumb || thumb === item.image) return;
+      const targetFilename = withUrl.filename;
+      set((state) => ({
+        history: state.history.map((h) =>
+          h.filename === targetFilename ? { ...h, thumb } : h,
+        ),
+        currentImage:
+          state.currentImage && state.currentImage.filename === targetFilename
+            ? ({ ...state.currentImage, thumb } as GenerateItem)
+            : state.currentImage,
+      }));
+    })
+    .catch(() => {
+      // Thumbnail compression is purely cosmetic — failures are non-fatal.
+    });
 }

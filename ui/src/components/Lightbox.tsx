@@ -273,8 +273,8 @@ export function Lightbox() {
               toggleCaption();
             }}
             aria-pressed={!showCaption}
-            aria-label={showCaption ? "프롬프트 숨기기" : "프롬프트 보기"}
-            title={showCaption ? "프롬프트 숨기기 (H)" : "프롬프트 보기 (H)"}
+            aria-label={showCaption ? "프롬프트·참조사진 숨기기" : "프롬프트·참조사진 보기"}
+            title={showCaption ? "프롬프트·참조사진 숨기기 (H)" : "프롬프트·참조사진 보기 (H)"}
           >
             {showCaption ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -437,7 +437,7 @@ export function Lightbox() {
         </div>
       ) : null}
 
-      {currentImage.references && currentImage.references.length > 0 ? (
+      {currentImage.references && currentImage.references.length > 0 && showCaption ? (
         <div className="lightbox__refs" onClick={(e) => e.stopPropagation()}>
           <span className="lightbox__refs-label">참조 사진</span>
           <div className="lightbox__refs-row">

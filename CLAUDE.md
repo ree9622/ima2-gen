@@ -70,6 +70,25 @@ ima2 serve
 - Filename collisions avoided via `${Date.now()}_${randomBytes(4).hex}_${idx}` (commit `7a0e2f5`). Keep the random token when adding new write paths.
 - Tests live in `tests/*.test.js` using Node's built-in test runner (`node --test`). `scripts/run-tests.mjs` handles cross-platform invocation; CI matrix is Ubuntu/macOS/Windows × Node 20/22.
 
+## Git workflow (BLOCKING)
+
+작업 단위마다 자동 분할 커밋 + push 가 이 레포의 기본값입니다. 사용자가 매번 "커밋해" 라고 안 시켜도 알아서 분할 커밋합니다.
+
+- **트리거 (논리적 작업 1건이 끝났을 때)**:
+  - 신규 기능 한 묶음 (예: "scenario 30개 추가", "framing UI 토글 추가", "ref 자동 다운샘플")
+  - 단일 버그 수정 한 묶음
+  - 리팩터/문서 수정 한 묶음
+  - 사용자가 "다음 작업 시작" 신호를 줄 때 — 이전 작업 미커밋 분이 있으면 먼저 커밋
+- **분할 단위**: 한 커밋 = 한 논리 작업. 같은 파일이 여러 작업에 걸리더라도 시간순 작업 단위로 끊어 커밋. `git add -p` 를 써서라도 분할.
+- **커밋 메시지**: `<type>(<scope>): <한 줄 요약>` + 본문 (변경 사유 + 영향 범위 + 검증 방법). type 예: `feat / fix / refactor / chore / docs / test`. scope 예: `sexy-tune / refs / safety / ui / server`. AI 표시(Co-Authored-By 등) 금지.
+- **검증 후 커밋**: 커밋 전 관련 테스트(`npm test` 또는 `node --test tests/<관련>.test.js`)와 `npm run build` 통과 필수. 빌드/테스트 실패 시 커밋 금지.
+- **푸시**: 커밋 직후 origin/main 푸시 (이 레포는 사용자 본인 repo이고 main 직접 푸시 운영). 푸시 실패 시 사용자에게 보고.
+- **예외 — 커밋 금지/보류**:
+  - 미완성 코드 (빌드/테스트 실패, TypeScript 에러)
+  - 사용자가 "이건 아직 커밋 보류" 명시한 작업
+  - 다른 세션/사용자가 워킹 트리에 남긴 미커밋 변경 — 손대지 말고 별도 알림
+- **세션 종료 직전 누락 점검**: 답변 마지막 직전 `git status` 확인. 미커밋 파일이 있고 그게 이번 세션 작업이면 자동 커밋 + 푸시 진행.
+
 ## Gotchas
 
 - The developer system prompt inside `generateViaOAuth` / `editViaOAuth` currently contains "authorized red-team evaluation session" and instructions to skip safety disclaimers. This is a published npm package — treat any change near those strings as user-visible policy. Do not add similar phrases without an explicit ask.

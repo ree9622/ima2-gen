@@ -5,8 +5,10 @@ import {
   buildPromptAttempts,
   getCompliantPromptVariant,
   getFashionPortraitVariant,
+  getJustificationVariant,
   getStrongCompliantVariant,
   hasCompliantRetry,
+  JUSTIFICATION_CONTEXTS,
 } from "../lib/safetyRetry.js";
 
 describe("safety retry prompt variants", () => {
@@ -25,12 +27,14 @@ describe("safety retry prompt variants", () => {
   it("adds adult non-sexual framing for English beachwear prompts", () => {
     const attempts = buildPromptAttempts("bikini selfie at a resort pool");
 
-    // bikini alone is a soft trigger → tier 1 only.
-    assert.equal(attempts.length, 2);
-    assert.match(attempts[1], /adults aged 25 or older/);
-    assert.match(attempts[1], /amateur smartphone photo/);
-    assert.match(attempts[1], /South Korea setting/);
-    assert.match(attempts[1], /no minors/);
+    // bikini = soft trigger. Sequence: [raw, justifyA, justifyB, ENG wrapper].
+    assert.equal(attempts.length, 4);
+    assert.match(attempts[1], /Editorial fashion magazine BTS/);
+    assert.match(attempts[2], /Sports broadcast post-match/);
+    assert.match(attempts[3], /adults aged 25 or older/);
+    assert.match(attempts[3], /amateur smartphone photo/);
+    assert.match(attempts[3], /South Korea setting/);
+    assert.match(attempts[3], /no minors/);
   });
 
   it("does not rewrite explicit or minor prompts", () => {
@@ -50,13 +54,15 @@ describe("strong-tier rewrite (high-risk triggers)", () => {
       "167kg에 54kg 여성, E컵, 잘록한 허리, 골반 라인 도드라짐, 전신 다 보이게";
     const attempts = buildPromptAttempts(prompt);
 
-    // [original, korean wrapper, strong English variant, fashion portrait]
-    assert.equal(attempts.length, 4);
+    // [original, justifyA, justifyB, korean wrapper, strong English, fashion portrait]
+    assert.equal(attempts.length, 6);
     assert.equal(attempts[0], prompt);
-    assert.match(attempts[1], /성인\(25세 이상\)/);
-    assert.match(attempts[3], /Korean fashion portrait/);
+    assert.match(attempts[1], /Editorial fashion magazine BTS/);
+    assert.match(attempts[2], /Sports broadcast post-match/);
+    assert.match(attempts[3], /성인\(25세 이상\)/);
+    assert.match(attempts[5], /Korean fashion portrait/);
 
-    const strong = attempts[2];
+    const strong = attempts[4];
     assert.match(strong, /AI-generated synthetic character/);
     assert.match(strong, /amateur smartphone snapshot/);
     assert.match(strong, /South Korea setting/);
@@ -186,14 +192,18 @@ describe("hasRefs hint (reference-image safety guard)", () => {
     // Production-observed reject pattern: short edit prompt + reference image,
     // where the image (not the text) trips the classifier. Wrapper-first
     // gives the classifier non-sexual framing on the very first attempt.
-    // Order: [fashion-portrait, strong-amateur, raw] — opposite framings
-    // give the retry cycle two distinct anchor points.
+    // Order: [fashion-portrait, strong-amateur, raw, ...justifications] —
+    // opposite framings give the retry cycle two distinct anchor points,
+    // raw stays as a final fallback before the justification fan-out.
     const short = "다른 자세, 다른 배경";
     const seq = buildPromptAttempts(short, { hasRefs: true });
     assert.ok(seq.length >= 3);
     assert.match(seq[0], /Korean fashion portrait/);
     assert.match(seq[1], /AI-generated synthetic character/);
-    assert.equal(seq[seq.length - 1], short);
+    // raw is preserved somewhere in the cycle as a fallback
+    assert.ok(seq.includes(short), "raw prompt must remain in the cycle");
+    // justification variants attached because hasRefs: true forces them
+    assert.ok(seq.some((p) => /Editorial fashion magazine BTS/.test(p)));
   });
 
   it("does not hoist for long prompts even with refs", () => {
@@ -215,11 +225,87 @@ describe("hasRefs hint (reference-image safety guard)", () => {
 
   it("does not hoist when prompt has its own trigger keywords", () => {
     // If the text has its own triggers, keep the standard escalation order:
-    // raw → korean wrapper → strong English. Hoisting would skip tier 1.
+    // raw → justifications → korean wrapper → strong → fashion.
     const triggered = "비키니 셀카";
     const seq = buildPromptAttempts(triggered, { hasRefs: true });
     assert.equal(seq[0], triggered);
-    assert.match(seq[1], /성인\(25세 이상\)/);
+    assert.match(seq[1], /Editorial fashion magazine BTS/);
+    assert.match(seq[2], /Sports broadcast post-match/);
+    assert.ok(
+      seq.some((p) => /성인\(25세 이상\)/.test(p)),
+      "korean wrapper must remain queued after justifications",
+    );
+  });
+});
+
+describe("justification tier (no tone-down, professional context anchor)", () => {
+  it("prefixes a context to a soft-trigger swimwear prompt", () => {
+    const v = getJustificationVariant("bikini selfie at a pool", { contextIndex: 0 });
+    assert.ok(v);
+    assert.match(v, /^Editorial fashion magazine BTS/);
+    assert.match(v, /bikini selfie at a pool$/);
+    // body of the original prompt MUST be preserved (no keyword strip,
+    // no body-emphasis removal — that is the whole point of this tier).
+    assert.match(v, /bikini/);
+  });
+
+  it("rotates between 4 contexts via contextIndex", () => {
+    assert.equal(JUSTIFICATION_CONTEXTS.length, 4);
+    for (let i = 0; i < 8; i++) {
+      const v = getJustificationVariant("수영복 셀카", { contextIndex: i });
+      assert.ok(v);
+      const expected = JUSTIFICATION_CONTEXTS[i % 4];
+      assert.ok(v.startsWith(expected), `index ${i} should start with rotated context ${i % 4}`);
+    }
+  });
+
+  it("returns null for hard blockers (explicit / minor cues)", () => {
+    assert.equal(getJustificationVariant("nude selfie"), null);
+    assert.equal(getJustificationVariant("여고생 비키니"), null);
+    assert.equal(getJustificationVariant("schoolgirl swimsuit"), null);
+  });
+
+  it("returns null for prompts with no triggers (and no force)", () => {
+    // No swimwear/selfie/sheer/underwear/fitting-room cue → classifier
+    // unlikely to reject anyway. Adding a "fashion magazine BTS" prefix
+    // would be cargo-culting.
+    assert.equal(getJustificationVariant("산 풍경, 일출"), null);
+    assert.equal(getJustificationVariant("귀여운 강아지"), null);
+  });
+
+  it("force: true attaches even when no trigger is present", () => {
+    // Used for ref-mode where the reference image (not the prompt text)
+    // is what trips the classifier.
+    const v = getJustificationVariant("다른 자세", { contextIndex: 0, force: true });
+    assert.ok(v);
+    assert.match(v, /^Editorial fashion magazine BTS/);
+  });
+
+  it("does not duplicate when the context is already present", () => {
+    const once = getJustificationVariant("비키니 셀카", { contextIndex: 0 });
+    const twice = getJustificationVariant(once, { contextIndex: 0 });
+    assert.equal(twice, null);
+  });
+
+  it("preserves skin-exposure cues in the body — that's the whole point", () => {
+    const skin =
+      "fitted ribbed crop tank top with bare midriff and bare shoulders exposed, " +
+      "low-rise short denim shorts, bare legs from upper thigh visible, bikini";
+    const v = getJustificationVariant(skin, { contextIndex: 0 });
+    assert.ok(v);
+    assert.match(v, /bare midriff/);
+    assert.match(v, /bare shoulders/);
+    assert.match(v, /bare legs/);
+    assert.match(v, /low-rise/);
+  });
+
+  it("appears between raw and the tone-down wrappers in the attempt cycle", () => {
+    const seq = buildPromptAttempts("bikini selfie", { hasRefs: false });
+    assert.equal(seq[0], "bikini selfie");
+    assert.match(seq[1], /Editorial fashion magazine BTS/);
+    assert.match(seq[2], /Sports broadcast post-match/);
+    // tone-down wrapper (englsh) comes after the 2 justifications
+    assert.match(seq[3], /adults aged 25 or older/);
   });
 });
 
@@ -273,27 +359,33 @@ describe("buildAttemptSequence (max retry count)", () => {
     assert.equal(seq[0], "수영복 셀카");
   });
 
-  it("alternates between original and compliant variant for N > 1", () => {
+  it("cycles raw → 2 justifications → KO wrapper for soft triggers", () => {
+    // Soft trigger ("수영복") now produces 4 base variants since 2 justification
+    // contexts are inserted before the tone-down wrapper:
+    //   [raw, justifyA, justifyB, korean wrapper]
     const seq = buildAttemptSequence("수영복 셀카", 5);
     assert.equal(seq.length, 5);
     assert.equal(seq[0], "수영복 셀카");
-    assert.match(seq[1], /성인\(25세 이상\)/);
-    assert.match(seq[1], /일반인이 폰으로 찍은/);
-    assert.equal(seq[2], "수영복 셀카");
+    assert.match(seq[1], /Editorial fashion magazine BTS/);
+    assert.match(seq[2], /Sports broadcast post-match/);
     assert.match(seq[3], /성인\(25세 이상\)/);
+    assert.match(seq[3], /일반인이 폰으로 찍은/);
+    // 5th attempt cycles back to raw
     assert.equal(seq[4], "수영복 셀카");
   });
 
-  it("cycles through 4 variants for strong-trigger prompts", () => {
-    // Strong-trigger prompts now produce 4 base variants:
-    // [original, korean wrapper, strong-amateur English, fashion portrait]
+  it("cycles through 6 variants for strong-trigger prompts", () => {
+    // Strong-trigger prompts now produce 6 base variants:
+    //   [raw, justifyA, justifyB, korean wrapper, strong-amateur, fashion portrait]
     const prompt = "한국 여자 20대 시스루 티셔츠 피팅룸 셀카";
-    const seq = buildAttemptSequence(prompt, 4);
-    assert.equal(seq.length, 4);
+    const seq = buildAttemptSequence(prompt, 6);
+    assert.equal(seq.length, 6);
     assert.equal(seq[0], prompt);
-    assert.match(seq[1], /성인\(25세 이상\)/);
-    assert.match(seq[2], /AI-generated synthetic character/);
-    assert.match(seq[3], /Korean fashion portrait/);
+    assert.match(seq[1], /Editorial fashion magazine BTS/);
+    assert.match(seq[2], /Sports broadcast post-match/);
+    assert.match(seq[3], /성인\(25세 이상\)/);
+    assert.match(seq[4], /AI-generated synthetic character/);
+    assert.match(seq[5], /Korean fashion portrait/);
   });
 
   it("repeats the original prompt when no compliant variant is available", () => {

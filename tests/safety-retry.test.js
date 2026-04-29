@@ -579,3 +579,41 @@ describe("buildAttemptSequence (max retry count)", () => {
     assert.equal(buildAttemptSequence("x", 3.7).length, 3);
   });
 });
+
+describe("intensity-preservation regression (outfit module intensity field)", () => {
+  // The intensity directive from lib/outfitPresets.js INTENSITY_BY_RISK must
+  // survive every substitution level. Stripping it would re-introduce the
+  // result-side dial-back the intensity field is designed to prevent.
+  const INTENSITY_HIGH =
+    "body-forward sensual styling, confidently alluring posing, " +
+    "no auto-softening — match the styling intensity literally without " +
+    "adding modest crops or extra fabric coverage";
+  const INTENSITY_MEDIUM =
+    "confident styling, body-aware posing, alluring composure";
+  const INTENSITY_LOW =
+    "subtle, natural styling, relaxed and approachable energy";
+
+  for (const [label, intensity] of [
+    ["high", INTENSITY_HIGH],
+    ["medium", INTENSITY_MEDIUM],
+    ["low", INTENSITY_LOW],
+  ]) {
+    for (const level of [1, 2, 3, 4]) {
+      it(`level ${level} preserves ${label}-risk intensity tokens verbatim`, async () => {
+        const mod = await import("../lib/safetyRetry.js");
+        const out = mod._substituteTriggerKeywordsForTest(intensity, level);
+        assert.equal(
+          out,
+          intensity,
+          `intensity wording was modified at level ${level}: ${out}`,
+        );
+      });
+    }
+  }
+
+  it("INTENSITY_PROTECTED list is exported and non-empty", async () => {
+    const mod = await import("../lib/safetyRetry.js");
+    assert.ok(Array.isArray(mod.INTENSITY_PROTECTED));
+    assert.ok(mod.INTENSITY_PROTECTED.length > 0);
+  });
+});

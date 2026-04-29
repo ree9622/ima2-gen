@@ -823,6 +823,18 @@ app.post("/api/outfit/sample", express.json({ limit: "256kb" }), async (req, res
   const framingMode = body.framingMode === "full-body" || body.framingMode === "half-body"
     ? body.framingMode
     : "mixed";
+  // 2026-04-30 — aestheticMode toggle decouples sexy-tune from the
+  // amateur-snapshot default. amateur (legacy) | editorial | glamour | off.
+  // Off = no aesthetic prescription block (maximum model autonomy).
+  const aestheticMode = ["amateur", "editorial", "glamour", "off"].includes(body.aestheticMode)
+    ? body.aestheticMode
+    : "amateur";
+  // 2026-04-30 — risk:high modules auto-enable includeChestLine via
+  // composeOutfitPrompt. The body can still force it off explicitly with
+  // includeChestLine:false; otherwise undefined → auto.
+  const includeChestLine = typeof body.includeChestLine === "boolean"
+    ? body.includeChestLine
+    : undefined;
   // 2026-04-29 — random vs series mode. The UI sends hasReferences:false
   // when no reference photo is attached, so the prompt drops the
   // [얼굴 — 참조에서…] / [참조와 다른 값 강제] / "참고 이미지 인물의 머리카락"
@@ -851,6 +863,8 @@ app.post("/api/outfit/sample", express.json({ limit: "256kb" }), async (req, res
     includeFlirty,
     framingMode,
     hasReferences,
+    aestheticMode,
+    ...(includeChestLine !== undefined ? { includeChestLine } : {}),
   });
   res.json({ variants, framingMode, hasReferences });
 });

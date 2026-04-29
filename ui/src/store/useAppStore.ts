@@ -691,6 +691,7 @@ type AppState = {
     autoFillOnFail?: boolean;
     maxResolution?: boolean;
     framingMode?: "mixed" | "full-body" | "half-body";
+    aestheticMode?: "amateur" | "editorial" | "glamour" | "off";
   }) => Promise<void>;
   varyCurrentResult: () => Promise<void>;
   hydrateHistory: () => void;
@@ -827,6 +828,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           includeMirror: opts.includeMirror ?? false,
           includeFlirty: opts.includeFlirty ?? true,
           framingMode: opts.framingMode ?? "mixed",
+          aestheticMode: opts.aestheticMode ?? "amateur",
           useWeights: true,
           hasReferences,
         }),

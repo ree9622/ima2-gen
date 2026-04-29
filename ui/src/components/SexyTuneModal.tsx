@@ -74,6 +74,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
     autoFillOnFail: boolean;
     maxResolution: boolean;
     framingMode: "mixed" | "full-body" | "half-body";
+    aestheticMode: "amateur" | "editorial" | "glamour" | "off";
   };
   const loadPrefs = (): Partial<Prefs> => {
     try {
@@ -120,6 +121,13 @@ export function SexyTuneModal({ open, onClose }: Props) {
     initial.framingMode === "full-body" || initial.framingMode === "half-body"
       ? initial.framingMode
       : "mixed",
+  );
+  const [aestheticMode, setAestheticMode] = useState<"amateur" | "editorial" | "glamour" | "off">(
+    initial.aestheticMode === "editorial" ||
+      initial.aestheticMode === "glamour" ||
+      initial.aestheticMode === "off"
+      ? initial.aestheticMode
+      : "amateur",
   );
   const [preview, setPreview] = useState<
     Array<{ id: string; label: string; category: string; risk: string }> | null
@@ -177,6 +185,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
           includeMirror,
           includeFlirty,
           framingMode,
+          aestheticMode,
           useWeights: true,
           hasReferences: refsCount > 0,
         }),
@@ -216,6 +225,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
         autoFillOnFail,
         maxResolution,
         framingMode,
+        aestheticMode,
       };
       localStorage.setItem(PREFS_KEY, JSON.stringify(blob));
     } catch {
@@ -232,6 +242,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
     autoFillOnFail,
     maxResolution,
     framingMode,
+    aestheticMode,
   ]);
 
   if (!open) return null;
@@ -271,6 +282,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
       autoFillOnFail,
       maxResolution,
       framingMode,
+      aestheticMode,
     }).catch((e) => {
       console.error("[sexy-tune] batch error:", e);
     });
@@ -555,6 +567,46 @@ export function SexyTuneModal({ open, onClose }: Props) {
                 onChange={() => setFramingMode("half-body")}
               />
               <span>👤 반신만 (얼굴/상반신 위주, 클로즈업 톤)</span>
+            </label>
+          </fieldset>
+
+          <fieldset style={fieldset}>
+            <legend
+              style={{ fontSize: 12, color: "var(--text-dim)", padding: "0 4px" }}
+            >
+              미적 톤 (결과물 스타일)
+            </legend>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="radio"
+                checked={aestheticMode === "amateur"}
+                onChange={() => setAestheticMode("amateur")}
+              />
+              <span>📱 아마추어 스마트폰 (기본 — 친구가 찍은 듯한 캐주얼)</span>
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="radio"
+                checked={aestheticMode === "editorial"}
+                onChange={() => setAestheticMode("editorial")}
+              />
+              <span>📖 에디토리얼 (패션 매거진 톤, 컨트롤된 조명)</span>
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="radio"
+                checked={aestheticMode === "glamour"}
+                onChange={() => setAestheticMode("glamour")}
+              />
+              <span>💋 글래머 (인티메이트 뷰티 라이팅, sensual)</span>
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="radio"
+                checked={aestheticMode === "off"}
+                onChange={() => setAestheticMode("off")}
+              />
+              <span>🎨 모델 자율 (미적 가이드 없음 — 모델이 알아서 결정)</span>
             </label>
           </fieldset>
 

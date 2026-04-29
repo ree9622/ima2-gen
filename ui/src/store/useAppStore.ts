@@ -88,11 +88,16 @@ function clampMaxAttempts(n: number): number {
 function loadMaxAttempts(): number {
   try {
     const raw = localStorage.getItem("ima2.maxAttempts");
-    if (raw == null) return 3;
+    // 2026-04-29: default raised 3 → 7 to match the new safety-retry
+    // pipeline (justifyA, justifyB, KO wrapper, strong-L2, strong-L3,
+    // fashion-L4 + LLM rewrite at the tail). With maxAttempts=3 the cycle
+    // stopped at justifyB and never reached the substitution wrappers,
+    // making the upgraded pipeline a no-op for skin-related rejections.
+    if (raw == null) return 7;
     const n = Number(JSON.parse(raw));
     return clampMaxAttempts(n);
   } catch {
-    return 3;
+    return 7;
   }
 }
 

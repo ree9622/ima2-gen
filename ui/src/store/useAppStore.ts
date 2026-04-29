@@ -807,6 +807,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       category: string;
       risk: "low" | "medium" | "high";
       prompt: string;
+      // 2026-04-29 — server-side override for media-category variants.
+      // When present, the generate call uses a size matching this aspect
+      // ratio regardless of the user's batch-wide aspectRatio choice.
+      // See lib/outfitPresets.js composeOutfitPrompt() for context.
+      forcedAspectRatio?: string;
     };
 
     const fetchVariants = async (n: number, excludeIds: string[]): Promise<Variant[]> => {
@@ -852,7 +857,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Snapshot history size BEFORE the batch so we can derive how many
     // generates actually produced an image. Per-call detection is unreliable
     // under Promise.all because other concurrent calls also bump history.
+    // 2026-04-29 — Resolve a per-variant size override when the server
+    // marks the variant with forcedAspectRatio (media category → 16:9).
+    // We reuse the same aspect→size table as the batch-wide override so
+    // maxResolution is honored. Falls back to overrideSize otherwise.
+    const sizeForRatio = (ratio: string, hi: boolean): string => {
+      const lo: Record<string, string> = {
+        "1:1": "1024x1024",
+        "16:9": "1824x1024",
+        "9:16": "1024x1824",
+        "3:4": "1024x1360",
+        "4:3": "1360x1024",
+        "2:3": "1024x1536",
+        "3:2": "1536x1024",
+      };
+      const high: Record<string, string> = {
+        "1:1": "2048x2048",
+        "16:9": "3824x2160",
+        "9:16": "2160x3824",
+        "3:4": "1152x1536",
+        "4:3": "1536x1152",
+        "2:3": "1024x1536",
+        "3:2": "1536x1024",
+      };
+      return (hi ? high : lo)[ratio] ?? lo["16:9"];
+    };
+
     const fireOne = async (v: Variant): Promise<void> => {
+      const variantSize = v.forcedAspectRatio
+        ? sizeForRatio(v.forcedAspectRatio, !!opts.maxResolution)
+        : overrideSize;
       await get().generate({
         overridePrompt: v.prompt,
         overrideCount: 1,
@@ -863,7 +897,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           risk: v.risk,
         },
         overrideReferences: refSnapshot,
-        ...(overrideSize ? { overrideSize } : {}),
+        ...(variantSize ? { overrideSize: variantSize } : {}),
         ...(overrideQuality ? { overrideQuality } : {}),
       });
     };

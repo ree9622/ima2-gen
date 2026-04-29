@@ -9,6 +9,68 @@ import {
   weightsFromStats,
 } from "../lib/outfitPresets.js";
 
+describe("media-category broadcast 16:9 enforcement (2026-04-29)", () => {
+  it("composeOutfitPrompt forces 16:9 aspect for media-category modules", () => {
+    const mediaModule = OUTFIT_PRESETS.find((m) => m.category === "media");
+    assert.ok(mediaModule, "no media-category module in pool");
+    const prompt = composeOutfitPrompt(mediaModule, { aspectRatio: "1024x1024" });
+    // The user's 1:1 choice must be ignored; the prompt should declare 16:9.
+    assert.match(prompt, /1824x1024|16:9 horizontal broadcast/i);
+    // The dedicated broadcast frame block should be appended.
+    assert.match(prompt, /\[방송 프레임/);
+    assert.match(prompt, /caption-bar|lower-third caption/i);
+    // The originally requested 1:1 size must NOT survive on the [퀄리티] line.
+    assert.doesNotMatch(prompt, /^[\s-]*1024x1024 비율/m);
+  });
+
+  it("composeOutfitPrompt leaves non-media modules at the user's chosen aspect", () => {
+    const beachModule = OUTFIT_PRESETS.find((m) => m.category === "beach");
+    assert.ok(beachModule);
+    const prompt = composeOutfitPrompt(beachModule, { aspectRatio: "1024x1024" });
+    assert.match(prompt, /1024x1024 비율/);
+    assert.doesNotMatch(prompt, /\[방송 프레임/);
+  });
+
+  it("sampleOutfitPrompts attaches forcedAspectRatio: '16:9' to media variants", () => {
+    const fixedRng = (() => {
+      let i = 0;
+      const seq = [0.13, 0.42, 0.78, 0.05, 0.61, 0.27, 0.88, 0.34];
+      return () => seq[i++ % seq.length];
+    })();
+    const variants = sampleOutfitPrompts({
+      count: 8,
+      maxRisk: "medium",
+      categories: ["media"],
+      aspectRatio: "1:1",
+      rng: fixedRng,
+    });
+    assert.ok(variants.length > 0);
+    for (const v of variants) {
+      assert.equal(v.category, "media");
+      assert.equal(v.forcedAspectRatio, "16:9", `variant ${v.id} missing forcedAspectRatio`);
+    }
+  });
+
+  it("sampleOutfitPrompts does NOT attach forcedAspectRatio to non-media variants", () => {
+    const fixedRng = (() => {
+      let i = 0;
+      const seq = [0.13, 0.42, 0.78, 0.05, 0.61, 0.27, 0.88, 0.34];
+      return () => seq[i++ % seq.length];
+    })();
+    const variants = sampleOutfitPrompts({
+      count: 5,
+      maxRisk: "medium",
+      categories: ["beach", "scenario"],
+      aspectRatio: "1:1",
+      rng: fixedRng,
+    });
+    for (const v of variants) {
+      assert.notEqual(v.category, "media");
+      assert.equal(v.forcedAspectRatio, undefined);
+    }
+  });
+});
+
 describe("outfit pool integrity", () => {
   it("has at least 2 modules per category present", () => {
     const counts = {};

@@ -138,6 +138,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
           includeFlirty,
           framingMode,
           useWeights: true,
+          hasReferences: refsCount > 0,
         }),
       });
       const data = await res.json();
@@ -236,7 +237,9 @@ export function SexyTuneModal({ open, onClose }: Props) {
     onClose();
   };
 
-  const canStart = refsCount > 0 && filteredCount > 0;
+  // 2026-04-29 — 참조 사진 0장이어도 시작 가능 (random mode). 카테고리
+  // 필터로 풀이 0개로 줄어들면 막음.
+  const canStart = filteredCount > 0;
 
   const fieldset: React.CSSProperties = {
     border: "1px solid var(--border)",
@@ -321,16 +324,18 @@ export function SexyTuneModal({ open, onClose }: Props) {
         >
           {refsCount === 0 && (
             <div
-              role="alert"
               style={{
                 padding: 8,
-                border: "1px solid var(--amber)",
-                color: "var(--amber)",
+                border: "1px solid var(--border)",
+                color: "var(--text-dim)",
                 borderRadius: 6,
                 fontSize: 13,
+                background: "var(--surface-2)",
               }}
             >
-              참고 이미지를 먼저 첨부해야 시작할 수 있습니다.
+              참고 이미지가 없어 <b>랜덤 모드</b>로 진행됩니다. 매 컷 다른
+              얼굴이 생성됩니다 (시리즈성 없음). 같은 얼굴로 옷·배경만 바꾸려면
+              참고 사진을 먼저 첨부하세요.
             </div>
           )}
 

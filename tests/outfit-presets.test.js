@@ -9,6 +9,72 @@ import {
   weightsFromStats,
 } from "../lib/outfitPresets.js";
 
+describe("random mode (no reference photo) — hasReferences=false", () => {
+  const beachModule = OUTFIT_PRESETS.find((m) => m.category === "beach");
+
+  it("default (no opt) keeps the legacy reference-anchored blocks", () => {
+    const prompt = composeOutfitPrompt(beachModule, { aspectRatio: "1:1" });
+    assert.match(prompt, /참고 이미지 인물 고정/);
+    assert.match(prompt, /\[얼굴 — 참조에서 식별만/);
+    assert.match(prompt, /참조와 반드시 달라야 함/);
+    assert.match(prompt, /참고 이미지 인물의 머리카락/);
+  });
+
+  it("hasReferences=false drops every reference-anchored block", () => {
+    const prompt = composeOutfitPrompt(beachModule, {
+      aspectRatio: "1:1",
+      hasReferences: false,
+    });
+    assert.doesNotMatch(prompt, /참고 이미지 인물 고정/);
+    assert.doesNotMatch(prompt, /\[얼굴 — 참조에서 식별만/);
+    assert.doesNotMatch(prompt, /참조와 반드시 달라야 함/);
+    assert.doesNotMatch(prompt, /참고 이미지 인물의 머리카락/);
+    assert.doesNotMatch(prompt, /참조 이미지의 프레이밍이 비슷하면 OVERRIDE/);
+  });
+
+  it("hasReferences=false includes a random-Korean-woman person block", () => {
+    const prompt = composeOutfitPrompt(beachModule, {
+      aspectRatio: "1:1",
+      hasReferences: false,
+    });
+    assert.match(prompt, /fresh random Korean woman/);
+    assert.match(prompt, /do NOT carry over\s+facial features from any prior generation/);
+    assert.match(prompt, /natural, ordinary face/);
+  });
+
+  it("hasReferences=false still keeps outfit / mood / camera framing", () => {
+    const prompt = composeOutfitPrompt(beachModule, {
+      aspectRatio: "1:1",
+      hasReferences: false,
+    });
+    assert.match(prompt, /\[Outfit\]/);
+    assert.match(prompt, /\[Mood\]/);
+    assert.match(prompt, /\[카메라\]/);
+    assert.match(prompt, /이번 컷 프레이밍 \(REQUIRED\)/);
+  });
+
+  it("sampleOutfitPrompts honors hasReferences=false through the pipeline", () => {
+    const fixedRng = (() => {
+      let i = 0;
+      const seq = [0.13, 0.42, 0.78, 0.05, 0.61, 0.27, 0.88, 0.34];
+      return () => seq[i++ % seq.length];
+    })();
+    const variants = sampleOutfitPrompts({
+      count: 3,
+      maxRisk: "medium",
+      categories: ["beach"],
+      aspectRatio: "1:1",
+      hasReferences: false,
+      rng: fixedRng,
+    });
+    assert.ok(variants.length > 0);
+    for (const v of variants) {
+      assert.doesNotMatch(v.prompt, /참고 이미지 인물 고정/);
+      assert.match(v.prompt, /fresh random Korean woman/);
+    }
+  });
+});
+
 describe("media-category broadcast 16:9 enforcement (2026-04-29)", () => {
   it("composeOutfitPrompt forces 16:9 aspect for media-category modules", () => {
     const mediaModule = OUTFIT_PRESETS.find((m) => m.category === "media");

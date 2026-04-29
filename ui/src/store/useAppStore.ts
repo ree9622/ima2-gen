@@ -759,10 +759,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   runSexyTuneBatch: async (opts) => {
     const s = get();
-    if (s.referenceImages.length === 0) {
-      s.showToast("참고 이미지를 먼저 첨부하세요.", true);
-      return;
-    }
+    // 2026-04-29 — 참조 사진 없어도 동작. 없으면 random mode (매 컷 다른 얼굴).
+    // 참조 있으면 series mode (얼굴 고정, 옷/배경/포즈만 변형).
+    const hasReferences = s.referenceImages.length > 0;
     const count = Math.max(1, Math.min(8, Math.floor(opts.count) || 4));
     const autoFill = opts.autoFillOnFail !== false; // default true
 
@@ -770,7 +769,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // immediately and switch to a different reference image (b → c → ...),
     // but this batch must keep using the refs that were attached when
     // they pressed start. generate() honors overrideReferences over store
-    // state.
+    // state. In random mode this snapshot is empty by design.
     const refSnapshot = s.referenceImages.map((d) =>
       d.replace(/^data:[^;]+;base64,/, ""),
     );
@@ -829,6 +828,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           includeFlirty: opts.includeFlirty ?? true,
           framingMode: opts.framingMode ?? "mixed",
           useWeights: true,
+          hasReferences,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

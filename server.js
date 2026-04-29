@@ -828,6 +828,11 @@ app.post("/api/outfit/sample", express.json({ limit: "256kb" }), async (req, res
   const framingMode = body.framingMode === "full-body" || body.framingMode === "half-body"
     ? body.framingMode
     : "mixed";
+  // 2026-04-29 — random vs series mode. The UI sends hasReferences:false
+  // when no reference photo is attached, so the prompt drops the
+  // [얼굴 — 참조에서…] / [참조와 다른 값 강제] / "참고 이미지 인물의 머리카락"
+  // blocks and the model is free to invent a fresh face per shot.
+  const hasReferences = body.hasReferences !== false; // default true (legacy)
 
   let weights;
   if (useWeights) {
@@ -850,8 +855,9 @@ app.post("/api/outfit/sample", express.json({ limit: "256kb" }), async (req, res
     includeMirror,
     includeFlirty,
     framingMode,
+    hasReferences,
   });
-  res.json({ variants, framingMode });
+  res.json({ variants, framingMode, hasReferences });
 });
 
 // -- Reference bundles --

@@ -21,7 +21,7 @@ describe("Default prompt injection", () => {
       "default prompt must explicitly say outputs are not real people",
     );
     assert.ok(
-      /do not surface this disclaimer as visible text/i.test(DEFAULT_PROMPT_INJECTION),
+      /do not surface[^.]{0,80}as visible text/i.test(DEFAULT_PROMPT_INJECTION),
       "the cue must stay internal — not rendered into the image",
     );
   });

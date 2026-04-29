@@ -28,6 +28,7 @@ import {
   hasCompliantRetry,
   parseSafetyViolation,
 } from "./lib/safetyRetry.js";
+import { rewritePromptForSafety } from "./lib/llmRewrite.js";
 import {
   OUTFIT_PRESETS,
   OUTFIT_CATEGORIES,
@@ -486,6 +487,129 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       console.log(`${tag} ${mode} (${i + 1}/${attempts.length}) [${route}] after: ${lastErr?.message?.slice(0, 160)}`);
     }
   }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // 단계 4 (2026-04-29) — LLM rewrite tier (last resort).
+  // All static variants failed. Ask GPT-5.5 (via the same OAuth proxy) to
+  // rewrite the original prompt around the rejection signals (categories
+  // + reasoningSummary + refusalText captured from the last attempt) and
+  // try one more time. We only invoke this when the failure pattern looks
+  // like a skin-related safety refusal, since rewriting a non-safety
+  // failure (transient 5xx, network reset) wastes tokens.
+  // ───────────────────────────────────────────────────────────────────────
+  const lastViolation = parseSafetyViolation(lastErr);
+  const lastLog = log[log.length - 1] || {};
+  const llmRewriteEnabled = process.env.IMA2_DISABLE_LLM_REWRITE !== "1" &&
+    ctx.disableLLMRewrite !== true;
+  const looksSafetyRelated =
+    lastErr?.code === "SAFETY_REFUSAL" ||
+    !!lastViolation ||
+    (lastLog && lastLog.refusalText) ||
+    (lastErr?.message && /safety system|content policy|safety_violations/i.test(lastErr.message));
+  if (llmRewriteEnabled && looksSafetyRelated && !lastViolation?.unrecoverable && OAUTH_URL) {
+    console.log(
+      `${tag} LLM-rewrite tier engaging — categories=[${lastViolation ? Array.from(lastViolation.categories).join(",") : "unknown"}]`,
+    );
+    let rewritten = null;
+    try {
+      rewritten = await rewritePromptForSafety({
+        prompt,
+        oauthUrl: OAUTH_URL,
+        categories: lastViolation ? Array.from(lastViolation.categories) : ["sexual"],
+        refusalText: lastLog.refusalText || null,
+        reasoningSummary: lastLog.reasoningSummary || null,
+        tag,
+      });
+    } catch (e) {
+      console.warn(`${tag} LLM-rewrite call threw: ${e?.message?.slice(0, 200)}`);
+    }
+    if (rewritten) {
+      const i = attempts.length;
+      const startedAt = Date.now();
+      console.log(
+        `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) begin: ` +
+        `promptLen=${rewritten.length}`,
+      );
+      if (typeof onAttempt === "function") {
+        try { onAttempt(i + 1, attempts.length + 1); } catch {}
+      }
+      try {
+        const r = await invoke(rewritten);
+        const durationMs = Date.now() - startedAt;
+        if (r.b64) {
+          log.push({
+            attempt: i + 1,
+            promptUsed: rewritten,
+            compliantVariant: true,
+            llmRewrite: true,
+            ok: true,
+            errorMessage: null,
+            errorCode: null,
+            durationMs,
+            startedAt,
+            reasoningSummary: r.reasoningSummary || null,
+            refusalText: r.refusalText || null,
+            eventTypeCounts: r.eventTypeCounts || null,
+          });
+          console.log(
+            `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) SUCCESS in ${durationMs}ms ` +
+            `b64Len=${r.b64.length}`,
+          );
+          return {
+            ...r,
+            promptUsed: rewritten,
+            promptRewrittenForSafety: true,
+            llmRewriteUsed: true,
+            attempts: log,
+          };
+        }
+        // Empty response = another safety refusal even after rewrite. Record
+        // and fall through to the original failure throw below.
+        lastErr = new Error("Empty response (safety refusal after LLM rewrite)");
+        lastErr.code = "SAFETY_REFUSAL";
+        log.push({
+          attempt: i + 1,
+          promptUsed: rewritten,
+          compliantVariant: true,
+          llmRewrite: true,
+          ok: false,
+          errorMessage: lastErr.message,
+          errorCode: lastErr.code,
+          durationMs,
+          startedAt,
+          reasoningSummary: r?.reasoningSummary || null,
+          refusalText: r?.refusalText || null,
+          eventTypeCounts: r?.eventTypeCounts || null,
+        });
+        console.warn(
+          `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) EMPTY (safety refusal) after ${durationMs}ms`,
+        );
+      } catch (e) {
+        const durationMs = Date.now() - startedAt;
+        lastErr = e;
+        const violation = parseSafetyViolation(e);
+        log.push({
+          attempt: i + 1,
+          promptUsed: rewritten,
+          compliantVariant: true,
+          llmRewrite: true,
+          ok: false,
+          errorMessage: e?.message || String(e),
+          errorCode: e?.code || null,
+          durationMs,
+          startedAt,
+          violationCategories: violation ? Array.from(violation.categories) : null,
+        });
+        console.warn(
+          `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) THREW after ${durationMs}ms: ` +
+          `${(e?.message || String(e)).slice(0, 200)}`,
+        );
+      }
+    } else {
+      console.log(`${tag} LLM-rewrite returned null — surfacing original failure`);
+    }
+  }
+
   console.error(
     `${tag} ALL ${attempts.length} ATTEMPTS FAILED: lastCode=${lastErr?.code || "?"} ` +
     `lastMsg=${(lastErr?.message || String(lastErr || "")).slice(0, 200)}`,

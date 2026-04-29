@@ -1,3 +1,4 @@
+import "./lib/timestampConsole.js";
 import "dotenv/config";
 import express from "express";
 import { writeFile, mkdir, readFile, readdir, stat, rename } from "fs/promises";

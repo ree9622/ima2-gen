@@ -19,10 +19,46 @@ type Props = {
 //   --accent     primary action color (dark→white, light→near-black)
 //   --bg         page background — used as the contrast color on accent
 //   --amber      warning highlight
+// 2026-04-29 — Aspect ratio quick-pick options for the SexyTuneModal radio.
+// Each option maps to a default size preset; the user can still fine-tune
+// the resolution via the global sizePreset selector.
+type AspectChoice = "1:1" | "16:9" | "9:16" | "3:4" | "auto";
+const ASPECT_OPTIONS: ReadonlyArray<{ id: AspectChoice; label: string; preset: string }> = [
+  { id: "1:1", label: "1:1 정사각", preset: "1024x1024" },
+  { id: "16:9", label: "16:9 가로", preset: "1824x1024" },
+  { id: "9:16", label: "9:16 세로", preset: "1024x1824" },
+  { id: "3:4", label: "3:4 인물", preset: "1024x1360" },
+  { id: "auto", label: "자동", preset: "auto" },
+];
+
+// Reverse-map an active sizePreset to the closest AspectChoice. The radio
+// uses this to highlight whichever option matches the current sizePreset.
+function aspectChoiceFromPreset(preset: string): AspectChoice {
+  if (preset === "auto") return "auto";
+  // Exact match first (covers all preset values listed in size.ts).
+  const exact = ASPECT_OPTIONS.find((opt) => opt.preset === preset);
+  if (exact) return exact.id;
+  // Fall back to width/height ratio inspection — handles 2K / 4K presets
+  // and custom WxH values (e.g. 2048x2048 → 1:1, 3824x2160 → 16:9).
+  const m = preset.match(/^(\d+)x(\d+)$/);
+  if (!m) return "auto";
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (!w || !h) return "auto";
+  const ratio = w / h;
+  if (Math.abs(ratio - 1) < 0.05) return "1:1";
+  if (Math.abs(ratio - 16 / 9) < 0.06) return "16:9";
+  if (Math.abs(ratio - 9 / 16) < 0.06) return "9:16";
+  if (Math.abs(ratio - 3 / 4) < 0.06) return "3:4";
+  return "auto";
+}
+
 export function SexyTuneModal({ open, onClose }: Props) {
   const runSexyTuneBatch = useAppStore((s) => s.runSexyTuneBatch);
   const refsCount = useAppStore((s) => s.referenceImages.length);
   const sizePreset = useAppStore((s) => s.sizePreset);
+  const setSizePreset = useAppStore((s) => s.setSizePreset);
+  const activeAspect = aspectChoiceFromPreset(sizePreset);
 
   // Persist last-used options across modal opens (also across page reloads).
   // Stored in localStorage as a JSON blob; missing/corrupt → fall back to
@@ -338,6 +374,53 @@ export function SexyTuneModal({ open, onClose }: Props) {
               참고 사진을 먼저 첨부하세요.
             </div>
           )}
+
+          {/* Aspect ratio quick-pick (2026-04-29). Sits above the global
+              sizePreset selector; clicking a radio sets sizePreset to the
+              default size for that aspect. The selector below remains for
+              fine-tuning resolution. */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+              비율
+            </span>
+            <div
+              role="radiogroup"
+              aria-label="이미지 비율"
+              style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+            >
+              {ASPECT_OPTIONS.map((opt) => {
+                const checked = activeAspect === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={checked}
+                    onClick={() => setSizePreset(opt.preset as never)}
+                    style={{
+                      padding: "6px 12px",
+                      border: `1px solid ${checked ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: 6,
+                      background: checked ? "var(--accent)" : "var(--surface)",
+                      color: checked ? "var(--bg)" : "var(--text)",
+                      fontSize: 13,
+                      cursor: "pointer",
+                      fontWeight: checked ? 600 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              현재 사이즈 프리셋:{" "}
+              <strong style={{ color: "var(--text)" }}>
+                {sizePreset === "auto" ? "자동" : sizePreset}
+              </strong>
+              {" — 메인 화면 사이즈 셀렉터에서 더 세밀한 해상도(2K·4K 등)를 선택할 수 있습니다."}
+            </span>
+          </div>
 
           <label style={{ display: "grid", gap: 6 }}>
             <span style={{ fontSize: 13, color: "var(--text-dim)" }}>

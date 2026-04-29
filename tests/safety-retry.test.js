@@ -9,6 +9,7 @@ import {
   getStrongCompliantVariant,
   hasCompliantRetry,
   JUSTIFICATION_CONTEXTS,
+  parseSafetyViolation,
 } from "../lib/safetyRetry.js";
 
 describe("safety retry prompt variants", () => {
@@ -306,6 +307,82 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     assert.match(seq[2], /Sports broadcast post-match/);
     // tone-down wrapper (englsh) comes after the 2 justifications
     assert.match(seq[3], /adults aged 25 or older/);
+  });
+});
+
+describe("parseSafetyViolation (단계 3 — 적응형 routing 입력 파서)", () => {
+  it("returns null when no safety_violations clause is present", () => {
+    assert.equal(parseSafetyViolation(null), null);
+    assert.equal(parseSafetyViolation(""), null);
+    assert.equal(parseSafetyViolation("Some unrelated error"), null);
+    assert.equal(parseSafetyViolation(new Error("network reset")), null);
+  });
+
+  it("parses a single sexual violation from a typical refusal message", () => {
+    const msg =
+      "Your request was rejected by the safety system. " +
+      "If you believe this is an error, contact us at help.openai.com and " +
+      "include the request ID e24923ac-4fb0-4187-b1fd-802626599f63. " +
+      "safety_violations=[sexual].";
+    const v = parseSafetyViolation(msg);
+    assert.ok(v);
+    assert.deepEqual(Array.from(v.categories), ["sexual"]);
+    assert.equal(v.skinRelated, true);
+    assert.equal(v.unrecoverable, false);
+  });
+
+  it("parses multi-category violations (sexual + minors → unrecoverable)", () => {
+    const msg = "rejected — safety_violations=[sexual, minors]";
+    const v = parseSafetyViolation(msg);
+    assert.ok(v);
+    assert.ok(v.categories.has("sexual"));
+    assert.ok(v.categories.has("minors"));
+    assert.equal(v.skinRelated, true);
+    assert.equal(v.unrecoverable, true);
+  });
+
+  it("parses sexual_minors as unrecoverable + skin-related", () => {
+    const v = parseSafetyViolation("safety_violations=[sexual_minors]");
+    assert.ok(v);
+    assert.equal(v.unrecoverable, true);
+    assert.equal(v.skinRelated, true);
+  });
+
+  it("treats violence / hate / self_harm as recoverable but not skin-related", () => {
+    for (const cat of ["violence", "hate", "self_harm", "harassment"]) {
+      const v = parseSafetyViolation(`safety_violations=[${cat}]`);
+      assert.ok(v, `failed to parse [${cat}]`);
+      assert.equal(v.unrecoverable, false, `${cat} unexpectedly unrecoverable`);
+      assert.equal(v.skinRelated, false, `${cat} unexpectedly skin-related`);
+    }
+  });
+
+  it("accepts both quoted and unquoted category tokens", () => {
+    const a = parseSafetyViolation("safety_violations=['sexual']");
+    const b = parseSafetyViolation('safety_violations=["sexual"]');
+    const c = parseSafetyViolation("safety_violations=[sexual]");
+    assert.ok(a && b && c);
+    assert.deepEqual(Array.from(a.categories), ["sexual"]);
+    assert.deepEqual(Array.from(b.categories), ["sexual"]);
+    assert.deepEqual(Array.from(c.categories), ["sexual"]);
+  });
+
+  it("includes unknown categories in the set (so observability isn't lossy)", () => {
+    const v = parseSafetyViolation("safety_violations=[mystery_category]");
+    assert.ok(v);
+    assert.ok(v.categories.has("mystery_category"));
+    assert.equal(v.unrecoverable, false);
+    assert.equal(v.skinRelated, false);
+  });
+
+  it("accepts an Error object directly (uses .message)", () => {
+    const err = new Error(
+      "rejected by safety_violations=[sexual]. retry-after: 0",
+    );
+    err.code = "SAFETY_REFUSAL";
+    const v = parseSafetyViolation(err);
+    assert.ok(v);
+    assert.deepEqual(Array.from(v.categories), ["sexual"]);
   });
 });
 

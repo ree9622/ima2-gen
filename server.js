@@ -23,7 +23,11 @@ import { trashAsset, restoreAsset, markNodesAssetMissing } from "./lib/assetLife
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
-import { buildAttemptSequence, hasCompliantRetry } from "./lib/safetyRetry.js";
+import {
+  buildAttemptSequence,
+  hasCompliantRetry,
+  parseSafetyViolation,
+} from "./lib/safetyRetry.js";
 import {
   OUTFIT_PRESETS,
   OUTFIT_CATEGORIES,
@@ -414,6 +418,9 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
     } catch (e) {
       const durationMs = Date.now() - startedAt;
       lastErr = e;
+      // Adaptive routing (단계 3): parse safety_violations=[xxx] from the
+      // upstream error and stash on the attempt log + decide loop control.
+      const violation = parseSafetyViolation(e);
       log.push({
         attempt: i + 1,
         promptUsed: attemptPrompt,
@@ -423,10 +430,12 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         errorCode: e?.code || null,
         durationMs,
         startedAt,
+        violationCategories: violation ? Array.from(violation.categories) : null,
       });
       console.warn(
         `${tag} attempt ${i + 1}/${attempts.length} THREW after ${durationMs}ms: ` +
-        `code=${e?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}`,
+        `code=${e?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}` +
+        (violation ? ` violation=[${Array.from(violation.categories).join(",")}]` : ""),
       );
       // Non-retryable: usage limit / quota / 429. Stop the loop and throw
       // a typed error so the route handler can forward it to the client.
@@ -441,11 +450,40 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         );
         throw stop;
       }
+      // Adaptive bail-out: minors / sexual_minors are unrecoverable. No
+      // wrapper or context can rescue these — bail immediately.
+      if (violation?.unrecoverable) {
+        const stop = new Error(
+          `Safety system rejected with unrecoverable category: ` +
+            `${Array.from(violation.categories).join(", ")}`,
+        );
+        stop.code = "SAFETY_UNRECOVERABLE";
+        stop.status = 422;
+        stop.cause = e;
+        stop.attempts = log;
+        stop.violationCategories = Array.from(violation.categories);
+        console.warn(
+          `${tag} non-retryable SAFETY [${Array.from(violation.categories).join(",")}] ` +
+            `— aborting after ${i + 1}/${attempts.length}`,
+        );
+        throw stop;
+      }
     }
 
     if (i < attempts.length - 1) {
       const mode = isCompliantRetry ? "compliant retry failed" : "retrying";
-      console.log(`${tag} ${mode} (${i + 1}/${attempts.length}) after: ${lastErr?.message}`);
+      // Adaptive routing log (단계 3): when the rejection is skin-related,
+      // call out that the next attempt is guaranteed-different (the cycle
+      // has 7 unique variants for strong-trigger prompts). When the
+      // rejection is non-skin (transient / unrelated), call out that we're
+      // re-trying without a new wrapper.
+      const violation = parseSafetyViolation(lastErr);
+      const route = violation?.skinRelated
+        ? "skin-related → next variant"
+        : violation
+          ? `non-skin [${Array.from(violation.categories).join(",")}] → cycling`
+          : "transient → cycling";
+      console.log(`${tag} ${mode} (${i + 1}/${attempts.length}) [${route}] after: ${lastErr?.message?.slice(0, 160)}`);
     }
   }
   console.error(

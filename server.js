@@ -9,7 +9,7 @@ import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsRea
 import { homedir } from "os";
 import { randomBytes } from "crypto";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64 } from "./lib/nodeStore.js";
-import { startJob, finishJob, listJobs, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
+import { startJob, finishJob, listJobs, listJobsRaw, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
 import {
   createSession,
   listSessions,
@@ -2462,9 +2462,12 @@ onShutdown(async (sig) => {
   while (true) {
     let active;
     try {
-      active = listJobs();
+      // listJobsRaw skips purgeStaleJobs() so the drain doesn't
+      // accidentally drop a row whose fetch is still running. Stale
+      // rows get cleaned up at startup of the next process anyway.
+      active = listJobsRaw();
     } catch (err) {
-      console.warn(`[shutdown] listJobs failed during drain: ${err?.message || err}`);
+      console.warn(`[shutdown] listJobsRaw failed during drain: ${err?.message || err}`);
       break;
     }
     if (active.length === 0) {

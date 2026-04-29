@@ -79,15 +79,39 @@ export function openUrl(url) {
  * Windows does NOT raise SIGTERM from the OS — SIGINT (Ctrl+C) and SIGBREAK
  * (Ctrl+Break) are the observable signals. We still register SIGTERM so that
  * Node-internal `child.kill("SIGTERM")` calls work in tests.
+ *
+ * 2026-04-29 — async-aware. The handler may return a Promise; we await it
+ * before calling process.exit(0). Used by server.js to drain in-flight
+ * generation jobs (max 10 min) so SIGTERM during a systemctl restart no
+ * longer kills active OpenAI streams mid-flight.
+ *
+ * Re-entrant signals: a second SIGTERM/SIGINT during the drain phase
+ * forces immediate exit. Useful when the operator presses Ctrl+C twice
+ * because they don't want to wait for the drain.
  */
 export function onShutdown(handler) {
   const signals = isWin
     ? ["SIGINT", "SIGTERM", "SIGBREAK"]
     : ["SIGINT", "SIGTERM", "SIGHUP"];
+  let shuttingDown = false;
   for (const sig of signals) {
     try {
-      process.on(sig, () => {
-        try { handler(sig); } finally { process.exit(0); }
+      process.on(sig, async () => {
+        if (shuttingDown) {
+          // Operator wants out NOW. Don't wait for the drain to finish.
+          process.exit(1);
+          return;
+        }
+        shuttingDown = true;
+        try {
+          await handler(sig);
+        } catch (err) {
+          try {
+            console.error(`[shutdown] handler threw on ${sig}:`, err?.message || err);
+          } catch {}
+        } finally {
+          process.exit(0);
+        }
       });
     } catch {
       // Some signals aren't installable on certain platforms; ignore.

@@ -110,6 +110,40 @@ function canAccess(meta, authUser) {
 // and query). Mounted after the auth-user middleware so authUser is captured.
 app.use(createRequestLogger());
 
+// ─────────────────────────────────────────────────────────────────────────
+// Graceful shutdown gate (2026-04-29).
+//
+// During a systemctl restart we want existing in-flight generations to
+// finish (each one has been billed against the user's ChatGPT Plus image
+// quota; killing them mid-stream loses both the work AND the quota). The
+// signal handler at the bottom of this file flips SHUTTING_DOWN=true, then
+// polls the inflight registry until it drains (max 10 min) before exiting.
+// While the flag is set, NEW generation requests are rejected with 503 +
+// Retry-After so the client can re-submit after the restart.
+//
+// Read-only / status endpoints stay open: /api/inflight, /api/billing,
+// /api/history, /api/oauth/status — clients need these to render UI even
+// during a drain. Only mutation endpoints that would create new in-flight
+// state are gated.
+// ─────────────────────────────────────────────────────────────────────────
+let SHUTTING_DOWN = false;
+const SHUTDOWN_GATED_ROUTES = new Set([
+  "POST /api/generate",
+  "POST /api/edit",
+  "POST /api/node/generate",
+  "POST /api/enhance", // optional convenience; same drain rule
+]);
+app.use((req, res, next) => {
+  if (!SHUTTING_DOWN) return next();
+  const key = `${req.method} ${req.path}`;
+  if (!SHUTDOWN_GATED_ROUTES.has(key)) return next();
+  res.set("Retry-After", "30");
+  res.status(503).json({
+    error: "Server is shutting down for restart. Please retry in ~30 seconds.",
+    code: "SHUTTING_DOWN",
+  });
+});
+
 // UI bundle cache policy: index.html must never be cached (so a redeploy is
 // picked up immediately), but the hashed /assets/* files are content-addressed
 // and safe to mark immutable for a year.
@@ -2402,7 +2436,56 @@ function __unadvertise() {
   } catch {}
 }
 
-onShutdown(() => {
+// Maximum drain window. Each in-flight generation can take up to ~10 min
+// (8 attempts × ~3min reasoning each), so this matches the inflight TTL
+// that purgeStaleJobs uses. Override via env for tests.
+const SHUTDOWN_DRAIN_TIMEOUT_MS = Number(process.env.IMA2_SHUTDOWN_DRAIN_MS) || 10 * 60 * 1000;
+const SHUTDOWN_POLL_INTERVAL_MS = 1000;
+
+onShutdown(async (sig) => {
+  // Step 1 — gate new requests immediately. Anything already past the
+  // gate (mid-stream) keeps running.
+  SHUTTING_DOWN = true;
+  console.log(`[shutdown] received ${sig} — gating new mutation requests, draining in-flight jobs`);
+
+  // Step 2 — poll the inflight registry until it's empty or we hit the
+  // timeout. We log a status line every 5 seconds so an operator watching
+  // `journalctl -fu ima2-gen` can see progress instead of a silent hang.
+  const drainStartedAt = Date.now();
+  let lastReportAt = 0;
+  while (true) {
+    let active;
+    try {
+      active = listJobs();
+    } catch (err) {
+      console.warn(`[shutdown] listJobs failed during drain: ${err?.message || err}`);
+      break;
+    }
+    if (active.length === 0) {
+      console.log(`[shutdown] drain complete after ${Date.now() - drainStartedAt}ms`);
+      break;
+    }
+    const elapsed = Date.now() - drainStartedAt;
+    if (elapsed >= SHUTDOWN_DRAIN_TIMEOUT_MS) {
+      const ids = active.map((j) => j.requestId).join(", ");
+      console.warn(
+        `[shutdown] drain timeout after ${elapsed}ms — ${active.length} job(s) still in-flight: ${ids}. ` +
+        `Forcing shutdown; OpenAI quota for these requests is forfeit.`,
+      );
+      break;
+    }
+    if (elapsed - lastReportAt >= 5000) {
+      lastReportAt = elapsed;
+      const phases = active.map((j) => `${j.requestId}@${j.phase}(${j.attempt}/${j.maxAttempts})`).join(", ");
+      console.log(
+        `[shutdown] still draining: ${active.length} job(s) — ${phases} ` +
+        `(${Math.round(elapsed / 1000)}s / ${Math.round(SHUTDOWN_DRAIN_TIMEOUT_MS / 1000)}s)`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, SHUTDOWN_POLL_INTERVAL_MS));
+  }
+
+  // Step 3 — release process-level resources after the drain.
   __unadvertise();
   try { oauthChild?.kill(); } catch {}
 });

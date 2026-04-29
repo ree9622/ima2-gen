@@ -309,6 +309,104 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
   });
 });
 
+describe("graduated keyword substitution (level 1-4)", () => {
+  // Realistic outfit-pool body that contains keywords from every group.
+  const richPrompt =
+    "fitted ribbed crop tank top with thin straps, " +
+    "bare midriff and bare shoulders exposed, " +
+    "low-rise short denim shorts, fabric slightly clinging, " +
+    "body-hugging silhouette, deep V-neckline, " +
+    "bare legs from upper thigh visible, bikini";
+
+  it("level 2 strips body-hugging / deep-V but preserves bare midriff", () => {
+    const v = getStrongCompliantVariant(richPrompt, { substitutionLevel: 2 });
+    assert.ok(v);
+    // SUB_BASE substitutions still apply
+    assert.match(v, /two-piece swimwear/);
+    // SUB_G3 (level 2+): body-hugging / deep-V gone
+    assert.doesNotMatch(v, /body[- ]hugging/i);
+    assert.doesNotMatch(v, /deep\s+v[- ]neck/i);
+    // SUB_G2 (level 3+): bare midriff / fabric clinging STILL PRESENT
+    assert.match(v, /bare midriff/);
+    assert.match(v, /fabric (?:slightly\s+)?clinging|fabric clinging/);
+    // SUB_G1 (level 4): bare shoulders / arms / legs STILL PRESENT
+    assert.match(v, /bare shoulders/);
+    assert.match(v, /bare legs/);
+  });
+
+  it("level 3 also strips bare midriff / fabric clinging but keeps bare shoulders / legs", () => {
+    const v = getStrongCompliantVariant(richPrompt, { substitutionLevel: 3 });
+    assert.ok(v);
+    assert.match(v, /two-piece swimwear/);
+    assert.doesNotMatch(v, /body[- ]hugging/i);
+    assert.doesNotMatch(v, /bare midriff/);
+    assert.doesNotMatch(v, /fabric clinging/);
+    // SUB_G1 (level 4): bare shoulders / legs still present
+    assert.match(v, /bare shoulders/);
+    assert.match(v, /bare legs/);
+  });
+
+  it("level 4 strips everything (legacy behavior, last resort)", () => {
+    const v = getStrongCompliantVariant(richPrompt, { substitutionLevel: 4 });
+    assert.ok(v);
+    assert.match(v, /two-piece swimwear/);
+    assert.doesNotMatch(v, /body[- ]hugging/i);
+    assert.doesNotMatch(v, /bare midriff/);
+    assert.doesNotMatch(v, /bare shoulders/);
+    assert.doesNotMatch(v, /bare legs/);
+  });
+
+  it("default level (no opt) is 4 — back-compat with legacy callers", () => {
+    const def = getStrongCompliantVariant(richPrompt);
+    const lvl4 = getStrongCompliantVariant(richPrompt, { substitutionLevel: 4 });
+    assert.equal(def, lvl4);
+  });
+
+  it("getFashionPortraitVariant honors substitutionLevel the same way", () => {
+    const lvl2 = getFashionPortraitVariant(richPrompt, { substitutionLevel: 2 });
+    assert.ok(lvl2);
+    assert.match(lvl2, /Korean fashion portrait/);
+    assert.match(lvl2, /bare midriff/);
+    assert.match(lvl2, /bare legs/);
+
+    const lvl4 = getFashionPortraitVariant(richPrompt, { substitutionLevel: 4 });
+    assert.ok(lvl4);
+    assert.doesNotMatch(lvl4, /bare midriff/);
+    assert.doesNotMatch(lvl4, /bare legs/);
+  });
+
+  it("buildPromptAttempts adds level-2 and level-3 strong wrappers as separate variants when prompt has G2 keywords", () => {
+    const attempts = buildPromptAttempts(richPrompt);
+    // Strong-trigger sequence: [raw, justifyA, justifyB, KO wrapper,
+    //                          strong-L2, strong-L3, fashion-L4] = 7
+    assert.ok(attempts.length >= 6);
+    const strongL2 = attempts.find((p) =>
+      /AI-generated synthetic character/.test(p) && /bare midriff/.test(p),
+    );
+    const strongL3 = attempts.find((p) =>
+      /AI-generated synthetic character/.test(p) &&
+      !/bare midriff/.test(p) &&
+      /bare shoulders/.test(p),
+    );
+    assert.ok(strongL2, "level-2 strong wrapper (bare midriff preserved) missing");
+    assert.ok(strongL3, "level-3 strong wrapper (midriff stripped, shoulders kept) missing");
+    // Fashion-portrait at level 4 strips everything
+    const fashionL4 = attempts.find((p) =>
+      /Korean fashion portrait/.test(p) && !/bare shoulders/.test(p),
+    );
+    assert.ok(fashionL4, "level-4 fashion-portrait wrapper missing");
+  });
+
+  it("clamps level out of range to [1, 4]", () => {
+    const v0 = getStrongCompliantVariant(richPrompt, { substitutionLevel: 0 });
+    const v1 = getStrongCompliantVariant(richPrompt, { substitutionLevel: 1 });
+    assert.equal(v0, v1, "level 0 should clamp to 1");
+    const v99 = getStrongCompliantVariant(richPrompt, { substitutionLevel: 99 });
+    const v4 = getStrongCompliantVariant(richPrompt, { substitutionLevel: 4 });
+    assert.equal(v99, v4, "level 99 should clamp to 4");
+  });
+});
+
 describe("expanded body-emphasis triggers (production gap fix)", () => {
   it("strips '몸매 드러나게' / '전신 다 보이게'", () => {
     const prompt = "한국 20대, 비키니, 몸매 드러나게, 전신 다 보이게";

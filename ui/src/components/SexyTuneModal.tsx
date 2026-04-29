@@ -66,7 +66,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
   const PREFS_KEY = "ima2.sexyTune.prefs.v1";
   type Prefs = {
     count: number;
-    maxRisk: "low" | "medium";
+    maxRisk: "low" | "medium" | "high";
     selectedCats: string[];
     cameraTone: "canon" | "iphone";
     includeMirror: boolean;
@@ -90,8 +90,12 @@ export function SexyTuneModal({ open, onClose }: Props) {
   const [count, setCount] = useState(
     typeof initial.count === "number" ? initial.count : 4,
   );
-  const [maxRisk, setMaxRisk] = useState<"low" | "medium">(
-    initial.maxRisk === "low" ? "low" : "medium",
+  const [maxRisk, setMaxRisk] = useState<"low" | "medium" | "high">(
+    initial.maxRisk === "low"
+      ? "low"
+      : initial.maxRisk === "high"
+        ? "high"
+        : "medium",
   );
   const [presets, setPresets] = useState<CategoryMeta[] | null>(null);
   const [selectedCats, setSelectedCats] = useState<string[]>(
@@ -452,7 +456,7 @@ export function SexyTuneModal({ open, onClose }: Props) {
             <legend
               style={{ fontSize: 12, color: "var(--text-dim)", padding: "0 4px" }}
             >
-              risk level
+              risk level (노출 강도)
             </legend>
             <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
@@ -470,6 +474,32 @@ export function SexyTuneModal({ open, onClose }: Props) {
               />
               <span>기본 (비키니/크롭/시착도 포함)</span>
             </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="radio"
+                checked={maxRisk === "high"}
+                onChange={() => setMaxRisk("high")}
+              />
+              <span>강함 (하이레그/스트링타이/오픈백 — retry 더 자주 발동)</span>
+            </label>
+            {maxRisk === "high" && (
+              <div
+                style={{
+                  marginTop: 4,
+                  padding: 6,
+                  fontSize: 11,
+                  color: "var(--text-dim)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 4,
+                  lineHeight: 1.45,
+                }}
+              >
+                attempt 1 통과율은 떨어질 수 있지만 retry 시퀀스(justification →
+                wrapper → LLM rewrite)가 받쳐줍니다. 한 컷당 최대 ~25분.
+                실패 시 자동 다른 모듈로 채우는 옵션 켜 두시는 걸 권장합니다.
+              </div>
+            )}
           </fieldset>
 
           <fieldset style={fieldset}>

@@ -18,7 +18,22 @@ const TXT_PROMPT_MAX = 8000;
 // we ask for confirmation since the multiplier with `count` can be huge
 // (50 files × 4 = 200 generations).
 const TXT_BATCH_CONFIRM_THRESHOLD = 20;
-const TXT_BATCH_HARD_CAP = 100;
+const TXT_BATCH_HARD_CAP = 500;
+
+// Throttling — running 31 generates back-to-back killed the local OAuth
+// proxy (auto-restart loop, every following request → "fetch failed").
+// Process in small chunks with a cool-down between them; chunk size 5 was
+// the user's request, delay 8s comfortably exceeds the proxy's ~6s
+// auto-restart window. Numbers are intentionally not user-tunable; if a
+// chunk's first prompt still hits "fetch failed" we bail with a clear
+// message rather than extending the wait.
+const TXT_BATCH_CHUNK_SIZE = 5;
+const TXT_BATCH_CHUNK_DELAY_MS = 8000;
+// Stop the whole run after this many prompts produced zero new history
+// rows in a row — almost always a sign the upstream stopped responding
+// (proxy crash / network drop / OpenAI outage). Trying 30 more wastes
+// minutes for guaranteed failures.
+const TXT_BATCH_CONSECUTIVE_FAIL_LIMIT = 3;
 
 export function PromptComposer() {
   const prompt = useAppStore((s) => s.prompt);
@@ -89,9 +104,21 @@ export function PromptComposer() {
   };
 
   // Read .txt files (one file = one prompt) and fire generate sequentially
-  // for each. Right-panel options (count / quality / size / refs / format)
-  // are inherited from the store automatically; we only override prompt.
-  // Total images produced = N files × store.count.
+  // in small chunks. Right-panel options (count / quality / size / refs /
+  // format) come from the store; we only override prompt. Total images
+  // produced = N files × store.count when everything succeeds.
+  //
+  // Robustness vs. the naive "for await generate" loop:
+  //   1. Chunk into TXT_BATCH_CHUNK_SIZE; sleep TXT_BATCH_CHUNK_DELAY_MS
+  //      between chunks so the local OAuth proxy can settle. Without this
+  //      a 30+ batch killed the proxy and the next 25 calls all failed
+  //      with "fetch failed" while it was auto-restarting.
+  //   2. Track success via history.length diff before/after each call —
+  //      `generate` swallows its own errors (sets toast + inflight=error
+  //      but never throws), so try/catch alone wouldn't catch them.
+  //   3. Bail when usage-limited cool-down kicks in (would silently no-op
+  //      anyway), or when N consecutive prompts produce zero new history
+  //      rows (upstream is gone — keep going wastes minutes).
   const handleTxtBatch = async (files: File[]) => {
     if (txtBatchRunning) {
       showToast("이미 일괄 생성이 진행 중입니다.", true);
@@ -123,28 +150,74 @@ export function PromptComposer() {
     const total = prompts.length * count;
     if (prompts.length >= TXT_BATCH_CONFIRM_THRESHOLD) {
       const ok = window.confirm(
-        `프롬프트 ${prompts.length}개 × 개수 ${count}장 = 총 ${total}장 생성합니다.\n계속할까요?`,
+        `프롬프트 ${prompts.length}개 × 개수 ${count}장 = 총 ${total}장.\n` +
+          `${TXT_BATCH_CHUNK_SIZE}개씩 끊어서 ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식하며 진행됩니다. 계속?`,
       );
       if (!ok) return;
     }
 
     setTxtBatchRunning(true);
-    showToast(`텍스트 일괄 시작: ${prompts.length}개 × ${count}장 = ${total}장`);
+    showToast(
+      `텍스트 일괄 시작: ${prompts.length}개 × ${count}장 = 총 ${total}장 ` +
+        `(${TXT_BATCH_CHUNK_SIZE}개씩 처리)`,
+    );
+
+    let succeeded = 0; // number of *images* added to history (count-aware)
+    let failedPrompts = 0; // prompts that produced no new history rows
+    let consecutiveFails = 0;
+    let stopReason: string | null = null;
+
     try {
       for (let i = 0; i < prompts.length; i++) {
+        // Cool-down means /api/generate is rejected client-side already; no
+        // point burning more iterations on guaranteed silent skips.
+        const cool = useAppStore.getState().usageLimitedUntil;
+        if (cool && cool > Date.now()) {
+          stopReason = "OpenAI 사용 한도(429) 로 일괄 중단";
+          break;
+        }
+
+        // Chunk boundary (after every CHUNK_SIZE prompts, except the very
+        // first). Brief pause lets the OAuth proxy & inflight queue catch up.
+        if (i > 0 && i % TXT_BATCH_CHUNK_SIZE === 0) {
+          showToast(
+            `${i}/${prompts.length} 처리 — ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식 후 다음 묶음`,
+          );
+          await new Promise((r) => setTimeout(r, TXT_BATCH_CHUNK_DELAY_MS));
+        }
+
         const { name, text } = prompts[i];
         showToast(`${i + 1}/${prompts.length} ${name}`);
-        // Each generate honors store.count + size + quality + refs as-is.
-        // We deliberately do NOT pass overrideCount so the right-panel value
-        // (e.g. 4) multiplies as the user expects: 5 files × 4 = 20 images.
+        const before = useAppStore.getState().history.length;
+        // store.count multiplies as the user expects: 5 files × 4 = 20 images.
         await generate({ overridePrompt: text });
+        const after = useAppStore.getState().history.length;
+        const added = after - before;
+        if (added > 0) {
+          succeeded += added;
+          consecutiveFails = 0;
+        } else {
+          failedPrompts += 1;
+          consecutiveFails += 1;
+          if (consecutiveFails >= TXT_BATCH_CONSECUTIVE_FAIL_LIMIT) {
+            stopReason =
+              `연속 ${consecutiveFails}회 실패 — 서버 연결 또는 OAuth proxy 점검 필요`;
+            break;
+          }
+        }
       }
-      showToast(`텍스트 일괄 완료: ${prompts.length} × ${count} = ${total}장`);
     } catch (err) {
       console.error("[txt-batch]", err);
-      showToast(`일괄 생성 중 오류: ${(err as Error).message}`, true);
+      stopReason = `오류: ${(err as Error).message}`;
     } finally {
       setTxtBatchRunning(false);
+    }
+
+    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 ${failedPrompts}건`;
+    if (stopReason) {
+      showToast(`${summary} · ${stopReason}`, true);
+    } else {
+      showToast(summary);
     }
   };
 

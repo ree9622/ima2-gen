@@ -159,51 +159,73 @@ export function PromptComposer() {
     setTxtBatchRunning(true);
     showToast(
       `텍스트 일괄 시작: ${prompts.length}개 × ${count}장 = 총 ${total}장 ` +
-        `(${TXT_BATCH_CHUNK_SIZE}개씩 처리)`,
+        `(${TXT_BATCH_CHUNK_SIZE}개 동시, 묶음 사이 ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식)`,
     );
 
     let succeeded = 0; // number of *images* added to history (count-aware)
-    let failedPrompts = 0; // prompts that produced no new history rows
-    let consecutiveFails = 0;
+    let failedPrompts = 0; // prompts that produced 0 new history rows
+    let consecutiveFailedChunks = 0;
     let stopReason: string | null = null;
 
     try {
-      for (let i = 0; i < prompts.length; i++) {
-        // Cool-down means /api/generate is rejected client-side already; no
-        // point burning more iterations on guaranteed silent skips.
+      for (let chunkStart = 0; chunkStart < prompts.length; chunkStart += TXT_BATCH_CHUNK_SIZE) {
+        // Bail early if cool-down kicked in (429). Subsequent generate calls
+        // would silent-no-op anyway.
         const cool = useAppStore.getState().usageLimitedUntil;
         if (cool && cool > Date.now()) {
           stopReason = "OpenAI 사용 한도(429) 로 일괄 중단";
           break;
         }
 
-        // Chunk boundary (after every CHUNK_SIZE prompts, except the very
-        // first). Brief pause lets the OAuth proxy & inflight queue catch up.
-        if (i > 0 && i % TXT_BATCH_CHUNK_SIZE === 0) {
-          showToast(
-            `${i}/${prompts.length} 처리 — ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식 후 다음 묶음`,
-          );
-          await new Promise((r) => setTimeout(r, TXT_BATCH_CHUNK_DELAY_MS));
-        }
+        const chunk = prompts.slice(chunkStart, chunkStart + TXT_BATCH_CHUNK_SIZE);
+        const chunkNum = Math.floor(chunkStart / TXT_BATCH_CHUNK_SIZE) + 1;
+        const totalChunks = Math.ceil(prompts.length / TXT_BATCH_CHUNK_SIZE);
+        const namesPreview = chunk.map((p) => p.name).slice(0, 3).join(", ") +
+          (chunk.length > 3 ? ` 외 ${chunk.length - 3}` : "");
+        showToast(
+          `묶음 ${chunkNum}/${totalChunks} 동시 시작 (${chunk.length}개): ${namesPreview}`,
+        );
 
-        const { name, text } = prompts[i];
-        showToast(`${i + 1}/${prompts.length} ${name}`);
+        // Fire all prompts in this chunk in PARALLEL. Each generate already
+        // creates its own inflight rows + writes its own history entries on
+        // success, so they don't step on each other. We measure success at
+        // the chunk granularity by diffing history.length before/after the
+        // entire chunk completes.
         const before = useAppStore.getState().history.length;
-        // store.count multiplies as the user expects: 5 files × 4 = 20 images.
-        await generate({ overridePrompt: text });
+        await Promise.all(
+          chunk.map(({ text }) => generate({ overridePrompt: text })),
+        );
         const after = useAppStore.getState().history.length;
         const added = after - before;
-        if (added > 0) {
-          succeeded += added;
-          consecutiveFails = 0;
-        } else {
-          failedPrompts += 1;
-          consecutiveFails += 1;
-          if (consecutiveFails >= TXT_BATCH_CONSECUTIVE_FAIL_LIMIT) {
+        const expected = chunk.length * count;
+        succeeded += added;
+        // Approx fail count: prompts that produced 0 rows. Without per-prompt
+        // tracking we can't tell exactly which prompts failed; the chunk-
+        // level miss count is enough to drive the bail-out heuristic.
+        const chunkMissed = Math.max(0, expected - added);
+        if (chunkMissed > 0) {
+          // Each prompt contributes `count` to expected; estimate prompt
+          // failures by ceiling division so we never under-report.
+          failedPrompts += Math.ceil(chunkMissed / Math.max(1, count));
+        }
+
+        if (added === 0) {
+          consecutiveFailedChunks += 1;
+          if (consecutiveFailedChunks >= TXT_BATCH_CONSECUTIVE_FAIL_LIMIT) {
             stopReason =
-              `연속 ${consecutiveFails}회 실패 — 서버 연결 또는 OAuth proxy 점검 필요`;
+              `연속 ${consecutiveFailedChunks}묶음 전부 실패 — 서버 연결 또는 OAuth proxy 점검 필요`;
             break;
           }
+        } else {
+          consecutiveFailedChunks = 0;
+        }
+
+        const isLast = chunkStart + TXT_BATCH_CHUNK_SIZE >= prompts.length;
+        if (!isLast) {
+          showToast(
+            `묶음 ${chunkNum}/${totalChunks} 완료 (+${added}장) · ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식`,
+          );
+          await new Promise((r) => setTimeout(r, TXT_BATCH_CHUNK_DELAY_MS));
         }
       }
     } catch (err) {
@@ -213,7 +235,7 @@ export function PromptComposer() {
       setTxtBatchRunning(false);
     }
 
-    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 ${failedPrompts}건`;
+    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 약 ${failedPrompts}건`;
     if (stopReason) {
       showToast(`${summary} · ${stopReason}`, true);
     } else {

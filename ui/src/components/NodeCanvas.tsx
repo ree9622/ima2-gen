@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -18,6 +18,35 @@ import "@xyflow/react/dist/style.css";
 import { useAppStore, type GraphNode, type GraphEdge } from "../store/useAppStore";
 import { ImageNode } from "./ImageNode";
 import { NodeBatchBar } from "./NodeBatchBar";
+import {
+  applyEdgeVisibility,
+  applyVisibility,
+  getFilteredOutIds,
+  getHiddenNodeIds,
+  unionHidden,
+} from "../lib/nodeCollapse";
+import { NodeSearchBar } from "./NodeSearchBar";
+import { TrashModal } from "./TrashModal";
+
+function readThemeColors() {
+  if (typeof window === "undefined") {
+    return {
+      bg: "#0a0a0a",
+      surface: "#141414",
+      border: "#2a2a2a",
+      accent: "#4a9eff",
+    };
+  }
+  const cs = getComputedStyle(document.documentElement);
+  const get = (name: string, fallback: string) =>
+    cs.getPropertyValue(name).trim() || fallback;
+  return {
+    bg: get("--bg", "#0a0a0a"),
+    surface: get("--surface", "#141414"),
+    border: get("--border", "#2a2a2a"),
+    accent: get("--accent", "#4a9eff"),
+  };
+}
 
 function NodeCanvasInner() {
   const nodes = useAppStore((s) => s.graphNodes);
@@ -31,11 +60,50 @@ function NodeCanvasInner() {
   const nodeSelectionMode = useAppStore((s) => s.nodeSelectionMode);
   const selectNodeGraph = useAppStore((s) => s.selectNodeGraph);
   const sessionLoading = useAppStore((s) => s.sessionLoading);
+  const autoLayoutGraph = useAppStore((s) => s.autoLayoutGraph);
+  const nodeFilterText = useAppStore((s) => s.nodeFilterText);
+  const nodeFilterStatuses = useAppStore((s) => s.nodeFilterStatuses);
+  const trashCount = useAppStore((s) => s.trashedItems.length);
+  const setTrashOpen = useAppStore((s) => s.setTrashOpen);
 
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const nodeTypes = useMemo(() => ({ imageNode: ImageNode }), []);
+
+  // Apply collapse + filter state by hiding nodes/edges before they reach
+  // react-flow. Keeps the underlying store unchanged so save round-trips and
+  // selection logic still see the full graph.
+  const hiddenIds = useMemo(
+    () =>
+      unionHidden(
+        getHiddenNodeIds(nodes, edges),
+        getFilteredOutIds(nodes, nodeFilterText, nodeFilterStatuses),
+      ),
+    [nodes, edges, nodeFilterText, nodeFilterStatuses],
+  );
+  const visibleNodes = useMemo(
+    () => applyVisibility(nodes, hiddenIds),
+    [nodes, hiddenIds],
+  );
+  const visibleEdges = useMemo(
+    () => applyEdgeVisibility(edges, hiddenIds),
+    [edges, hiddenIds],
+  );
+
+  // Read theme tokens at runtime so the minimap / background follow the
+  // active light/dark CSS variables instead of hardcoded hex.
+  const [themeColors, setThemeColors] = useState(() => readThemeColors());
+  useEffect(() => {
+    const update = () => setThemeColors(readThemeColors());
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
@@ -84,18 +152,42 @@ function NodeCanvasInner() {
     [nodeSelectionMode, selectNodeGraph],
   );
 
+  const runAutoLayout = useCallback(
+    (direction: "LR" | "TB") => {
+      autoLayoutGraph(direction);
+      // Wait one frame so react-flow picks up the new positions before
+      // recomputing the viewport. Without this, fitView occasionally locks
+      // onto the pre-layout bbox.
+      requestAnimationFrame(() => {
+        fitView({ padding: 0.2, duration: 320 });
+      });
+    },
+    [autoLayoutGraph, fitView],
+  );
+
   return (
     <main className="node-canvas" ref={wrapperRef}>
       {sessionLoading && <div className="node-canvas__loading">세션 불러오는 중...</div>}
       {nodes.length === 0 ? (
-        <button type="button" className="node-canvas__plus" onClick={() => addRootNode()}>
-          + 첫 노드 추가
-        </button>
+        <div className="node-canvas__empty">
+          <button type="button" className="node-canvas__plus" onClick={() => addRootNode()}>
+            + 첫 노드 추가
+          </button>
+          {trashCount > 0 ? (
+            <button
+              type="button"
+              className="node-canvas__empty-trash"
+              onClick={() => setTrashOpen(true)}
+            >
+              🗑 휴지통 ({trashCount})에서 복구
+            </button>
+          ) : null}
+        </div>
       ) : (
         <>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={visibleNodes}
+            edges={visibleEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -112,15 +204,18 @@ function NodeCanvasInner() {
             proOptions={{ hideAttribution: true }}
           >
             <NodeBatchBar />
-            <Background gap={24} color="#2a2a2a" />
+            <Background gap={24} color={themeColors.border} />
             <Controls className="node-canvas__controls" />
             <MiniMap
               pannable
               zoomable
-              maskColor="rgba(10, 10, 10, 0.7)"
-              nodeColor="#4a9eff"
-              nodeStrokeColor="#1a1a1a"
-              style={{ background: "#141414", border: "1px solid #2a2a2a" }}
+              maskColor={`color-mix(in srgb, ${themeColors.bg} 70%, transparent)`}
+              nodeColor={themeColors.accent}
+              nodeStrokeColor={themeColors.border}
+              style={{
+                background: themeColors.surface,
+                border: `1px solid ${themeColors.border}`,
+              }}
             />
           </ReactFlow>
           <button
@@ -131,11 +226,43 @@ function NodeCanvasInner() {
           >
             +
           </button>
+          <NodeSearchBar />
+          <div className="node-canvas__layout-tools nodrag">
+            <button
+              type="button"
+              onClick={() => runAutoLayout("LR")}
+              title="자동 정렬 (가로 트리)"
+            >
+              ⇢ 가로 정렬
+            </button>
+            <button
+              type="button"
+              onClick={() => runAutoLayout("TB")}
+              title="자동 정렬 (세로 트리)"
+            >
+              ⇣ 세로 정렬
+            </button>
+            <button
+              type="button"
+              onClick={() => fitView({ padding: 0.2, duration: 320 })}
+              title="뷰 맞춤"
+            >
+              ⤢ 화면 맞춤
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrashOpen(true)}
+              title="휴지통 (삭제된 노드 복구)"
+            >
+              🗑 휴지통{trashCount > 0 ? ` (${trashCount})` : ""}
+            </button>
+          </div>
           <div className="node-canvas__hint">
             핸들을 빈 공간으로 드래그하면 새 브랜치가 생깁니다. Delete 또는 Backspace로 삭제할 수 있습니다.
           </div>
         </>
       )}
+      <TrashModal />
     </main>
   );
 }

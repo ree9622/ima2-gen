@@ -1,8 +1,14 @@
+import dagre from "dagre";
 import type { GraphEdge, GraphNode } from "../store/useAppStore";
 import { initialPos } from "./graph";
 
 const NODE_X_GAP = 360;
 const NODE_Y_GAP = 320;
+
+export type LayoutDirection = "LR" | "TB";
+
+const DEFAULT_NODE_WIDTH = 260;
+const DEFAULT_NODE_HEIGHT = 380;
 
 export function getChildNodes(
   parentId: string,
@@ -36,4 +42,48 @@ export function getNextChildPosition(
   if (children.length === 0) return { x, y: parent.position.y };
   const maxY = Math.max(...children.map((n) => n.position.y));
   return { x, y: maxY + NODE_Y_GAP };
+}
+
+// dagre-based hierarchical autolayout. Returns nodes with new positions —
+// edges are unchanged. Direction "LR" matches the existing left→right tree
+// vibe; "TB" stacks generations top→bottom for screenshot/landscape work.
+export function layoutGraph(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  direction: LayoutDirection = "LR",
+): GraphNode[] {
+  if (nodes.length === 0) return nodes;
+
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({
+    rankdir: direction,
+    nodesep: direction === "LR" ? 60 : 80,
+    ranksep: direction === "LR" ? 120 : 90,
+    marginx: 40,
+    marginy: 40,
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const n of nodes) {
+    const measured = (n as { width?: number; height?: number });
+    g.setNode(n.id, {
+      width: measured.width ?? DEFAULT_NODE_WIDTH,
+      height: measured.height ?? DEFAULT_NODE_HEIGHT,
+    });
+  }
+  for (const e of edges) g.setEdge(e.source, e.target);
+
+  dagre.layout(g);
+
+  return nodes.map((n) => {
+    const pos = g.node(n.id);
+    if (!pos) return n;
+    // dagre returns center coordinates; react-flow uses top-left.
+    const w = (n as { width?: number }).width ?? DEFAULT_NODE_WIDTH;
+    const h = (n as { height?: number }).height ?? DEFAULT_NODE_HEIGHT;
+    return {
+      ...n,
+      position: { x: pos.x - w / 2, y: pos.y - h / 2 },
+    };
+  });
 }

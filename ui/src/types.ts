@@ -110,6 +110,17 @@ export type GenerateRequest = {
   // Server stores it in the sidecar so history can show what the user typed
   // before the model expanded it.
   originalPrompt?: string;
+  // Sexy-tune metadata: which outfit-pool module produced this prompt. The
+  // server records it in the sidecar so we can compute per-module pass rates
+  // and feed those back into weighted sampling.
+  outfitModule?: OutfitModuleMeta;
+};
+
+export type OutfitModuleMeta = {
+  id: string;
+  label: string;
+  category: string;
+  risk: "low" | "medium" | "high";
 };
 
 export type AttemptLog = {

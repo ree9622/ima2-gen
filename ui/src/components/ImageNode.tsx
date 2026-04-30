@@ -1,6 +1,12 @@
 import { memo, useCallback, useRef, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { useAppStore, type ImageNodeData, type GraphNode } from "../store/useAppStore";
+import {
+  useAppStore,
+  type ImageNodeData,
+  type GraphNode,
+  COLOR_TAGS,
+} from "../store/useAppStore";
+import { getDirectChildCount } from "../lib/nodeCollapse";
 
 const MAX_NODE_REFS = 5;
 
@@ -34,6 +40,10 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
   const deleteNode = useAppStore((s) => s.deleteNode);
   const addNodeReferences = useAppStore((s) => s.addNodeReferences);
   const removeNodeReference = useAppStore((s) => s.removeNodeReference);
+  const toggleCollapsed = useAppStore((s) => s.toggleNodeCollapsed);
+  const childCount = useAppStore(
+    (s) => getDirectChildCount(id, s.graphEdges),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refs = d.referenceImages ?? [];
@@ -79,6 +89,17 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
 
   const onDelete = useCallback(() => deleteNode(id), [id, deleteNode]);
 
+  const onToggleCollapsed = useCallback(
+    () => toggleCollapsed(id),
+    [id, toggleCollapsed],
+  );
+
+  const fanOutFromNode = useAppStore((s) => s.fanOutFromNode);
+  const onFanOut = useCallback(
+    () => void fanOutFromNode(id, 3),
+    [id, fanOutFromNode],
+  );
+
   const isBusy = d.status === "pending" || d.status === "reconciling";
   const pendingDetail = d.pendingPhase ? ` · ${d.pendingPhase}` : "";
   const statusLabel = {
@@ -91,14 +112,19 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
     error: `오류: ${d.error ?? "알 수 없음"}`,
   }[d.status];
 
+  const tagHex = d.colorTag
+    ? COLOR_TAGS.find((t) => t.value === d.colorTag)?.hex
+    : undefined;
+
   const nodeStyle = {
     "--node-preview-w": `${getPreviewWidth(d.size)}px`,
     "--node-preview-h": `${NODE_PREVIEW_HEIGHT}px`,
+    ...(tagHex ? { "--node-tag-color": tagHex } : {}),
   } as CSSProperties;
 
   return (
     <div
-      className={`image-node image-node--${d.status}${selected ? " image-node--selected" : ""}`}
+      className={`image-node image-node--${d.status}${selected ? " image-node--selected" : ""}${d.colorTag ? " image-node--tagged" : ""}`}
       style={nodeStyle}
     >
       {d.parentServerNodeId ? (
@@ -170,7 +196,20 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
         disabled={isBusy}
       />
       <div className="image-node__footer">
-        <span className="image-node__status" title={statusLabel}>{statusLabel}</span>
+        <div className="image-node__status-row">
+          <span className="image-node__status" title={statusLabel}>{statusLabel}</span>
+          {childCount > 0 ? (
+            <button
+              type="button"
+              className="image-node__collapse nodrag"
+              onClick={onToggleCollapsed}
+              title={d.collapsed ? "자식 트리 펼치기" : "자식 트리 접기"}
+              aria-pressed={d.collapsed === true}
+            >
+              {d.collapsed ? "▸" : "▾"} {childCount}
+            </button>
+          ) : null}
+        </div>
         <div className="image-node__actions nodrag">
           <button
             type="button"
@@ -184,6 +223,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
             <>
               <button type="button" onClick={onBranch} title="자식 노드 추가">
                 자식 추가
+              </button>
+              <button
+                type="button"
+                onClick={onFanOut}
+                title="같은 프롬프트로 자식 3개 동시 생성"
+              >
+                변형 3
               </button>
               <button
                 type="button"

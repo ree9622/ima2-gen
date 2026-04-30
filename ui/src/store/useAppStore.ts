@@ -1178,8 +1178,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     get().showToast("현재 이미지를 참조에 추가했습니다.");
   },
-  activeGenerations: loadInFlight().filter((f) => (f.status ?? "running") === "running").length,
-  inFlight: loadInFlight(),
+  // Start empty on every page load. The persisted localStorage inflight is
+  // pulled in by `reconcileInflight()` (which runs once on mount) — that
+  // reconciliation can mark each entry as still-running, finished (via
+  // history rescue), or stuck/expired BEFORE we ever show a spinner. If we
+  // seeded directly from localStorage here, a refresh would briefly flash
+  // last session's "running" rows even though all of them long since
+  // finished. activeGenerations starts at 0 for the same reason.
+  activeGenerations: 0,
+  inFlight: [],
   dismissActivity: (id) => {
     const next = get().inFlight.filter((f) => f.id !== id);
     saveInFlight(next);
@@ -1419,7 +1426,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
       const now = Date.now();
-      const local = get().inFlight;
+      // First reconcile after page load: store starts with `inFlight: []`
+      // (see initial state above) so a refresh doesn't flash last session's
+      // stale spinners. Pull the persisted entries IN HERE so they get
+      // immediately reconciled against server/history below — anything not
+      // still running gets dropped or rescued before we ever set state.
+      const currentLocal = get().inFlight;
+      const local = currentLocal.length > 0 ? currentLocal : loadInFlight();
       let rescued = 0;
       let dropped = 0;
       let kept = 0;

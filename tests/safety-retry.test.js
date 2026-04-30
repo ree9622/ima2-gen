@@ -272,6 +272,29 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     assert.equal(getJustificationVariant("nude selfie"), null);
     assert.equal(getJustificationVariant("여고생 비키니"), null);
     assert.equal(getJustificationVariant("schoolgirl swimsuit"), null);
+    // explicit minor tokens still block
+    assert.equal(getJustificationVariant("어린이 수영복"), null);
+    assert.equal(getJustificationVariant("청소년 비키니"), null);
+    assert.equal(getJustificationVariant("10대 셀카"), null);
+  });
+
+  it("does not false-positive on common Korean device/UX words containing '아이'", () => {
+    // Regression: '아이' alone used to be in MINOR_RE which short-circuited
+    // every wrapper for prompts mentioning 아이폰 / 아이패드 / 아이디어 /
+    // 아이콘 / 아이템. Production-observed: a swimwear/fitting-room prompt
+    // with "아이폰으로 촬영한 아마추어 사진" had its entire 5-attempt cycle
+    // collapse to raw retries because of this single substring match.
+    const samples = [
+      "아이폰으로 촬영한 아마추어 사진, 비키니 피팅룸 셀카",
+      "아이패드 화면 비키니 카탈로그 셀카",
+      "참신한 아이디어, 비키니 룩북 셀카",
+      "앱 아이콘 디자인, 비키니 프로모 셀카",
+      "여름 아이템 비키니 셀카",
+    ];
+    for (const s of samples) {
+      const v = getJustificationVariant(s, { contextIndex: 0 });
+      assert.ok(v, `wrapper should attach for "${s}" — '아이' substring must not hard-block`);
+    }
   });
 
   it("returns null for prompts with no triggers (and no force)", () => {

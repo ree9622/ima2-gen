@@ -8,6 +8,9 @@ ui/dist/
 ui/tsconfig.app.tsbuildinfo
 ui/tsconfig.node.tsbuildinfo
 
+# Runtime SQLite (node-mode session store, e.g. data/ima2.db) and other runtime data
+data/
+
 # Ad-hoc E2E / debug artifacts (Playwright/Chrome DevTools screenshots etc.)
 _e2e_*.png
 _e2e_*.json

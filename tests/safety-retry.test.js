@@ -1,6 +1,7 @@
-import { describe, it } from "node:test";
+import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
+  _resetJustifyCycle,
   buildAttemptSequence,
   buildPromptAttempts,
   getCompliantPromptVariant,
@@ -11,6 +12,13 @@ import {
   JUSTIFICATION_CONTEXTS,
   parseSafetyViolation,
 } from "../lib/safetyRetry.js";
+
+// `buildPromptAttempts` advances a module-level cycle counter on every call
+// (so successive generate requests rotate through all 4 justification
+// contexts). Reset it before every test so order assertions stay deterministic.
+beforeEach(() => {
+  _resetJustifyCycle();
+});
 
 describe("safety retry prompt variants", () => {
   it("adds adult non-sexual framing for Korean swimwear selfies", () => {
@@ -307,6 +315,62 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     assert.match(seq[2], /Sports broadcast post-match/);
     // tone-down wrapper (englsh) comes after the 2 justifications
     assert.match(seq[3], /adults aged 25 or older/);
+  });
+
+  it("contexts must not name renderable production props", () => {
+    // Regression: the original Sports / Vlog contexts named "press microphone
+    // with a network logo cube" and "handheld camcorder footage", which the
+    // image model rendered literally on every retry that landed there. The
+    // fix strips those visual props from the anchors. Catalog/magazine frames
+    // remain because they describe abstract intent, not equipment.
+    const banned = [
+      /microphone/i,
+      /network logo/i,
+      /camcorder/i,
+      /press credential/i,
+    ];
+    for (const ctx of JUSTIFICATION_CONTEXTS) {
+      for (const re of banned) {
+        assert.doesNotMatch(
+          ctx,
+          re,
+          `context anchor must not name renderable prop "${re}": ${ctx}`,
+        );
+      }
+    }
+  });
+
+  it("rotates the starting context across successive buildPromptAttempts calls", () => {
+    // Without rotation the same (0, 1) pair was used on every call, so one
+    // prefix's visual bias dominated the output. Counter advances by one per
+    // call so a 4-call window covers all 4 contexts.
+    _resetJustifyCycle();
+    const startsOf = () => {
+      const seq = buildPromptAttempts("bikini selfie", { hasRefs: false });
+      // seq[0] = raw, seq[1] = first justification, seq[2] = second
+      return [seq[1], seq[2]].map(
+        (s) => JUSTIFICATION_CONTEXTS.findIndex((c) => s.startsWith(c)),
+      );
+    };
+    assert.deepEqual(startsOf(), [0, 1]);
+    assert.deepEqual(startsOf(), [1, 2]);
+    assert.deepEqual(startsOf(), [2, 3]);
+    assert.deepEqual(startsOf(), [3, 0]);
+    // wraps back around
+    assert.deepEqual(startsOf(), [0, 1]);
+  });
+
+  it("explicit contextStart overrides the cycle and does not advance it", () => {
+    _resetJustifyCycle();
+    const seq1 = buildPromptAttempts("bikini selfie", {
+      hasRefs: false,
+      contextStart: 2,
+    });
+    assert.match(seq1[1], /Resort lifestyle vlog/);
+    // The explicit override must NOT have advanced the module counter, so
+    // the next plain call still starts at 0.
+    const seq2 = buildPromptAttempts("bikini selfie", { hasRefs: false });
+    assert.match(seq2[1], /Editorial fashion magazine BTS/);
   });
 });
 

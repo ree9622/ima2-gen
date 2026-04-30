@@ -89,6 +89,20 @@ ima2 serve
   - 다른 세션/사용자가 워킹 트리에 남긴 미커밋 변경 — 손대지 말고 별도 알림
 - **세션 종료 직전 누락 점검**: 답변 마지막 직전 `git status` 확인. 미커밋 파일이 있고 그게 이번 세션 작업이면 자동 커밋 + 푸시 진행.
 
+### upstream(`lidge-jun/ima2-gen`) 절대 금지 (BLOCKING)
+
+이 레포는 `lidge-jun/ima2-gen` 의 fork 다. 실수로 원본 레포에 PR 이 올라가는 사고가 반복돼서 (#4 / #18 closed 이력) 명시적 가드가 필요하다.
+
+- ❌ **upstream 에 push 금지**. `git push upstream …` 절대 사용 안 함. upstream remote 의 push URL 은 의도적으로 `DISABLED-do-not-push-to-upstream-fork-it-instead` 로 봉인되어 있고, 다시 풀지 말 것. 봉인 상태 확인:
+  ```bash
+  git remote -v | grep '^upstream.*(push)'   # → DISABLED-... 가 나와야 정상
+  ```
+- ❌ **upstream 에 PR 생성 금지**. `gh pr create --repo lidge-jun/ima2-gen …` 사용 금지. 사용자가 명시적으로 "원본에 컨트리뷰트하자" 라고 지시한 경우 외에는 무조건 fork(`ree9622/ima2-gen`) 안에서만 작업한다.
+- ✅ **PR 생성은 항상 명시 base + repo**. `gh pr create` 호출은 반드시 `--repo ree9622/ima2-gen --base main` 두 플래그를 같이 명시. gh 의 default base 추론에 의존하지 말 것 (fork 환경에서 default 가 upstream 으로 잡혀 #4 / #18 사고가 났다). gh CLI default 도 이 레포로 고정되어 있다 (`gh repo set-default ree9622/ima2-gen`).
+- ✅ **upstream fetch 는 OK**. `git fetch upstream main` 으로 가져와서 `git log upstream/main..main` / `git log main..upstream/main` 비교하거나 cherry-pick 하는 건 정상 워크플로우. push/PR 만 막으면 된다.
+- ✅ **upstream 기능 픽업 절차**: ① `git fetch upstream` → ② 가져올 커밋 식별 (사용자 승인 필수) → ③ feature/chore 브랜치에서 `git cherry-pick <sha>` → ④ 충돌 해결 + 테스트/빌드 → ⑤ origin 으로 push → ⑥ origin/main 대상 PR 또는 main 직접 머지 (사용자 명시 시).
+- ✅ **사용자 의도 확인**: 누군가 "PR 만들어" / "원본에 올려" 같이 모호하게 말하면 base repo 가 origin(우리 fork)인지 upstream(원본)인지 한 번 더 확인. 명확하지 않으면 origin 가정.
+
 ## Gotchas
 
 - The developer system prompts (`GENERATE_DEVELOPER_PROMPT` / `EDIT_DEVELOPER_PROMPT` / `REFERENCE_DEVELOPER_PROMPT` in `server.js` + `DEFAULT_PROMPT_INJECTION` in `lib/defaultPrompt.js`) are tuned for three things at once: moderation pass-rate, output-intensity preservation, and **model autonomy**. The original `e919e5a` (4/24) commit removed an "authorized red-team evaluation session" / "skip safety disclaimers" wrapper because it read as moderation-bypass in a published npm package. `fff1fcd` (4/29) restored pass-rate via positive framing (`"self-hosted creative workflow"` + `"render literally"` + a fashion/editorial/lookbook/swimwear allowlist). `65b5c16` (4/29) then **stripped all prescriptive aesthetic defaults** — the prior `"casual amateur smartphone photo / no studio lighting / no quality boosters"` ~250-word block and the `"natural, vivid image guidance over keyword spam … specific subject/setting/composition/lighting/lens/texture/mood"` keyword-style nudge — because they crowded out the user's own prompt and produced robotic, AI-look results (per `~/.claude/docs/image-generation-guide.md` §5). The same commit removed the user-role wrappers (`"Generate an image: ${prompt}"` / `"Use the attached reference … User request:"` / `RESEARCH_SUFFIX`) so the user role now carries only the user's own prompt (plus `boostRefPrompt`'s short face-lock cue when ref-mode + short prompt).

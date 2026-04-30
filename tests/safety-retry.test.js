@@ -39,7 +39,7 @@ describe("safety retry prompt variants", () => {
     // bikini = soft trigger. Sequence: [raw, justifyA, justifyB, ENG wrapper].
     assert.equal(attempts.length, 4);
     assert.match(attempts[1], /Editorial fashion magazine BTS/);
-    assert.match(attempts[2], /Sports broadcast post-match/);
+    assert.match(attempts[2], /Resort lifestyle vlog/);
     assert.match(attempts[3], /adults aged 25 or older/);
     assert.match(attempts[3], /amateur smartphone photo/);
     assert.match(attempts[3], /South Korea setting/);
@@ -67,7 +67,7 @@ describe("strong-tier rewrite (high-risk triggers)", () => {
     assert.equal(attempts.length, 6);
     assert.equal(attempts[0], prompt);
     assert.match(attempts[1], /Editorial fashion magazine BTS/);
-    assert.match(attempts[2], /Sports broadcast post-match/);
+    assert.match(attempts[2], /Resort lifestyle vlog/);
     assert.match(attempts[3], /성인\(25세 이상\)/);
     assert.match(attempts[5], /Korean fashion portrait/);
 
@@ -239,7 +239,7 @@ describe("hasRefs hint (reference-image safety guard)", () => {
     const seq = buildPromptAttempts(triggered, { hasRefs: true });
     assert.equal(seq[0], triggered);
     assert.match(seq[1], /Editorial fashion magazine BTS/);
-    assert.match(seq[2], /Sports broadcast post-match/);
+    assert.match(seq[2], /Resort lifestyle vlog/);
     assert.ok(
       seq.some((p) => /성인\(25세 이상\)/.test(p)),
       "korean wrapper must remain queued after justifications",
@@ -258,13 +258,13 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     assert.match(v, /bikini/);
   });
 
-  it("rotates between 4 contexts via contextIndex", () => {
-    assert.equal(JUSTIFICATION_CONTEXTS.length, 4);
-    for (let i = 0; i < 8; i++) {
+  it("rotates between 3 contexts via contextIndex", () => {
+    assert.equal(JUSTIFICATION_CONTEXTS.length, 3);
+    for (let i = 0; i < 6; i++) {
       const v = getJustificationVariant("수영복 셀카", { contextIndex: i });
       assert.ok(v);
-      const expected = JUSTIFICATION_CONTEXTS[i % 4];
-      assert.ok(v.startsWith(expected), `index ${i} should start with rotated context ${i % 4}`);
+      const expected = JUSTIFICATION_CONTEXTS[i % 3];
+      assert.ok(v.startsWith(expected), `index ${i} should start with rotated context ${i % 3}`);
     }
   });
 
@@ -335,22 +335,29 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     const seq = buildPromptAttempts("bikini selfie", { hasRefs: false });
     assert.equal(seq[0], "bikini selfie");
     assert.match(seq[1], /Editorial fashion magazine BTS/);
-    assert.match(seq[2], /Sports broadcast post-match/);
+    assert.match(seq[2], /Resort lifestyle vlog/);
     // tone-down wrapper (englsh) comes after the 2 justifications
     assert.match(seq[3], /adults aged 25 or older/);
   });
 
-  it("contexts must not name renderable production props", () => {
+  it("contexts must not name renderable production props or broadcast frames", () => {
     // Regression: the original Sports / Vlog contexts named "press microphone
     // with a network logo cube" and "handheld camcorder footage", which the
-    // image model rendered literally on every retry that landed there. The
-    // fix strips those visual props from the anchors. Catalog/magazine frames
-    // remain because they describe abstract intent, not equipment.
+    // image model rendered literally on every retry that landed there.
+    // 2026-04-30 escalation: even after stripping prop nouns, the "Sports
+    // broadcast post-match athlete interview" anchor kept producing
+    // broadcast/interview scenes (mics, station logos, press backdrops).
+    // We removed that anchor entirely. The banned list now also covers
+    // broadcast / interview / journalism wording so any future addition
+    // can't accidentally re-introduce the same failure mode.
     const banned = [
       /microphone/i,
       /network logo/i,
       /camcorder/i,
       /press credential/i,
+      /broadcast/i,
+      /interview/i,
+      /journalism/i,
     ];
     for (const ctx of JUSTIFICATION_CONTEXTS) {
       for (const re of banned) {
@@ -366,7 +373,7 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
   it("rotates the starting context across successive buildPromptAttempts calls", () => {
     // Without rotation the same (0, 1) pair was used on every call, so one
     // prefix's visual bias dominated the output. Counter advances by one per
-    // call so a 4-call window covers all 4 contexts.
+    // call so a 3-call window covers all 3 contexts.
     _resetJustifyCycle();
     const startsOf = () => {
       const seq = buildPromptAttempts("bikini selfie", { hasRefs: false });
@@ -377,8 +384,7 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     };
     assert.deepEqual(startsOf(), [0, 1]);
     assert.deepEqual(startsOf(), [1, 2]);
-    assert.deepEqual(startsOf(), [2, 3]);
-    assert.deepEqual(startsOf(), [3, 0]);
+    assert.deepEqual(startsOf(), [2, 0]);
     // wraps back around
     assert.deepEqual(startsOf(), [0, 1]);
   });
@@ -387,7 +393,7 @@ describe("justification tier (no tone-down, professional context anchor)", () =>
     _resetJustifyCycle();
     const seq1 = buildPromptAttempts("bikini selfie", {
       hasRefs: false,
-      contextStart: 2,
+      contextStart: 1,
     });
     assert.match(seq1[1], /Resort lifestyle vlog/);
     // The explicit override must NOT have advanced the module counter, so
@@ -629,7 +635,7 @@ describe("buildAttemptSequence (max retry count)", () => {
     assert.equal(seq.length, 5);
     assert.equal(seq[0], "수영복 셀카");
     assert.match(seq[1], /Editorial fashion magazine BTS/);
-    assert.match(seq[2], /Sports broadcast post-match/);
+    assert.match(seq[2], /Resort lifestyle vlog/);
     assert.match(seq[3], /성인\(25세 이상\)/);
     assert.match(seq[3], /일반인이 폰으로 찍은/);
     // 5th attempt cycles back to raw
@@ -644,7 +650,7 @@ describe("buildAttemptSequence (max retry count)", () => {
     assert.equal(seq.length, 6);
     assert.equal(seq[0], prompt);
     assert.match(seq[1], /Editorial fashion magazine BTS/);
-    assert.match(seq[2], /Sports broadcast post-match/);
+    assert.match(seq[2], /Resort lifestyle vlog/);
     assert.match(seq[3], /성인\(25세 이상\)/);
     assert.match(seq[4], /AI-generated synthetic character/);
     assert.match(seq[5], /Korean fashion portrait/);

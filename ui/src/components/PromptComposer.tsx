@@ -9,10 +9,23 @@ import { enhancePrompt as apiEnhance } from "../lib/api";
 
 const MAX_REFS = 5;
 
+// Per-prompt cap when importing .txt files. Each .txt is one prompt; very
+// long files are typically a paste mistake (e.g. a whole document) rather
+// than an intentional 10k-char prompt, so we clamp instead of bailing.
+const TXT_PROMPT_MAX = 8000;
+
+// Hard ceiling on how many .txt files we'll process in one batch. Above this
+// we ask for confirmation since the multiplier with `count` can be huge
+// (50 files × 4 = 200 generations).
+const TXT_BATCH_CONFIRM_THRESHOLD = 20;
+const TXT_BATCH_HARD_CAP = 100;
+
 export function PromptComposer() {
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
   const generate = useAppStore((s) => s.generate);
+  const count = useAppStore((s) => s.count);
+  const showToast = useAppStore((s) => s.showToast);
   const originalPrompt = useAppStore((s) => s.originalPrompt);
   const applyEnhancedPrompt = useAppStore((s) => s.applyEnhancedPrompt);
   const revertToOriginalPrompt = useAppStore((s) => s.revertToOriginalPrompt);
@@ -25,11 +38,13 @@ export function PromptComposer() {
   const currentImage = useAppStore((s) => s.currentImage);
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const txtBatchInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [enhanceOpen, setEnhanceOpen] = useState(false);
   const [sexyTuneOpen, setSexyTuneOpen] = useState(false);
   const [bundlesOpen, setBundlesOpen] = useState(false);
   const [promptBundlesOpen, setPromptBundlesOpen] = useState(false);
+  const [txtBatchRunning, setTxtBatchRunning] = useState(false);
 
   const canAddMore = refs.length < MAX_REFS;
 
@@ -71,6 +86,66 @@ export function PromptComposer() {
     e.preventDefault();
     const room = MAX_REFS - refs.length;
     void addReferences(files.slice(0, room));
+  };
+
+  // Read .txt files (one file = one prompt) and fire generate sequentially
+  // for each. Right-panel options (count / quality / size / refs / format)
+  // are inherited from the store automatically; we only override prompt.
+  // Total images produced = N files × store.count.
+  const handleTxtBatch = async (files: File[]) => {
+    if (txtBatchRunning) {
+      showToast("이미 일괄 생성이 진행 중입니다.", true);
+      return;
+    }
+    if (files.length === 0) return;
+    if (files.length > TXT_BATCH_HARD_CAP) {
+      showToast(`한 번에 ${TXT_BATCH_HARD_CAP}개까지만 처리할 수 있습니다.`, true);
+      return;
+    }
+
+    // Read each file → strip BOM → trim → clamp. Drop empties (spaces only,
+    // wrong encoding, etc.) so we don't fire generate("") for them.
+    const prompts: { name: string; text: string }[] = [];
+    for (const f of files) {
+      try {
+        const raw = await f.text();
+        const text = raw.replace(/^﻿/, "").trim().slice(0, TXT_PROMPT_MAX);
+        if (text) prompts.push({ name: f.name, text });
+      } catch (err) {
+        console.warn("[txt-batch] failed to read", f.name, err);
+      }
+    }
+    if (prompts.length === 0) {
+      showToast("불러온 .txt 에 사용할 텍스트가 없습니다.", true);
+      return;
+    }
+
+    const total = prompts.length * count;
+    if (prompts.length >= TXT_BATCH_CONFIRM_THRESHOLD) {
+      const ok = window.confirm(
+        `프롬프트 ${prompts.length}개 × 개수 ${count}장 = 총 ${total}장 생성합니다.\n계속할까요?`,
+      );
+      if (!ok) return;
+    }
+
+    setTxtBatchRunning(true);
+    showToast(`텍스트 일괄 시작: ${prompts.length}개 × ${count}장 = ${total}장`);
+    try {
+      for (let i = 0; i < prompts.length; i++) {
+        const { name, text } = prompts[i];
+        showToast(`${i + 1}/${prompts.length} ${name}`);
+        // Each generate honors store.count + size + quality + refs as-is.
+        // We deliberately do NOT pass overrideCount so the right-panel value
+        // (e.g. 4) multiplies as the user expects: 5 files × 4 = 20 images.
+        await generate({ overridePrompt: text });
+      }
+      showToast(`텍스트 일괄 완료: ${prompts.length} × ${count} = ${total}장`);
+    } catch (err) {
+      console.error("[txt-batch]", err);
+      showToast(`일괄 생성 중 오류: ${(err as Error).message}`, true);
+    } finally {
+      setTxtBatchRunning(false);
+    }
   };
 
   useEffect(() => {
@@ -213,6 +288,16 @@ export function PromptComposer() {
         <button
           type="button"
           className="composer__tool"
+          onClick={() => txtBatchInput.current?.click()}
+          disabled={txtBatchRunning}
+          title={`여러 .txt 파일 불러와 일괄 생성 (각 파일 × 개수 ${count}장)`}
+        >
+          <span aria-hidden="true">📄</span>
+          <span>{txtBatchRunning ? "일괄 진행…" : "텍스트 일괄"}</span>
+        </button>
+        <button
+          type="button"
+          className="composer__tool"
           onClick={() => setSexyTuneOpen(true)}
           disabled={refs.length === 0}
           title="참고 이미지로 N장 자동 생성 (각 다른 의상)"
@@ -265,6 +350,19 @@ export function PromptComposer() {
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           if (files.length > 0) void addReferences(files);
+          e.target.value = "";
+        }}
+      />
+
+      <input
+        ref={txtBatchInput}
+        type="file"
+        accept=".txt,text/plain"
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length > 0) void handleTxtBatch(files);
           e.target.value = "";
         }}
       />

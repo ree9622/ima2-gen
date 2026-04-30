@@ -39,6 +39,19 @@ import {
   ValidationError as PromptBundleValidationError,
 } from "./lib/promptBundles.js";
 import {
+  login as authLogin,
+  logout as authLogout,
+  AuthError,
+  purgeExpiredSessions,
+} from "./lib/userAuth.js";
+import {
+  cookieParserMiddleware,
+  authMiddleware,
+  buildSessionCookie,
+  buildClearSessionCookie,
+  isAuthEnabled,
+} from "./lib/authMiddleware.js";
+import {
   OUTFIT_PRESETS,
   OUTFIT_CATEGORIES,
   sampleOutfitPrompts,
@@ -99,14 +112,24 @@ if (HAS_API_KEY) {
 
 app.use(express.json({ limit: "50mb" }));
 
-// Per-account ACL. nginx forwards Basic Auth username via X-Auth-User.
-// When the header is absent (npm package single-user mode / dev), ACL is bypassed.
+// Per-account ACL. Two layers:
+//   1) Legacy: nginx Basic Auth forwards username via X-Auth-User. Used
+//      while we still run nginx auth in front (npm package single-user
+//      mode / pre-self-login deploys).
+//   2) Self-hosted login (IMA2_AUTH=enabled): cookieParserMiddleware +
+//      authMiddleware below override req.authUser with the session user
+//      and gate every protected /api/* path with 401.
+// The self-hosted layer wins when both are present (session beats
+// X-Auth-User), so the migration is a no-op for already-authenticated
+// requests and only adds a 401 for unauthenticated ones once enabled.
 const LEGACY_OWNER = process.env.IMA2_LEGACY_OWNER || "ree9622";
 app.use((req, _res, next) => {
   const raw = req.get("X-Auth-User") || "";
   req.authUser = raw.trim() || null;
   next();
 });
+app.use(cookieParserMiddleware);
+app.use(authMiddleware);
 function ownerOf(meta) {
   return (meta && typeof meta.owner === "string" && meta.owner) || LEGACY_OWNER;
 }
@@ -1081,6 +1104,50 @@ app.patch("/api/prompt-bundles/:id", express.json({ limit: "1mb" }), async (req,
     }
     res.status(500).json({ error: { code: "BUNDLE_PATCH_FAIL", message: err.message } });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Self-hosted login. Endpoints are unauthenticated by design — they sit on
+// the public allow-list in authMiddleware so the LoginPage can call them
+// before there's a session.
+// ─────────────────────────────────────────────────────────────────────────
+
+// POST /api/auth/login { username, password } → { user } + Set-Cookie
+app.post("/api/auth/login", express.json({ limit: "16kb" }), (req, res) => {
+  try {
+    const username = String(req.body?.username || "").trim();
+    const password = String(req.body?.password || "");
+    const result = authLogin(username, password);
+    res.append("Set-Cookie", buildSessionCookie(result.sessionId, result.expiresAt));
+    res.json({ user: result.user, expiresAt: result.expiresAt });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    }
+    console.error("[auth] login failed:", err);
+    res.status(500).json({ error: { code: "LOGIN_FAILED", message: err.message } });
+  }
+});
+
+// POST /api/auth/logout — drops the row and clears the cookie.
+app.post("/api/auth/logout", (req, res) => {
+  const sid = req.cookies?.ima2_session;
+  if (sid) authLogout(sid);
+  res.append("Set-Cookie", buildClearSessionCookie());
+  res.json({ ok: true });
+});
+
+// GET /api/auth/me — { user } if logged in, { user: null } otherwise.
+// Public so the LoginPage can probe whether to skip itself on mount.
+app.get("/api/auth/me", (req, res) => {
+  if (req.session?.user) {
+    return res.json({
+      user: req.session.user,
+      expiresAt: req.session.expiresAt,
+      authEnabled: isAuthEnabled(),
+    });
+  }
+  res.json({ user: null, authEnabled: isAuthEnabled() });
 });
 
 // -- Provider info --

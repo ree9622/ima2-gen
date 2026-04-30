@@ -200,7 +200,7 @@ export function PromptComposer() {
           chunk.map((c) => c.name).join(", "),
         );
         showToast(
-          `${chunkPrefix}전체 ${chunk.length}개 발사 — 서버에서 1개씩 직렬 처리`,
+          `${chunkPrefix}전체 ${chunk.length}개 발사 — 서버에서 1초 간격으로 OpenAI 호출`,
         );
 
         // Fire all prompts in this chunk in PARALLEL, but track each one

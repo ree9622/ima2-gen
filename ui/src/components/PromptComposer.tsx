@@ -180,36 +180,46 @@ export function PromptComposer() {
         const chunk = prompts.slice(chunkStart, chunkStart + TXT_BATCH_CHUNK_SIZE);
         const chunkNum = Math.floor(chunkStart / TXT_BATCH_CHUNK_SIZE) + 1;
         const totalChunks = Math.ceil(prompts.length / TXT_BATCH_CHUNK_SIZE);
-        const namesPreview = chunk.map((p) => p.name).slice(0, 3).join(", ") +
-          (chunk.length > 3 ? ` 외 ${chunk.length - 3}` : "");
         showToast(
-          `묶음 ${chunkNum}/${totalChunks} 동시 시작 (${chunk.length}개): ${namesPreview}`,
+          `묶음 ${chunkNum}/${totalChunks} 동시 발사 (${chunk.length}개) — 각 generate 끝나는 대로 표시`,
         );
 
-        // Fire all prompts in this chunk in PARALLEL. Each generate already
-        // creates its own inflight rows + writes its own history entries on
-        // success, so they don't step on each other. We measure success at
-        // the chunk granularity by diffing history.length before/after the
-        // entire chunk completes.
-        const before = useAppStore.getState().history.length;
-        await Promise.all(
-          chunk.map(({ text }) => generate({ overridePrompt: text })),
-        );
-        const after = useAppStore.getState().history.length;
-        const added = after - before;
+        // Fire all prompts in this chunk in PARALLEL, but track each one
+        // individually so the user sees progress as the FAST ones finish
+        // instead of waiting for the slowest. (Earlier behavior: a chunk-
+        // level diff after Promise.all completed → if one prompt did 7
+        // safety retries the user thought everything was stuck for 5
+        // minutes when in fact 4 of the 5 had already produced images.)
+        const chunkStartedAt = Date.now();
+        let chunkAdded = 0;
+        let chunkDoneCount = 0;
+        const tasks = chunk.map(async ({ name, text }) => {
+          const promptStartedAt = Date.now();
+          const before = useAppStore.getState().history.length;
+          await generate({ overridePrompt: text });
+          const after = useAppStore.getState().history.length;
+          const added = after - before;
+          chunkDoneCount += 1;
+          chunkAdded += added;
+          const seconds = Math.max(1, Math.round((Date.now() - promptStartedAt) / 1000));
+          const mark = added > 0 ? `✓ +${added}장` : "✗ 실패";
+          showToast(
+            `묶음 ${chunkNum}/${totalChunks} · ${chunkDoneCount}/${chunk.length} ${name} ${mark} (${seconds}s)`,
+            added === 0,
+          );
+          return added;
+        });
+        await Promise.all(tasks);
+
+        const chunkSeconds = Math.max(1, Math.round((Date.now() - chunkStartedAt) / 1000));
         const expected = chunk.length * count;
-        succeeded += added;
-        // Approx fail count: prompts that produced 0 rows. Without per-prompt
-        // tracking we can't tell exactly which prompts failed; the chunk-
-        // level miss count is enough to drive the bail-out heuristic.
-        const chunkMissed = Math.max(0, expected - added);
+        succeeded += chunkAdded;
+        const chunkMissed = Math.max(0, expected - chunkAdded);
         if (chunkMissed > 0) {
-          // Each prompt contributes `count` to expected; estimate prompt
-          // failures by ceiling division so we never under-report.
           failedPrompts += Math.ceil(chunkMissed / Math.max(1, count));
         }
 
-        if (added === 0) {
+        if (chunkAdded === 0) {
           consecutiveFailedChunks += 1;
           if (consecutiveFailedChunks >= TXT_BATCH_CONSECUTIVE_FAIL_LIMIT) {
             stopReason =
@@ -223,7 +233,7 @@ export function PromptComposer() {
         const isLast = chunkStart + TXT_BATCH_CHUNK_SIZE >= prompts.length;
         if (!isLast) {
           showToast(
-            `묶음 ${chunkNum}/${totalChunks} 완료 (+${added}장) · ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식`,
+            `묶음 ${chunkNum}/${totalChunks} 완료 (+${chunkAdded}장 / ${chunkSeconds}s) · ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식`,
           );
           await new Promise((r) => setTimeout(r, TXT_BATCH_CHUNK_DELAY_MS));
         }

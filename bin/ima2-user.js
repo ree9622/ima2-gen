@@ -10,7 +10,6 @@
 // run this on the same box / as the same user that runs `ima2 serve` so
 // the file path resolves to the same DB.
 
-import { createInterface } from "node:readline";
 import process from "node:process";
 import {
   createUser,
@@ -19,6 +18,8 @@ import {
   setUserPassword,
   AuthError,
 } from "../lib/userAuth.js";
+
+const ETX = String.fromCharCode(3); // Ctrl+C
 
 function usage() {
   console.error(
@@ -31,23 +32,17 @@ function usage() {
   process.exit(2);
 }
 
-// Reads a line from stdin without echoing characters (for password input).
-// Falls back to a visible prompt if stdin is not a TTY (CI / piped input).
-function readPasswordHidden(prompt) {
+// TTY-only hidden password prompt. Echoes each keystroke as nothing,
+// hands back the buffered string on newline. The non-TTY branch lives in
+// promptNewPassword because the readline approach is fragile when stdin
+// closes after the first line (we'd have lost the second prompt).
+function readPasswordHiddenTTY(prompt) {
   return new Promise((resolve, reject) => {
-    if (!process.stdin.isTTY) {
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      rl.question(prompt, (answer) => {
-        rl.close();
-        resolve(answer);
-      });
-      return;
-    }
     process.stdout.write(prompt);
+    let buf = "";
     const onData = (chunk) => {
       const s = chunk.toString("utf8");
-      if (s.includes("")) {
-        // Ctrl+C
+      if (s.includes(ETX)) {
         process.stdout.write("\n");
         process.stdin.setRawMode(false);
         process.stdin.removeListener("data", onData);
@@ -65,16 +60,42 @@ function readPasswordHidden(prompt) {
       }
       buf += s;
     };
-    let buf = "";
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.on("data", onData);
   });
 }
 
+async function readAllStdin() {
+  return new Promise((resolve, reject) => {
+    let buf = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => { buf += chunk; });
+    process.stdin.on("end", () => resolve(buf));
+    process.stdin.on("error", reject);
+  });
+}
+
 async function promptNewPassword() {
-  const a = await readPasswordHidden("새 비밀번호: ");
-  const b = await readPasswordHidden("비밀번호 확인: ");
+  if (!process.stdin.isTTY) {
+    // Non-TTY (CI / `printf "..." | ima2-user add ko`): read all of stdin
+    // once, take the first non-empty line as the password. If two lines
+    // were piped (legacy two-prompt flow) we verify they match; one line
+    // alone is also accepted.
+    const all = await readAllStdin();
+    const lines = all.split(/\r?\n/).filter((s) => s.length > 0);
+    if (lines.length === 0) {
+      console.error("stdin 에서 비밀번호를 읽지 못했습니다.");
+      process.exit(1);
+    }
+    if (lines.length >= 2 && lines[0] !== lines[1]) {
+      console.error("두 비밀번호가 다릅니다.");
+      process.exit(1);
+    }
+    return lines[0];
+  }
+  const a = await readPasswordHiddenTTY("새 비밀번호: ");
+  const b = await readPasswordHiddenTTY("비밀번호 확인: ");
   if (a !== b) {
     console.error("두 비밀번호가 다릅니다.");
     process.exit(1);

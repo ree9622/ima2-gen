@@ -529,6 +529,15 @@ export type PromptBundle = {
   updatedAt?: number;
 };
 
+// Logged-in user (null when unauthenticated, undefined while we're still
+// resolving the initial /api/auth/me probe — App uses this to render a
+// brief "loading" state instead of flashing the LoginPage).
+export type AuthUser = { id: number; username: string };
+export type AuthState =
+  | { status: "loading"; user: null; authEnabled: boolean }
+  | { status: "anonymous"; user: null; authEnabled: boolean }
+  | { status: "authed"; user: AuthUser; authEnabled: boolean };
+
 type AppState = {
   provider: Provider;
   quality: Quality;
@@ -557,6 +566,15 @@ type AppState = {
   applyRefBundle: (id: string, opts?: { append?: boolean }) => Promise<void>;
   deleteRefBundle: (id: string) => Promise<void>;
   renameRefBundle: (id: string, name: string) => Promise<void>;
+  // Auth — self-hosted login. Drives App's gate between LoginPage and the
+  // main UI. `auth.status === "loading"` until the first /api/auth/me
+  // probe resolves on mount.
+  auth: AuthState;
+  loginError: string | null;
+  loginPending: boolean;
+  checkAuth: () => Promise<void>;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   // Prompt bundles — same CRUD shape as ref bundles, text-only payload.
   promptBundles: PromptBundle[];
   promptBundlesLoading: boolean;
@@ -1164,6 +1182,77 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     } catch (e) {
       get().showToast(`이름 변경 실패: ${(e as Error).message}`, true);
     }
+  },
+
+  // ─── Auth ────────────────────────────────────────────────────────────────
+  auth: { status: "loading", user: null, authEnabled: false },
+  loginError: null,
+  loginPending: false,
+  checkAuth: async () => {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+      // Even if the network is up, only 200 means we got a useful answer.
+      // Any other code → treat as anonymous so the LoginPage shows up.
+      if (!res.ok) {
+        set({ auth: { status: "anonymous", user: null, authEnabled: true } });
+        return;
+      }
+      const j = (await res.json()) as { user: AuthUser | null; authEnabled: boolean };
+      if (j.user) {
+        set({ auth: { status: "authed", user: j.user, authEnabled: !!j.authEnabled } });
+      } else {
+        set({ auth: { status: "anonymous", user: null, authEnabled: !!j.authEnabled } });
+      }
+    } catch {
+      // Network error during boot — assume anonymous; the user will see the
+      // login screen with a "서버에 연결할 수 없습니다" banner once they
+      // try to log in.
+      set({ auth: { status: "anonymous", user: null, authEnabled: true } });
+    }
+  },
+  login: async (username, password) => {
+    set({ loginPending: true, loginError: null });
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        const msg = j?.error?.message || `HTTP ${res.status}`;
+        set({ loginError: msg, loginPending: false });
+        return false;
+      }
+      const j = (await res.json()) as { user: AuthUser };
+      set({
+        auth: { status: "authed", user: j.user, authEnabled: true },
+        loginError: null,
+        loginPending: false,
+      });
+      return true;
+    } catch (e) {
+      set({
+        loginError: `로그인 요청 실패: ${(e as Error).message}`,
+        loginPending: false,
+      });
+      return false;
+    }
+  },
+  logout: async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+    } catch (e) {
+      console.warn("[auth] logout request failed:", e);
+    }
+    set({
+      auth: { status: "anonymous", user: null, authEnabled: true },
+      loginError: null,
+    });
   },
 
   // ─── Prompt bundles ─────────────────────────────────────────────────────

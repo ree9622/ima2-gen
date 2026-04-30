@@ -8,6 +8,8 @@ import { GalleryModal } from "./components/GalleryModal";
 import { GenerationLogModal } from "./components/GenerationLogModal";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { Lightbox } from "./components/Lightbox";
+import { LoginPage } from "./components/LoginPage";
+import { UserBadge } from "./components/UserBadge";
 import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 import { ENABLE_NODE_MODE } from "./lib/devMode";
 import { useLightboxUrlSync } from "./lib/urlSync";
@@ -21,12 +23,27 @@ export default function App() {
   const uiModeRaw = useAppStore((s) => s.uiMode);
   const uiMode = ENABLE_NODE_MODE ? uiModeRaw : "classic";
 
+  // Auth gate. checkAuth always runs; the rest of the boot sequence waits
+  // until we know the user is authed (or auth is server-side disabled).
+  const auth = useAppStore((s) => s.auth);
+  const checkAuth = useAppStore((s) => s.checkAuth);
+
   useEffect(() => {
+    void checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    // Skip the heavy data hydration while we're still un-authed — those
+    // requests would 401 in waves and clutter the toast/log area. Once
+    // the user is authed (or the server has auth disabled entirely) we
+    // run them once.
+    const ready = auth.status === "authed" || (auth.status === "anonymous" && !auth.authEnabled);
+    if (!ready) return;
     hydrateHistory();
     loadSessions();
     reconcileInflight();
     startInFlightPolling();
-  }, [hydrateHistory, loadSessions, reconcileInflight, startInFlightPolling]);
+  }, [auth.status, auth.authEnabled, hydrateHistory, loadSessions, reconcileInflight, startInFlightPolling]);
 
   useLightboxUrlSync();
 
@@ -55,6 +72,38 @@ export default function App() {
     };
   }, []);
 
+  // While checkAuth is in flight, render a tiny placeholder instead of
+  // flashing the LoginPage and then immediately replacing it.
+  if (auth.status === "loading") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-dim)",
+          fontSize: 13,
+          background: "var(--bg)",
+        }}
+      >
+        세션 확인 중…
+      </div>
+    );
+  }
+
+  // Auth required and we don't have one — show the LoginPage. Toast layer
+  // stays mounted so login failures can still surface a brief notice if
+  // we ever route them through showToast (currently inline in LoginPage).
+  if (auth.status === "anonymous" && auth.authEnabled) {
+    return (
+      <>
+        <LoginPage />
+        <Toast />
+      </>
+    );
+  }
+
   return (
     <>
       <div className="app">
@@ -62,6 +111,7 @@ export default function App() {
         {uiMode === "classic" ? <Canvas /> : <NodeCanvas />}
         <RightPanel />
       </div>
+      <UserBadge />
       <Toast />
       <GalleryModal />
       <GenerationLogModal />

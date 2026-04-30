@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   Count,
   Format,
@@ -722,7 +723,17 @@ type AppState = {
   getResolvedSize: () => string;
 };
 
-export const useAppStore = create<AppState>((set, get) => ({
+// Right-panel options (count / quality / size / format / moderation) used to
+// reset on every reload because nothing was persisting them. We wrap the
+// store with zustand's `persist` middleware and keep the partialize list
+// minimal: ONLY the right-panel inputs survive a reload. Larger derived
+// state (refs, history, inFlight, sessions) is intentionally excluded — it
+// either has its own dedicated persistence layer (history disk, inflight
+// localStorage via reconcileInflight) or is too big / sensitive to mirror
+// here. `maxAttempts` already has bespoke load/save (loadMaxAttempts /
+// saveMaxAttempts) so it stays out of partialize to avoid two writers
+// fighting over the same setting.
+export const useAppStore = create<AppState>()(persist((set, get) => ({
   provider: "oauth",
   quality: "high",
   sizePreset: "auto",
@@ -3181,6 +3192,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   showToast(message, error = false) {
     set({ toast: { message, error, id: Date.now() + Math.random() } });
   },
+}), {
+  name: "ima2.userPrefs",
+  storage: createJSONStorage(() => localStorage),
+  version: 1,
+  // Whitelist exactly the right-panel inputs. Anything else (refs / history
+  // / inflight / sessions / draft / sexy-tune state) is left to its existing
+  // persistence path or is purposely transient.
+  partialize: (state) => ({
+    quality: state.quality,
+    sizePreset: state.sizePreset,
+    customW: state.customW,
+    customH: state.customH,
+    format: state.format,
+    moderation: state.moderation,
+    count: state.count,
+  }),
 }));
 
 // ── Graph autosave (module-level debounce) ──

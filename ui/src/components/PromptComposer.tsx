@@ -20,15 +20,21 @@ const TXT_PROMPT_MAX = 8000;
 const TXT_BATCH_CONFIRM_THRESHOLD = 20;
 const TXT_BATCH_HARD_CAP = 500;
 
-// Throttling — running 31 generates back-to-back killed the local OAuth
-// proxy (auto-restart loop, every following request → "fetch failed").
-// Worse, on 2026-04-30 the main Node process took a SIGSEGV during a
-// 31-prompt batch (status=11/SEGV in the systemd journal) — likely from
-// concurrent better-sqlite3 + undici load. Cut the chunk size hard so
-// only N requests are ever in-flight at once. Smaller chunks also mean
-// shorter waits between visible progress for the user.
-const TXT_BATCH_CHUNK_SIZE = 2;
-const TXT_BATCH_CHUNK_DELAY_MS = 4000;
+// Concurrency is now enforced server-side (lib/oauthStream.js
+// MAX_CONCURRENT_OAUTH semaphore, default 4) instead of client-side
+// chunk-pacing. The client fires every prompt at once and lets the
+// server queue them onto the OAuth proxy at a safe rate. Result: a
+// fast prompt finishing early starts the next queued one immediately,
+// without waiting for the chunk's slowest peer the way concurrency-2
+// chunk pacing did. UI also stays responsive because the per-prompt
+// toasts fire in arrival order, not chunk-aligned.
+//
+// We keep the chunk loop scaffolding (heartbeat, per-prompt toast,
+// consecutive-failure break-out) and just set the chunk size large
+// enough that every realistic batch fits in one iteration. Delay
+// between chunks is moot when there's only one.
+const TXT_BATCH_CHUNK_SIZE = 1000;
+const TXT_BATCH_CHUNK_DELAY_MS = 0;
 // Stop the whole run after this many prompts produced zero new history
 // rows in a row — almost always a sign the upstream stopped responding
 // (proxy crash / network drop / OpenAI outage). Trying 30 more wastes
@@ -185,12 +191,16 @@ export function PromptComposer() {
         const chunk = prompts.slice(chunkStart, chunkStart + TXT_BATCH_CHUNK_SIZE);
         const chunkNum = Math.floor(chunkStart / TXT_BATCH_CHUNK_SIZE) + 1;
         const totalChunks = Math.ceil(prompts.length / TXT_BATCH_CHUNK_SIZE);
+        // Toast prefix is suppressed when there's only one chunk (the
+        // common case now that server-side semaphore handles throttling)
+        // because "묶음 1/1" reads like noise.
+        const chunkPrefix = totalChunks > 1 ? `묶음 ${chunkNum}/${totalChunks} ` : "";
         console.log(
           `[txt-batch] chunk ${chunkNum}/${totalChunks} firing ${chunk.length}: ` +
           chunk.map((c) => c.name).join(", "),
         );
         showToast(
-          `묶음 ${chunkNum}/${totalChunks} 동시 발사 (${chunk.length}개) — 각 generate 끝나는 대로 표시`,
+          `${chunkPrefix}전체 ${chunk.length}개 동시 발사 — 서버에서 4개씩 병렬 처리`,
         );
 
         // Fire all prompts in this chunk in PARALLEL, but track each one
@@ -211,7 +221,7 @@ export function PromptComposer() {
         const heartbeat = setInterval(() => {
           const elapsed = Math.round((Date.now() - chunkStartedAt) / 1000);
           showToast(
-            `묶음 ${chunkNum}/${totalChunks} 진행 중 — ${chunkDoneCount}/${chunk.length} 완료, 경과 ${elapsed}s`,
+            `${chunkPrefix}진행 중 — ${chunkDoneCount}/${chunk.length} 완료, 경과 ${elapsed}s`,
           );
         }, 30000);
         const tasks = chunk.map(async ({ name, text }) => {
@@ -236,7 +246,7 @@ export function PromptComposer() {
           const seconds = Math.max(1, Math.round((Date.now() - promptStartedAt) / 1000));
           const mark = added > 0 ? `✓ +${added}장` : threw ? "✗ 서버 끊김" : "✗ 실패";
           showToast(
-            `묶음 ${chunkNum}/${totalChunks} · ${chunkDoneCount}/${chunk.length} ${name} ${mark} (${seconds}s)`,
+            `${chunkPrefix}${chunkDoneCount}/${chunk.length} ${name} ${mark} (${seconds}s)`,
             added === 0,
           );
           return added;

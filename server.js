@@ -31,6 +31,14 @@ import {
 } from "./lib/safetyRetry.js";
 import { rewritePromptForSafety } from "./lib/llmRewrite.js";
 import {
+  loadBundles as loadPromptBundles,
+  saveBundles as savePromptBundles,
+  bundleVisibleTo as promptBundleVisibleTo,
+  makeBundle as makePromptBundle,
+  applyPatch as applyPromptBundlePatch,
+  ValidationError as PromptBundleValidationError,
+} from "./lib/promptBundles.js";
+import {
   OUTFIT_PRESETS,
   OUTFIT_CATEGORIES,
   sampleOutfitPrompts,
@@ -987,6 +995,90 @@ app.patch("/api/ref-bundles/:id", express.json({ limit: "16kb" }), async (req, r
     await saveBundles(all);
     res.json({ bundle: target });
   } catch (err) {
+    res.status(500).json({ error: { code: "BUNDLE_PATCH_FAIL", message: err.message } });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Saved prompt bundles — text-only counterpart to ref bundles. Mirrors the
+// CRUD shape above so the UI can use the same modal pattern.
+// Storage: lib/promptBundles.js (single JSON in IMA2_CONFIG_DIR).
+// ─────────────────────────────────────────────────────────────────────────
+
+// GET /api/prompt-bundles → { bundles: [...] }
+app.get("/api/prompt-bundles", async (req, res) => {
+  try {
+    const all = await loadPromptBundles();
+    const visible = all
+      .filter((b) => promptBundleVisibleTo(b, req.authUser))
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    res.json({ bundles: visible });
+  } catch (err) {
+    res.status(500).json({ error: { code: "BUNDLE_READ_FAIL", message: err.message } });
+  }
+});
+
+// POST /api/prompt-bundles { name, prompt, tags? } → { bundle }
+app.post("/api/prompt-bundles", express.json({ limit: "1mb" }), async (req, res) => {
+  try {
+    const bundle = makePromptBundle({
+      name: req.body?.name,
+      prompt: req.body?.prompt,
+      tags: req.body?.tags,
+      owner: req.authUser,
+    });
+    const all = await loadPromptBundles();
+    all.push(bundle);
+    await savePromptBundles(all);
+    res.json({ bundle });
+  } catch (err) {
+    if (err instanceof PromptBundleValidationError) {
+      return res.status(400).json({ error: { code: err.code, message: err.message } });
+    }
+    console.error("[prompt-bundles] save failed:", err);
+    res.status(500).json({ error: { code: "BUNDLE_SAVE_FAIL", message: err.message } });
+  }
+});
+
+// DELETE /api/prompt-bundles/:id → { ok: true }
+app.delete("/api/prompt-bundles/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const all = await loadPromptBundles();
+    const target = all.find((b) => b.id === id);
+    if (!target) return res.status(404).json({ error: { code: "BUNDLE_NOT_FOUND", message: "묶음을 찾을 수 없습니다." } });
+    if (!promptBundleVisibleTo(target, req.authUser)) {
+      return res.status(403).json({ error: { code: "BUNDLE_FORBIDDEN", message: "권한이 없습니다." } });
+    }
+    const next = all.filter((b) => b.id !== id);
+    await savePromptBundles(next);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: { code: "BUNDLE_DELETE_FAIL", message: err.message } });
+  }
+});
+
+// PATCH /api/prompt-bundles/:id { name?, prompt?, tags? } → { bundle }
+app.patch("/api/prompt-bundles/:id", express.json({ limit: "1mb" }), async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const all = await loadPromptBundles();
+    const target = all.find((b) => b.id === id);
+    if (!target) return res.status(404).json({ error: { code: "BUNDLE_NOT_FOUND", message: "묶음을 찾을 수 없습니다." } });
+    if (!promptBundleVisibleTo(target, req.authUser)) {
+      return res.status(403).json({ error: { code: "BUNDLE_FORBIDDEN", message: "권한이 없습니다." } });
+    }
+    applyPromptBundlePatch(target, {
+      name: req.body?.name,
+      prompt: req.body?.prompt,
+      tags: req.body?.tags,
+    });
+    await savePromptBundles(all);
+    res.json({ bundle: target });
+  } catch (err) {
+    if (err instanceof PromptBundleValidationError) {
+      return res.status(400).json({ error: { code: err.code, message: err.message } });
+    }
     res.status(500).json({ error: { code: "BUNDLE_PATCH_FAIL", message: err.message } });
   }
 });

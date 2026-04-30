@@ -5,6 +5,7 @@ import { GenerateButton } from "./GenerateButton";
 import { InFlightList } from "./InFlightList";
 import { HistoryStrip } from "./HistoryStrip";
 import { SessionPicker } from "./SessionPicker";
+import { UserBadge } from "./UserBadge";
 import { useAppStore } from "../store/useAppStore";
 import { ENABLE_NODE_MODE } from "../lib/devMode";
 
@@ -57,6 +58,7 @@ export function Sidebar() {
           </>
         )}
       </div>
+      <UserBadge />
       <HistoryStrip />
     </aside>
   );

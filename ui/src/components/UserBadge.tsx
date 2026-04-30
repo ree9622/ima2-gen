@@ -1,11 +1,15 @@
 import { useAppStore } from "../store/useAppStore";
 
-// Tiny floating badge: shows the logged-in user and exposes a logout
-// action. Anchored to the bottom-LEFT so it sits in dead space (Toast
-// owns bottom-right; the right-panel owns top-right; the sidebar logo
-// owns top-left). Rendered only when auth is enabled and we have a user
-// — kept out of the way otherwise so legacy single-user installs
-// (IMA2_AUTH != "enabled") look unchanged.
+// Inline user badge — rendered as a normal block at the bottom of the
+// sidebar (NOT a floating fixed-position widget). The previous floating
+// versions (top-right, then bottom-left) kept overlapping other UI on
+// every layout the user opened (right-panel buttons, history strip,
+// sidebar inflight rows). Inline placement guarantees zero overlap by
+// construction — the layout reserves space for it.
+//
+// Rendered only when auth is enabled AND we have a user. Renders nothing
+// otherwise so legacy single-user installs (IMA2_AUTH != "enabled") look
+// unchanged.
 export function UserBadge() {
   const auth = useAppStore((s) => s.auth);
   const logout = useAppStore((s) => s.logout);
@@ -15,26 +19,22 @@ export function UserBadge() {
   return (
     <div
       style={{
-        position: "fixed",
-        bottom: 12,
-        left: 12,
-        zIndex: 900,
         display: "flex",
         alignItems: "center",
         gap: 8,
+        padding: "6px 10px",
+        margin: "4px 8px 6px",
         background: "var(--surface)",
         border: "1px solid var(--border)",
-        borderRadius: 999,
-        padding: "4px 10px 4px 12px",
+        borderRadius: 8,
         fontSize: 12,
         color: "var(--text)",
-        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-        opacity: 0.85,
-        pointerEvents: "auto",
       }}
     >
       <span style={{ color: "var(--text-dim)" }}>👤</span>
-      <span style={{ fontWeight: 500 }}>{auth.user.username}</span>
+      <span style={{ flex: 1, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {auth.user.username}
+      </span>
       <button
         type="button"
         onClick={() => void logout()}
@@ -43,10 +43,11 @@ export function UserBadge() {
           background: "transparent",
           color: "var(--text-dim)",
           border: "1px solid var(--border)",
-          borderRadius: 999,
-          padding: "1px 8px",
+          borderRadius: 6,
+          padding: "2px 8px",
           fontSize: 11,
           cursor: "pointer",
+          flexShrink: 0,
         }}
       >
         로그아웃

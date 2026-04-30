@@ -9,7 +9,6 @@ import { GenerationLogModal } from "./components/GenerationLogModal";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { Lightbox } from "./components/Lightbox";
 import { LoginPage } from "./components/LoginPage";
-import { UserBadge } from "./components/UserBadge";
 import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 import { ENABLE_NODE_MODE } from "./lib/devMode";
 import { useLightboxUrlSync } from "./lib/urlSync";
@@ -111,7 +110,6 @@ export default function App() {
         {uiMode === "classic" ? <Canvas /> : <NodeCanvas />}
         <RightPanel />
       </div>
-      <UserBadge />
       <Toast />
       <GalleryModal />
       <GenerationLogModal />

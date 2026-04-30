@@ -84,11 +84,20 @@ export function getBilling(): Promise<BillingResponse> {
   return jsonFetch<BillingResponse>("/api/billing");
 }
 
+// Hard ceiling on a single /api/generate or /api/edit POST. Server's
+// runResponses caps the upstream stream at 5 min; we add a 90-second
+// margin so a server-side timeout fires before our client one (lets the
+// server clean up inflight rows + stream a structured error). Without
+// any timeout here a wedged proxy could hang the txt-batch chunk loop
+// forever (production: 2026-04-30 batch stuck on attempt 4 streaming).
+const GENERATE_REQUEST_TIMEOUT_MS = 6.5 * 60 * 1000;
+
 export function postGenerate(payload: GenerateRequest): Promise<GenerateResponse> {
   return jsonFetch<GenerateResponse>("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(GENERATE_REQUEST_TIMEOUT_MS),
   });
 }
 
@@ -97,6 +106,7 @@ export function postEdit(payload: GenerateRequest): Promise<GenerateResponse> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(GENERATE_REQUEST_TIMEOUT_MS),
   });
 }
 

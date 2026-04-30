@@ -202,6 +202,18 @@ export function PromptComposer() {
         const chunkStartedAt = Date.now();
         let chunkAdded = 0;
         let chunkDoneCount = 0;
+        // Heartbeat — emits a toast every 30s while the chunk is still
+        // running. Without it the user sees no UI change for the 2-4min
+        // a single OpenAI generation can take (attempt 2-4 retries with
+        // streaming reasoning), and assumes the batch is stuck. The
+        // toast fires off-cycle from the per-prompt success toasts so
+        // it never overwrites them.
+        const heartbeat = setInterval(() => {
+          const elapsed = Math.round((Date.now() - chunkStartedAt) / 1000);
+          showToast(
+            `묶음 ${chunkNum}/${totalChunks} 진행 중 — ${chunkDoneCount}/${chunk.length} 완료, 경과 ${elapsed}s`,
+          );
+        }, 30000);
         const tasks = chunk.map(async ({ name, text }) => {
           const promptStartedAt = Date.now();
           const before = useAppStore.getState().history.length;
@@ -229,7 +241,11 @@ export function PromptComposer() {
           );
           return added;
         });
-        await Promise.all(tasks);
+        try {
+          await Promise.all(tasks);
+        } finally {
+          clearInterval(heartbeat);
+        }
 
         const chunkSeconds = Math.max(1, Math.round((Date.now() - chunkStartedAt) / 1000));
         const expected = chunk.length * count;

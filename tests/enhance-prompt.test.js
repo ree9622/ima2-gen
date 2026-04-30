@@ -32,6 +32,60 @@ describe("buildEnhancePayload", () => {
     assert.doesNotMatch(sys, /\badult\s*\(25\+\)/i);
     assert.doesNotMatch(sys, /non-sexual, fashion\/vacation oriented/i);
   });
+
+  // The series-friendly rewrite contract: rewriter MUST keep [인물] broad
+  // (no makeup/lip/skin micro-details), and MUST bundle hair/pose/setting/
+  // lighting/expression into a single [자유] category instead of five
+  // separate ones. Camera / Quality are intentionally minimal.
+  it("KO system prompt enforces unified [자유] category and bans micro-detail makeup tokens", () => {
+    const body = buildEnhancePayload("미시룩 송도 코스트코", "ko");
+    const sys = JSON.stringify(body.input.find((m) => m.role === "system"));
+    assert.ok(sys);
+    // The unified free category must be named explicitly.
+    assert.match(sys, /\[자유\]/);
+    // The forbidden micro-detail tokens must be listed as forbidden by default.
+    assert.match(sys, /촉촉한.*입술|입술.*묘사|FORBIDDEN[^\n]*촉촉한 입술/);
+    assert.match(sys, /K-뷰티|글로시 립|코랄 립|누드 립/);
+    // Camera defaults to "iPhone snap" only.
+    assert.match(sys, /아이폰 스냅 사진/);
+    assert.match(sys, /얕은 피사체 심도/); // listed as forbidden
+    // Quality defaults to "1:1 비율, 8k" only — 극사실적 must be listed as forbidden.
+    assert.match(sys, /극사실적/);
+  });
+
+  it("EN system prompt drops legacy per-category Hair/Pose/Setting headers", () => {
+    const body = buildEnhancePayload("series of casual mart selfies", "en");
+    const sys = JSON.stringify(body.input.find((m) => m.role === "system"));
+    assert.ok(sys);
+    // [Free] is the unified replacement category.
+    assert.match(sys, /\[Free\]/);
+    // The category-order line must NOT include separate [Hair]/[Pose]/[Setting]/
+    // [Lighting]/[Expression] in the English ordered list. (They survive
+    // elsewhere in the prompt as "old per-category ... no longer used"
+    // explanatory text, which is fine — but the active English ordering
+    // must read [Person] → [Body] → [Outfit] → [Accessories] → [Body Highlights]
+    // → [Free] → [Camera] → [Quality].)
+    assert.match(
+      sys,
+      /\[Person\][^\[]*\[Body\][^\[]*\[Outfit\][^\[]*\[Accessories\][^\[]*\[Body Highlights\][^\[]*\[Free\][^\[]*\[Camera\][^\[]*\[Quality\]/,
+    );
+  });
+
+  it("KO system prompt example uses one comma-list bullet per fixed category and TWO-line [자유]", () => {
+    const body = buildEnhancePayload("test", "ko");
+    const sys = body.input.find((m) => m.role === "system");
+    assert.ok(sys);
+    // sys.content is a string; match against real newlines.
+    const text = typeof sys.content === "string" ? sys.content : JSON.stringify(sys.content);
+    // Example must show the unified [자유] category with both lines (real \n).
+    assert.match(text, /\[자유\]\n {2}-\s*헤어스타일,\s*포즈,\s*배경,\s*조명,\s*표정 모두 자유/);
+    assert.match(text, /-\s*배경 큰 카테고리:\s*송도 코스트코/);
+    // Example must use ONE bullet for [인물] (comma-list), not three.
+    assert.match(text, /\[인물\]\n {2}-\s*한국 20대 초반 미시,\s*예쁘고 귀여움\n\n/);
+    // Example must end with the minimal [카메라] + [퀄리티] block.
+    assert.match(text, /\[카메라\]\n {2}-\s*아이폰 스냅 사진/);
+    assert.match(text, /\[퀄리티\]\n {2}-\s*1:1 비율,\s*8k/);
+  });
 });
 
 describe("sanitizeEnhancedText", () => {

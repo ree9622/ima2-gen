@@ -401,10 +401,44 @@ function isUsageLimitError(e) {
   return USAGE_LIMIT_RE.test(msg);
 }
 
+// Local OAuth proxy crashed / restarting → fetch to 127.0.0.1:10531 fails
+// in <5ms with `TypeError: fetch failed` whose `cause.code` is one of
+// ECONNREFUSED / ECONNRESET / EAI_AGAIN. The proxy auto-restarts every 5s
+// (ima2-gen.service supervisor), so the right move is wait + retry the
+// SAME variant — NOT advance the safety variant, NOT count it against the
+// safety retry budget. We cap consecutive network errors at 2 so a fully
+// dead proxy fails fast instead of stalling 7 attempts × 5s = 35s of
+// useless "fetch failed" log spam.
+const NETWORK_ERROR_CAUSE_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+  "ETIMEDOUT",
+  "EPIPE",
+  "UND_ERR_SOCKET",
+]);
+function isNetworkError(e) {
+  if (!e) return false;
+  if (e.code && NETWORK_ERROR_CAUSE_CODES.has(e.code)) return true;
+  const cause = e.cause;
+  if (cause?.code && NETWORK_ERROR_CAUSE_CODES.has(cause.code)) return true;
+  // undici throws bare `TypeError: fetch failed` with the underlying socket
+  // error in `.cause`. The message alone is enough to match because we only
+  // call fetch against the local OAuth proxy in the retry loop.
+  const msg = e?.message || "";
+  return /^fetch failed$/i.test(msg);
+}
+const NETWORK_RETRY_DELAY_MS = 5000;
+const NETWORK_RETRY_MAX_CONSECUTIVE = 2;
+
 async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttempt = null, ctx = {}) {
   const attempts = buildAttemptSequence(prompt, maxAttempts, { hasRefs: ctx.hasRefs === true });
   const log = [];
   let lastErr;
+  // Tracks back-to-back network failures so the loop bails fast when the
+  // OAuth proxy is fully dead (vs. just briefly restarting).
+  let consecutiveNetErrors = 0;
 
   const tag = ctx.requestId ? `[${label}][${ctx.requestId}]` : `[${label}]`;
   console.log(
@@ -482,22 +516,57 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       // Adaptive routing (단계 3): parse safety_violations=[xxx] from the
       // upstream error and stash on the attempt log + decide loop control.
       const violation = parseSafetyViolation(e);
+      const networkErr = isNetworkError(e);
       log.push({
         attempt: i + 1,
         promptUsed: attemptPrompt,
         compliantVariant: isCompliantRetry,
         ok: false,
         errorMessage: e?.message || String(e),
-        errorCode: e?.code || null,
+        errorCode: e?.code || e?.cause?.code || null,
         durationMs,
         startedAt,
         violationCategories: violation ? Array.from(violation.categories) : null,
+        networkError: networkErr || null,
       });
       console.warn(
         `${tag} attempt ${i + 1}/${attempts.length} THREW after ${durationMs}ms: ` +
-        `code=${e?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}` +
-        (violation ? ` violation=[${Array.from(violation.categories).join(",")}]` : ""),
+        `code=${e?.code || e?.cause?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}` +
+        (violation ? ` violation=[${Array.from(violation.categories).join(",")}]` : "") +
+        (networkErr ? ` [NETWORK]` : ""),
       );
+      // Network failure path: OAuth proxy on 127.0.0.1:10531 is down or
+      // restarting. Sleep to let the supervisor's 5s auto-restart finish,
+      // then retry the SAME variant (don't burn safety retries on a
+      // transport-level fault). After 2 consecutive network errors give
+      // up — the proxy is fully dead, no point in cycling more.
+      if (networkErr) {
+        consecutiveNetErrors += 1;
+        if (consecutiveNetErrors >= NETWORK_RETRY_MAX_CONSECUTIVE) {
+          const stop = new Error(
+            `OAuth proxy unreachable after ${consecutiveNetErrors} attempts: ${e?.message || String(e)}`,
+          );
+          stop.code = "PROXY_UNREACHABLE";
+          stop.status = 503;
+          stop.cause = e;
+          stop.attempts = log;
+          console.warn(
+            `${tag} non-retryable NETWORK — aborting after ${i + 1}/${attempts.length} ` +
+              `(${consecutiveNetErrors} consecutive fetch failures)`,
+          );
+          throw stop;
+        }
+        console.warn(
+          `${tag} network error (${consecutiveNetErrors}/${NETWORK_RETRY_MAX_CONSECUTIVE}) — ` +
+            `sleeping ${NETWORK_RETRY_DELAY_MS}ms then retrying SAME variant`,
+        );
+        await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAY_MS));
+        i -= 1; // re-attempt the same variant (decremented before for-loop ++)
+        continue;
+      }
+      // Reset network counter on non-network errors so an old proxy hiccup
+      // doesn't leak into a later cycle's bail-out budget.
+      consecutiveNetErrors = 0;
       // Non-retryable: usage limit / quota / 429. Stop the loop and throw
       // a typed error so the route handler can forward it to the client.
       if (isUsageLimitError(e)) {

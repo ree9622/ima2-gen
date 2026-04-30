@@ -22,13 +22,13 @@ const TXT_BATCH_HARD_CAP = 500;
 
 // Throttling — running 31 generates back-to-back killed the local OAuth
 // proxy (auto-restart loop, every following request → "fetch failed").
-// Process in small chunks with a cool-down between them; chunk size 5 was
-// the user's request, delay 8s comfortably exceeds the proxy's ~6s
-// auto-restart window. Numbers are intentionally not user-tunable; if a
-// chunk's first prompt still hits "fetch failed" we bail with a clear
-// message rather than extending the wait.
-const TXT_BATCH_CHUNK_SIZE = 5;
-const TXT_BATCH_CHUNK_DELAY_MS = 8000;
+// Worse, on 2026-04-30 the main Node process took a SIGSEGV during a
+// 31-prompt batch (status=11/SEGV in the systemd journal) — likely from
+// concurrent better-sqlite3 + undici load. Cut the chunk size hard so
+// only N requests are ever in-flight at once. Smaller chunks also mean
+// shorter waits between visible progress for the user.
+const TXT_BATCH_CHUNK_SIZE = 2;
+const TXT_BATCH_CHUNK_DELAY_MS = 4000;
 // Stop the whole run after this many prompts produced zero new history
 // rows in a row — almost always a sign the upstream stopped responding
 // (proxy crash / network drop / OpenAI outage). Trying 30 more wastes
@@ -161,6 +161,10 @@ export function PromptComposer() {
       `텍스트 일괄 시작: ${prompts.length}개 × ${count}장 = 총 ${total}장 ` +
         `(${TXT_BATCH_CHUNK_SIZE}개 동시, 묶음 사이 ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식)`,
     );
+    console.log(
+      `[txt-batch] start: prompts=${prompts.length} count=${count} ` +
+      `chunkSize=${TXT_BATCH_CHUNK_SIZE} chunkDelay=${TXT_BATCH_CHUNK_DELAY_MS}ms`,
+    );
 
     let succeeded = 0; // number of *images* added to history (count-aware)
     let failedPrompts = 0; // prompts that produced 0 new history rows
@@ -174,12 +178,17 @@ export function PromptComposer() {
         const cool = useAppStore.getState().usageLimitedUntil;
         if (cool && cool > Date.now()) {
           stopReason = "OpenAI 사용 한도(429) 로 일괄 중단";
+          console.warn(`[txt-batch] cool-down active until ${new Date(cool).toISOString()} — stopping`);
           break;
         }
 
         const chunk = prompts.slice(chunkStart, chunkStart + TXT_BATCH_CHUNK_SIZE);
         const chunkNum = Math.floor(chunkStart / TXT_BATCH_CHUNK_SIZE) + 1;
         const totalChunks = Math.ceil(prompts.length / TXT_BATCH_CHUNK_SIZE);
+        console.log(
+          `[txt-batch] chunk ${chunkNum}/${totalChunks} firing ${chunk.length}: ` +
+          chunk.map((c) => c.name).join(", "),
+        );
         showToast(
           `묶음 ${chunkNum}/${totalChunks} 동시 발사 (${chunk.length}개) — 각 generate 끝나는 대로 표시`,
         );
@@ -196,13 +205,24 @@ export function PromptComposer() {
         const tasks = chunk.map(async ({ name, text }) => {
           const promptStartedAt = Date.now();
           const before = useAppStore.getState().history.length;
-          await generate({ overridePrompt: text });
+          // Defensive: generate() catches internally, but we wrap anyway
+          // so a thrown error (e.g. server SIGSEGV mid-request → fetch
+          // reject in generate's outer try) never aborts Promise.all
+          // and breaks the chunk loop. The history-diff already classes
+          // this as "failure" — the throw is just noise to suppress.
+          let threw = false;
+          try {
+            await generate({ overridePrompt: text });
+          } catch (err) {
+            threw = true;
+            console.warn("[txt-batch] generate threw for", name, err);
+          }
           const after = useAppStore.getState().history.length;
           const added = after - before;
           chunkDoneCount += 1;
           chunkAdded += added;
           const seconds = Math.max(1, Math.round((Date.now() - promptStartedAt) / 1000));
-          const mark = added > 0 ? `✓ +${added}장` : "✗ 실패";
+          const mark = added > 0 ? `✓ +${added}장` : threw ? "✗ 서버 끊김" : "✗ 실패";
           showToast(
             `묶음 ${chunkNum}/${totalChunks} · ${chunkDoneCount}/${chunk.length} ${name} ${mark} (${seconds}s)`,
             added === 0,
@@ -231,6 +251,10 @@ export function PromptComposer() {
         }
 
         const isLast = chunkStart + TXT_BATCH_CHUNK_SIZE >= prompts.length;
+        console.log(
+          `[txt-batch] chunk ${chunkNum}/${totalChunks} done: +${chunkAdded}/${chunk.length * count} ` +
+          `in ${chunkSeconds}s, consecutiveFailedChunks=${consecutiveFailedChunks}, isLast=${isLast}`,
+        );
         if (!isLast) {
           showToast(
             `묶음 ${chunkNum}/${totalChunks} 완료 (+${chunkAdded}장 / ${chunkSeconds}s) · ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식`,
@@ -238,8 +262,9 @@ export function PromptComposer() {
           await new Promise((r) => setTimeout(r, TXT_BATCH_CHUNK_DELAY_MS));
         }
       }
+      console.log(`[txt-batch] loop exited: succeeded=${succeeded} failedPrompts=${failedPrompts} stopReason=${stopReason ?? "none"}`);
     } catch (err) {
-      console.error("[txt-batch]", err);
+      console.error("[txt-batch] caught at loop level:", err);
       stopReason = `오류: ${(err as Error).message}`;
     } finally {
       setTxtBatchRunning(false);

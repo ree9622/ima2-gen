@@ -2506,6 +2506,13 @@ function startOAuthProxy() {
 
 // -- Boot --
 const PORT = process.env.PORT || 3333;
+// Default to loopback-only listen so nginx (or whatever reverse proxy is in
+// front) is the single ingress. Without this guard, a 0.0.0.0 bind on a
+// shared box means anyone on the LAN — or anyone running a browser on the
+// box itself — can hit http://<box>:3333/ and bypass nginx basic-auth /
+// rate-limit / TLS. Set IMA2_HOST=0.0.0.0 only for self-hosted setups
+// without an upstream reverse proxy.
+const HOST = process.env.IMA2_HOST || "127.0.0.1";
 // Tests (and some CI contexts) can opt out of the OAuth proxy subprocess.
 // The proxy is a user-facing login helper, not required for /api/health or
 // offline unit tests, and starting it on Windows CI can add 7-10s latency.
@@ -2597,8 +2604,9 @@ onShutdown(async (sig) => {
 });
 process.on("exit", __unadvertise);
 
-app.listen(PORT, () => {
-  console.log(`Image Gen running at http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  const advertised = HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST;
+  console.log(`Image Gen running at http://${advertised}:${PORT} (bind ${HOST})`);
   console.log(`Provider policy: OAuth only (API key hard-disabled). OAuth proxy port ${OAUTH_PORT}.`);
   __advertise();
   try {

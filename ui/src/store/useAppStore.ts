@@ -753,6 +753,15 @@ type AppState = {
     overrideReferences?: string[];
     overrideSize?: string;
     overrideQuality?: Quality;
+    // When set, every /api/generate call this action emits will carry the
+    // batch headers so the server can append entries to
+    // generated/.batches/<batchId>/<index>.json. The caller (e.g. the txt-
+    // batch handler) is responsible for minting batchId once and assigning
+    // a unique batchIndex per prompt.
+    batchId?: string;
+    batchIndex?: number;
+    batchTotal?: number;
+    batchSource?: string;
   }) => Promise<void>;
   runSexyTuneBatch: (opts: {
     count: number;
@@ -3155,6 +3164,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             ...(references ? { references } : {}),
             ...(referenceMeta ? { referenceMeta } : {}),
             ...(overrides?.outfitModule ? { outfitModule: overrides.outfitModule } : {}),
+            ...(overrides?.batchId
+              ? {
+                  batchId: overrides.batchId,
+                  batchIndex: overrides.batchIndex ?? 0,
+                  batchTotal: overrides.batchTotal,
+                  batchSource: overrides.batchSource,
+                }
+              : {}),
           });
           console.log(
             `[ima2][generate][${flightId}] response ok in ` +

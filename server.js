@@ -23,6 +23,14 @@ import {
 import { trashAsset, restoreAsset, markNodesAssetMissing } from "./lib/assetLifecycle.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
+import {
+  isValidBatchId,
+  ensureBatchMeta,
+  appendBatchEntry,
+  readBatch,
+  listBatches,
+  summarizeBatch,
+} from "./lib/batchLog.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
 import {
   buildAttemptSequence,
@@ -839,7 +847,7 @@ function clampMaxAttempts(v, fallback = 2) {
 // Persist a failed generation attempt for the log UI + retry button.
 // Refs are NOT saved (see retry flow): refs live in the browser and are
 // re-attached when the user invokes retry from a history item that had them.
-async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null }) {
+async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null, batchId = null, batchIndex = null }) {
   try {
     const dir = join(__dirname, "generated", ".failed");
     await mkdir(dir, { recursive: true });
@@ -867,6 +875,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
       ...(outfitModule ? { outfitModule } : {}),
+      ...(batchId ? { batchId, batchIndex } : {}),
     };
     await writeFile(join(dir, `${id}.json`), JSON.stringify(record));
     return id;
@@ -1792,6 +1801,65 @@ app.delete("/api/inflight/:requestId", (req, res) => {
   res.status(204).end();
 });
 
+// -- Batch tracking --
+//
+// GET /api/batch
+//   Recent batches (most recent first), default limit 50, max 200. Pure
+//   meta listing — no per-entry detail. Use for the "최근 batch" UI panel.
+//
+// GET /api/batch/:id
+//   Single batch's meta + every per-prompt entry (success or failure)
+//   that the batch produced, sorted by batchIndex. Includes a top-level
+//   summary block (succeeded/failed/totalAttempts/totalUsage/reasons)
+//   computed at read time. The 31-prompt 텍스트 일괄 fanout: GET this once
+//   the run completes and you see the whole picture in one JSON, instead
+//   of grepping 31 sidecars. Owner-scoped when auth is enabled.
+app.get("/api/batch", async (req, res) => {
+  try {
+    const rawLimit = Number(req.query.limit);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(200, Math.floor(rawLimit))
+      : 50;
+    const batches = await listBatches({
+      generatedDir: join(__dirname, "generated"),
+      limit,
+    });
+    const filtered = req.authUser
+      ? batches.filter((b) => !b.owner || b.owner === req.authUser)
+      : batches;
+    res.json({ batches: filtered });
+  } catch (err) {
+    console.warn(`[batch] list failed: ${err?.message || err}`);
+    res.status(500).json({ error: err?.message || String(err), batches: [] });
+  }
+});
+
+app.get("/api/batch/:id", async (req, res) => {
+  const id = req.params.id;
+  if (!isValidBatchId(id)) {
+    return res.status(400).json({ error: "Invalid batchId" });
+  }
+  try {
+    const result = await readBatch({
+      generatedDir: join(__dirname, "generated"),
+      batchId: id,
+    });
+    if (!result) return res.status(404).json({ error: "batch not found" });
+    if (req.authUser && result.meta?.owner && result.meta.owner !== req.authUser) {
+      return res.status(404).json({ error: "batch not found" });
+    }
+    const summary = summarizeBatch(result.entries);
+    res.json({
+      meta: result.meta,
+      summary,
+      entries: result.entries,
+    });
+  } catch (err) {
+    console.warn(`[batch] read ${id} failed: ${err?.message || err}`);
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
 // -- Generate image (supports parallel via n) --
 app.post("/api/generate", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
@@ -1800,8 +1868,18 @@ app.post("/api/generate", async (req, res) => {
       typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
     const clientNodeId =
       typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
-    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt, outfitModule: rawOutfitModule } =
+    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt, outfitModule: rawOutfitModule, batchId: rawBatchId, batchIndex: rawBatchIndex, batchTotal: rawBatchTotal, batchSource: rawBatchSource } =
       req.body;
+    const batchId = isValidBatchId(rawBatchId) ? rawBatchId : null;
+    const batchIndex = batchId && Number.isFinite(rawBatchIndex)
+      ? Math.max(0, Math.floor(rawBatchIndex))
+      : null;
+    const batchTotal = batchId && Number.isFinite(rawBatchTotal)
+      ? Math.max(1, Math.floor(rawBatchTotal))
+      : null;
+    const batchSource = batchId && typeof rawBatchSource === "string"
+      ? rawBatchSource.slice(0, 40)
+      : null;
     const outfitModule = rawOutfitModule && typeof rawOutfitModule === "object"
       && typeof rawOutfitModule.id === "string"
       ? {
@@ -1862,8 +1940,23 @@ app.post("/api/generate", async (req, res) => {
     }
     const useOAuth = true;
     const __client = req.get("x-ima2-client") || "ui";
-    console.log(`[generate][${__client}] provider=oauth quality=${quality} size=${size} moderation=${moderation} n=${count} refs=${refB64s.length}`);
+    const __batchTag = batchId ? ` batch=${batchId}#${batchIndex}/${batchTotal}` : "";
+    console.log(`[generate][${__client}] provider=oauth quality=${quality} size=${size} moderation=${moderation} n=${count} refs=${refB64s.length}${__batchTag}`);
     const startTime = Date.now();
+    if (batchId) {
+      // Best-effort — meta write race between sibling calls is harmless,
+      // see batchLog.ensureBatchMeta.
+      ensureBatchMeta({
+        generatedDir: join(__dirname, "generated"),
+        batchId,
+        batchTotal,
+        startedAt: startTime,
+        owner: req.authUser || LEGACY_OWNER,
+        source: batchSource,
+      }).catch((err) => {
+        console.warn(`[batch] ensureBatchMeta failed: ${err?.message || err}`);
+      });
+    }
 
     const mimeMap = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
     const mime = mimeMap[format] || "image/png";
@@ -1931,6 +2024,7 @@ app.post("/api/generate", async (req, res) => {
           owner: req.authUser || LEGACY_OWNER,
           requestId,
           ...(outfitModule ? { outfitModule } : {}),
+          ...(batchId ? { batchId, batchIndex } : {}),
         };
         await writeFile(join(__dirname, "generated", filename + ".json"), JSON.stringify(meta)).catch(() => {});
         images.push({
@@ -1950,7 +2044,7 @@ app.post("/api/generate", async (req, res) => {
 
     if (images.length === 0) {
       const firstErr = results.find(r => r.status === "rejected")?.reason;
-      await writeFailureSidecar({
+      const failedSidecarId = await writeFailureSidecar({
         endpoint: "generate",
         prompt,
         originalPrompt,
@@ -1966,15 +2060,37 @@ app.post("/api/generate", async (req, res) => {
         owner: req.authUser,
         requestId,
         outfitModule,
+        batchId,
+        batchIndex,
       });
+      if (batchId) {
+        await appendBatchEntry({
+          generatedDir: join(__dirname, "generated"),
+          batchId,
+          batchIndex,
+          entry: {
+            ok: false,
+            requestId,
+            promptChars: prompt.length,
+            promptPreview: prompt.slice(0, 120),
+            errorCode: firstErr?.code || "UNKNOWN",
+            errorMessage: (firstErr?.message || String(firstErr || "")).slice(0, 240),
+            attemptsCount: Array.isArray(firstErr?.attempts) ? firstErr.attempts.length : 0,
+            usage: sumAttemptsUsage(firstErr?.attempts),
+            failedSidecarId,
+            durationMs: Date.now() - startTime,
+          },
+        }).catch((e) => console.warn(`[batch] appendBatchEntry failed: ${e?.message || e}`));
+      }
       if (firstErr?.code === "SAFETY_REFUSAL") {
-        return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [] });
+        return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [], batchId });
       }
       if (firstErr?.code === "USAGE_LIMIT" || firstErr?.status === 429) {
         return res.status(429).json({
           error: firstErr.message || "OpenAI usage limit reached",
           code: "USAGE_LIMIT",
           attempts: firstErr.attempts || [],
+          batchId,
         });
       }
       if (firstErr?.code === "AUTH_INVALIDATED" || firstErr?.status === 401) {
@@ -1982,9 +2098,10 @@ app.post("/api/generate", async (req, res) => {
           error: firstErr.message || "OAuth token invalidated — re-authentication required",
           code: "AUTH_INVALIDATED",
           attempts: firstErr.attempts || [],
+          batchId,
         });
       }
-      return res.status(500).json({ error: "All generation attempts failed", code: firstErr?.code || "ALL_ATTEMPTS_FAILED", attempts: firstErr?.attempts || [] });
+      return res.status(500).json({ error: "All generation attempts failed", code: firstErr?.code || "ALL_ATTEMPTS_FAILED", attempts: firstErr?.attempts || [], batchId });
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -1998,11 +2115,37 @@ app.post("/api/generate", async (req, res) => {
       safetyRetryAvailable: hasCompliantRetry(prompt),
       promptRewrittenForSafety,
     };
+    if (batchId) {
+      const totalAttempts = results.reduce((sum, r) => {
+        if (r.status === "fulfilled" && Array.isArray(r.value.attempts)) {
+          return sum + r.value.attempts.length;
+        }
+        return sum;
+      }, 0);
+      await appendBatchEntry({
+        generatedDir: join(__dirname, "generated"),
+        batchId,
+        batchIndex,
+        entry: {
+          ok: true,
+          requestId,
+          promptChars: prompt.length,
+          promptPreview: prompt.slice(0, 120),
+          imageCount: images.length,
+          filenames: images.map((img) => img.filename),
+          attemptsCount: totalAttempts,
+          usage: totalUsage,
+          webSearchCalls: totalWebSearchCalls,
+          promptRewrittenForSafety,
+          durationMs: Date.now() - startTime,
+        },
+      }).catch((e) => console.warn(`[batch] appendBatchEntry failed: ${e?.message || e}`));
+    }
 
     if (count === 1) {
-      res.json({ image: images[0].image, elapsed, filename: images[0].filename, requestId, ...extra });
+      res.json({ image: images[0].image, elapsed, filename: images[0].filename, requestId, batchId, ...extra });
     } else {
-      res.json({ images, elapsed, count: images.length, requestId, ...extra });
+      res.json({ images, elapsed, count: images.length, requestId, batchId, ...extra });
     }
   } catch (err) {
     console.error("Generate error:", err.message);

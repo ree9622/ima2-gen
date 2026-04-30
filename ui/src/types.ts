@@ -114,6 +114,15 @@ export type GenerateRequest = {
   // server records it in the sidecar so we can compute per-module pass rates
   // and feed those back into weighted sampling.
   outfitModule?: OutfitModuleMeta;
+  // Batch tracking: when a client-side fanout (e.g. 텍스트 일괄 31 prompts)
+  // mints these, every /api/generate call lands in
+  // generated/.batches/<batchId>/<batchIndex>.json so the whole burst can be
+  // inspected as one entity. batchSource is a free-form tag like "txt-batch"
+  // / "outfit-pool" so future batch-driving UIs can be distinguished.
+  batchId?: string;
+  batchIndex?: number;
+  batchTotal?: number;
+  batchSource?: string;
 };
 
 export type OutfitModuleMeta = {

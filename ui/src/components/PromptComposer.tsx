@@ -162,14 +162,28 @@ export function PromptComposer() {
       if (!ok) return;
     }
 
+    // Mint a single batchId for this run so every /api/generate call lands
+    // under generated/.batches/<batchId>/. Lets the user retroactively
+    // inspect "what did all 31 prompts cost / where did they fail" via
+    // GET /api/batch/<id> (or `curl -s /api/batch/<id> | jq` from the
+    // box). Without this each call is an island and the only way to see
+    // the whole run was grepping 31 sidecars by timestamp.
+    const batchId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `txt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     setTxtBatchRunning(true);
     showToast(
       `텍스트 일괄 시작: ${prompts.length}개 × ${count}장 = 총 ${total}장 ` +
-        `(${TXT_BATCH_CHUNK_SIZE}개 동시, 묶음 사이 ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식)`,
+        `(${TXT_BATCH_CHUNK_SIZE}개 동시, 묶음 사이 ${TXT_BATCH_CHUNK_DELAY_MS / 1000}초 휴식) · batch=${batchId.slice(0, 8)}`,
     );
     console.log(
       `[txt-batch] start: prompts=${prompts.length} count=${count} ` +
-      `chunkSize=${TXT_BATCH_CHUNK_SIZE} chunkDelay=${TXT_BATCH_CHUNK_DELAY_MS}ms`,
+      `chunkSize=${TXT_BATCH_CHUNK_SIZE} chunkDelay=${TXT_BATCH_CHUNK_DELAY_MS}ms ` +
+      `batchId=${batchId}`,
+    );
+    console.log(
+      `[txt-batch] inspect via: curl -s /api/batch/${batchId} | jq '.summary'`,
     );
 
     let succeeded = 0; // number of *images* added to history (count-aware)
@@ -224,9 +238,14 @@ export function PromptComposer() {
             `${chunkPrefix}진행 중 — ${chunkDoneCount}/${chunk.length} 완료, 경과 ${elapsed}s`,
           );
         }, 30000);
-        const tasks = chunk.map(async ({ name, text }) => {
+        const tasks = chunk.map(async ({ name, text }, idxInChunk) => {
           const promptStartedAt = Date.now();
           const before = useAppStore.getState().history.length;
+          // Absolute position in the batch (across all chunks). Used as
+          // batchIndex so the server's per-entry filename
+          // (generated/.batches/<batchId>/00000.json) sorts in user
+          // order regardless of which chunk landed first.
+          const batchIndex = chunkStart + idxInChunk;
           // Defensive: generate() catches internally, but we wrap anyway
           // so a thrown error (e.g. server SIGSEGV mid-request → fetch
           // reject in generate's outer try) never aborts Promise.all
@@ -234,7 +253,13 @@ export function PromptComposer() {
           // this as "failure" — the throw is just noise to suppress.
           let threw = false;
           try {
-            await generate({ overridePrompt: text });
+            await generate({
+              overridePrompt: text,
+              batchId,
+              batchIndex,
+              batchTotal: prompts.length,
+              batchSource: "txt-batch",
+            });
           } catch (err) {
             threw = true;
             console.warn("[txt-batch] generate threw for", name, err);
@@ -296,7 +321,11 @@ export function PromptComposer() {
       setTxtBatchRunning(false);
     }
 
-    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 약 ${failedPrompts}건`;
+    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 약 ${failedPrompts}건 · batch=${batchId.slice(0, 8)}`;
+    console.log(
+      `[txt-batch] complete: batchId=${batchId} succeeded=${succeeded} failedPrompts=${failedPrompts} ` +
+      `stopReason=${stopReason ?? "none"} — full report: curl -s /api/batch/${batchId} | jq`,
+    );
     if (stopReason) {
       showToast(`${summary} · ${stopReason}`, true);
     } else {

@@ -385,6 +385,38 @@ function saveSelectedFilename(filename: string | null): void {
   } catch {}
 }
 
+// Slice of state reset on every login/logout so account switching never
+// leaks the previous user's data through the store. Covers everything
+// scoped to a single account: history, currently-selected image, graph
+// sessions (nodes / edges), bundles, reference images, in-flight rows.
+// Right-panel preferences (quality / size / count / format / moderation)
+// are device-scoped, NOT user-scoped, so they intentionally survive a
+// logout. Each array is freshly allocated so callers can mutate without
+// aliasing.
+function userScopedResetSlice() {
+  return {
+    history: [] as GenerateItem[],
+    currentImage: null as GenerateItem | null,
+    sessions: [] as SessionSummary[],
+    activeSessionId: null as string | null,
+    activeSessionGraphVersion: 0,
+    graphNodes: [] as GraphNode[],
+    graphEdges: [] as GraphEdge[],
+    promptBundles: [] as PromptBundle[],
+    refBundles: [] as RefBundle[],
+    referenceImages: [] as string[],
+    referenceMetaHints: [] as (import("../types").ReferenceMetaHint | null)[],
+    inFlight: [] as PersistedInFlight[],
+  };
+}
+
+function clearUserScopedLocalStorage(): void {
+  try {
+    localStorage.removeItem("ima2.selectedFilename");
+    localStorage.removeItem("ima2.inFlight");
+  } catch {}
+}
+
 const HISTORY_LIMIT = 500;
 const MAX_NODE_REFS = 5;
 
@@ -1226,11 +1258,20 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         return false;
       }
       const j = (await res.json()) as { user: AuthUser };
+      // Hard reset all user-scoped state on login. Without this, account
+      // switching (logout A → login B) would leave A's history / sessions /
+      // bundles visible to B until the next API hydrate replaced them, and
+      // any A-data that B's hydrate returned an empty result for would
+      // STAY visible (see hydrateHistory comment). Clear up front so the
+      // worst-case post-login UI is "empty until hydrate finishes" rather
+      // than "shows previous user's data".
       set({
         auth: { status: "authed", user: j.user, authEnabled: true },
         loginError: null,
         loginPending: false,
+        ...userScopedResetSlice(),
       });
+      clearUserScopedLocalStorage();
       return true;
     } catch (e) {
       set({
@@ -1249,10 +1290,15 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     } catch (e) {
       console.warn("[auth] logout request failed:", e);
     }
+    // Clear all user-scoped state so the next login (potentially a
+    // different account on the same browser) starts from an empty slate
+    // instead of the previous user's data.
     set({
       auth: { status: "anonymous", user: null, authEnabled: true },
       loginError: null,
+      ...userScopedResetSlice(),
     });
+    clearUserScopedLocalStorage();
   },
 
   // ─── Prompt bundles ─────────────────────────────────────────────────────
@@ -3264,14 +3310,21 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             ? { references: it.references }
             : {}),
         }));
-        if (history.length > 0) {
-          const selected = loadSelectedFilename();
-          const matched = selected
-            ? history.find((it) => it.filename === selected)
-            : null;
-          set({ history, currentImage: matched ?? history[0] });
-          if (!matched) saveSelectedFilename(history[0]?.filename ?? null);
-        }
+        // Always replace the store, even when the response is empty. The
+        // previous `if (history.length > 0)` guard meant a freshly logged-in
+        // user with zero history would keep seeing the PREVIOUS account's
+        // history — multi-user data leak (2026-04-30: dajug35 saw ree9622's
+        // history because /api/history correctly returned 0 items but the
+        // store kept the stale array).
+        const selected = loadSelectedFilename();
+        const matched = selected
+          ? history.find((it) => it.filename === selected) ?? null
+          : null;
+        set({
+          history,
+          currentImage: matched ?? history[0] ?? null,
+        });
+        if (!matched) saveSelectedFilename(history[0]?.filename ?? null);
       } catch (err) {
         console.warn("[history] load failed:", err);
       }

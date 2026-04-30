@@ -401,6 +401,23 @@ function isUsageLimitError(e) {
   return USAGE_LIMIT_RE.test(msg);
 }
 
+// OAuth token revoked / expired upstream → openai-oauth proxy returns the
+// raw upstream message ("Your authentication token has been invalidated.
+// Please try signing in again." / "Encountered invalidated oauth token for
+// user, failing request"). Re-firing the same prompt with safety variants
+// or LLM-rewrite tier cannot fix this — only the user re-running `codex
+// login` (or equivalent re-auth) can. Detect early and bail after ONE
+// attempt to avoid the 5-attempt × 31-prompt = 155-call thrash that a
+// 31-prompt batch produced on 2026-04-30 (see generated/.failed/*.json
+// timestamps 1777537586–590).
+const AUTH_ERROR_RE =
+  /authentication token has been invalidated|invalidated oauth token|please try signing in again|sign in again/i;
+function isAuthError(e) {
+  if (!e) return false;
+  if (e.code === "AUTH_INVALIDATED" || e.status === 401) return true;
+  return AUTH_ERROR_RE.test(e.message || "");
+}
+
 // Local OAuth proxy crashed / restarting → fetch to 127.0.0.1:10531 fails
 // in <5ms with `TypeError: fetch failed` whose `cause.code` is one of
 // ECONNREFUSED / ECONNRESET / EAI_AGAIN. The proxy auto-restarts every 5s
@@ -474,6 +491,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           reasoningSummary: r.reasoningSummary || null,
           refusalText: r.refusalText || null,
           eventTypeCounts: r.eventTypeCounts || null,
+          usage: r.usage || null,
         });
         console.log(
           `${tag} attempt ${i + 1}/${attempts.length} SUCCESS in ${durationMs}ms ` +
@@ -500,6 +518,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         reasoningSummary: r?.reasoningSummary || null,
         refusalText: r?.refusalText || null,
         eventTypeCounts: r?.eventTypeCounts || null,
+        usage: r?.usage || null,
       });
       if (r?.reasoningSummary || r?.refusalText) {
         console.warn(
@@ -517,6 +536,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       // upstream error and stash on the attempt log + decide loop control.
       const violation = parseSafetyViolation(e);
       const networkErr = isNetworkError(e);
+      const authErr = isAuthError(e);
       log.push({
         attempt: i + 1,
         promptUsed: attemptPrompt,
@@ -528,13 +548,41 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         startedAt,
         violationCategories: violation ? Array.from(violation.categories) : null,
         networkError: networkErr || null,
+        authError: authErr || null,
+        // Partial usage / event histogram captured by oauthStream before
+        // the error surfaced. Important for token-spend audits — a "failed"
+        // attempt can still bill reasoning + image_generation tool tokens.
+        usage: e?.usage || null,
+        eventTypeCounts: e?.eventTypeCounts || null,
+        reasoningSummary: e?.reasoningSummary || null,
+        refusalText: e?.refusalText || null,
       });
       console.warn(
         `${tag} attempt ${i + 1}/${attempts.length} THREW after ${durationMs}ms: ` +
         `code=${e?.code || e?.cause?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}` +
         (violation ? ` violation=[${Array.from(violation.categories).join(",")}]` : "") +
-        (networkErr ? ` [NETWORK]` : ""),
+        (networkErr ? ` [NETWORK]` : "") +
+        (authErr ? ` [AUTH]` : ""),
       );
+      // Auth-invalidated path: upstream OAuth token was revoked. No prompt
+      // rewrite or wrapper can fix this — only re-auth (codex login). Bail
+      // after the FIRST attempt to avoid burning the rest of the safety
+      // retry budget × every prompt in the batch (2026-04-30 incident:
+      // 31 prompts × 5 attempts = 155 wasted calls before any feedback).
+      if (authErr) {
+        const stop = new Error(
+          e?.message || "OAuth token invalidated — re-authentication required",
+        );
+        stop.code = "AUTH_INVALIDATED";
+        stop.status = 401;
+        stop.cause = e;
+        stop.attempts = log;
+        console.warn(
+          `${tag} non-retryable AUTH — aborting after ${i + 1}/${attempts.length} ` +
+            `(re-auth required, no point cycling variants)`,
+        );
+        throw stop;
+      }
       // Network failure path: OAuth proxy on 127.0.0.1:10531 is down or
       // restarting. Sleep to let the supervisor's 5s auto-restart finish,
       // then retry the SAME variant (don't burn safety retries on a
@@ -679,6 +727,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
             reasoningSummary: r.reasoningSummary || null,
             refusalText: r.refusalText || null,
             eventTypeCounts: r.eventTypeCounts || null,
+            usage: r.usage || null,
           });
           console.log(
             `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) SUCCESS in ${durationMs}ms ` +
@@ -709,6 +758,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           reasoningSummary: r?.reasoningSummary || null,
           refusalText: r?.refusalText || null,
           eventTypeCounts: r?.eventTypeCounts || null,
+          usage: r?.usage || null,
         });
         console.warn(
           `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) EMPTY (safety refusal) after ${durationMs}ms`,
@@ -728,6 +778,10 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           durationMs,
           startedAt,
           violationCategories: violation ? Array.from(violation.categories) : null,
+          usage: e?.usage || null,
+          eventTypeCounts: e?.eventTypeCounts || null,
+          reasoningSummary: e?.reasoningSummary || null,
+          refusalText: e?.refusalText || null,
         });
         console.warn(
           `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) THREW after ${durationMs}ms: ` +
@@ -750,6 +804,29 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   err.cause = lastErr;
   err.attempts = log;
   throw err;
+}
+
+// Sum numeric usage fields across all attempts in a runPromptAttempts log.
+// Used to surface "this generation actually billed N reasoning + M output
+// tokens despite ending in failure" in the failure sidecar — without it,
+// only the final successful attempt's usage was tracked, which made
+// retry-thrash incidents (e.g. 5 attempts × 31 prompts on AUTH_INVALIDATED)
+// invisible in the per-image accounting.
+function sumAttemptsUsage(attempts) {
+  if (!Array.isArray(attempts) || attempts.length === 0) return null;
+  const total = {};
+  let any = false;
+  for (const a of attempts) {
+    const u = a?.usage;
+    if (!u || typeof u !== "object") continue;
+    for (const [k, v] of Object.entries(u)) {
+      if (typeof v === "number") {
+        total[k] = (total[k] || 0) + v;
+        any = true;
+      }
+    }
+  }
+  return any ? total : null;
 }
 
 function clampMaxAttempts(v, fallback = 2) {
@@ -786,6 +863,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       owner: owner || LEGACY_OWNER,
       requestId,
       attempts: attempts || [],
+      attemptsTotalUsage: sumAttemptsUsage(attempts),
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
       ...(outfitModule ? { outfitModule } : {}),
@@ -1846,6 +1924,7 @@ app.post("/api/generate", async (req, res) => {
           webSearchCalls: r.value.webSearchCalls || 0,
           maxAttempts,
           attempts: Array.isArray(r.value.attempts) ? r.value.attempts : [],
+          attemptsTotalUsage: sumAttemptsUsage(r.value.attempts),
           referenceCount: refB64s.length,
           references: refLineage,
           sessionId,
@@ -1895,6 +1974,13 @@ app.post("/api/generate", async (req, res) => {
         return res.status(429).json({
           error: firstErr.message || "OpenAI usage limit reached",
           code: "USAGE_LIMIT",
+          attempts: firstErr.attempts || [],
+        });
+      }
+      if (firstErr?.code === "AUTH_INVALIDATED" || firstErr?.status === 401) {
+        return res.status(401).json({
+          error: firstErr.message || "OAuth token invalidated — re-authentication required",
+          code: "AUTH_INVALIDATED",
           attempts: firstErr.attempts || [],
         });
       }

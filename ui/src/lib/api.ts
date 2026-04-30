@@ -101,6 +101,48 @@ export function postGenerate(payload: GenerateRequest): Promise<GenerateResponse
   });
 }
 
+export type BatchSummary = {
+  total: number;
+  succeeded: number;
+  failed: number;
+  totalAttempts: number;
+  totalUsage: Record<string, number> | null;
+  reasons: Record<string, number>;
+};
+
+export type BatchCloseResponse = {
+  meta: Record<string, unknown> | null;
+  summary: BatchSummary;
+};
+
+export function closeBatch(
+  batchId: string,
+  stopReason?: string | null,
+): Promise<BatchCloseResponse> {
+  return jsonFetch<BatchCloseResponse>(
+    `/api/batch/${encodeURIComponent(batchId)}/close`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(stopReason ? { stopReason } : {}),
+    },
+  );
+}
+
+export function getBatch(batchId: string): Promise<{
+  meta: Record<string, unknown> | null;
+  summary: BatchSummary;
+  entries: Array<Record<string, unknown>>;
+}> {
+  return jsonFetch(`/api/batch/${encodeURIComponent(batchId)}`);
+}
+
+export function listBatches(limit = 50): Promise<{
+  batches: Array<Record<string, unknown>>;
+}> {
+  return jsonFetch(`/api/batch?limit=${limit}`);
+}
+
 export function postEdit(payload: GenerateRequest): Promise<GenerateResponse> {
   return jsonFetch<GenerateResponse>("/api/edit", {
     method: "POST",

@@ -5,7 +5,7 @@ import { EnhanceModal } from "./EnhanceModal";
 import { SexyTuneModal } from "./SexyTuneModal";
 import { RefBundlesModal } from "./RefBundlesModal";
 import { PromptBundlesModal } from "./PromptBundlesModal";
-import { enhancePrompt as apiEnhance } from "../lib/api";
+import { enhancePrompt as apiEnhance, closeBatch as apiCloseBatch } from "../lib/api";
 
 const MAX_REFS = 5;
 
@@ -321,10 +321,28 @@ export function PromptComposer() {
       setTxtBatchRunning(false);
     }
 
-    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 약 ${failedPrompts}건 · batch=${batchId.slice(0, 8)}`;
+    // Close out the batch on the server: stamps _meta.completedAt + summary
+    // and emits the [batch.summary] log line. Best-effort — a failed close
+    // call doesn't change the user's experience, the entries are already
+    // on disk and GET /api/batch/:id still aggregates lazily.
+    let serverSummary: Awaited<ReturnType<typeof apiCloseBatch>>["summary"] | null = null;
+    try {
+      const closed = await apiCloseBatch(batchId, stopReason);
+      serverSummary = closed.summary;
+    } catch (err) {
+      console.warn("[txt-batch] close batch failed:", err);
+    }
+
+    const tokenSuffix = serverSummary?.totalUsage
+      ? ` · in=${serverSummary.totalUsage.input_tokens ?? "?"} ` +
+        `out=${serverSummary.totalUsage.output_tokens ?? "?"}`
+      : "";
+    const summary = `일괄 종료 — 성공 ${succeeded}장 / 실패 약 ${failedPrompts}건 · ` +
+      `batch=${batchId.slice(0, 8)}${tokenSuffix}`;
     console.log(
       `[txt-batch] complete: batchId=${batchId} succeeded=${succeeded} failedPrompts=${failedPrompts} ` +
-      `stopReason=${stopReason ?? "none"} — full report: curl -s /api/batch/${batchId} | jq`,
+      `stopReason=${stopReason ?? "none"} server-summary=${JSON.stringify(serverSummary)} ` +
+      `— full report: curl -s /api/batch/${batchId} | jq`,
     );
     if (stopReason) {
       showToast(`${summary} · ${stopReason}`, true);

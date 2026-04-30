@@ -30,6 +30,7 @@ import {
   readBatch,
   listBatches,
   summarizeBatch,
+  closeBatch,
 } from "./lib/batchLog.js";
 import { buildEnhancePayload, extractEnhancedText, sanitizeEnhancedText } from "./lib/enhance.js";
 import {
@@ -1831,6 +1832,56 @@ app.get("/api/batch", async (req, res) => {
   } catch (err) {
     console.warn(`[batch] list failed: ${err?.message || err}`);
     res.status(500).json({ error: err?.message || String(err), batches: [] });
+  }
+});
+
+// POST /api/batch/:id/close
+//   Called by the client when a fanout (e.g. 텍스트 일괄) finishes — including
+//   when it bailed early on stop conditions. Stamps _meta.completedAt and
+//   _meta.summary so subsequent reads don't have to re-aggregate, and
+//   emits the [batch.summary] log line for /var/log/ima2-gen.log so any
+//   31-prompt run leaves exactly one greppable summary entry. Idempotent
+//   — re-calling overwrites with the freshest snapshot of entries.
+app.post("/api/batch/:id/close", async (req, res) => {
+  const id = req.params.id;
+  if (!isValidBatchId(id)) {
+    return res.status(400).json({ error: "Invalid batchId" });
+  }
+  try {
+    const stopReason = typeof req.body?.stopReason === "string"
+      ? req.body.stopReason.slice(0, 200)
+      : null;
+    const closed = await closeBatch({
+      generatedDir: join(__dirname, "generated"),
+      batchId: id,
+    });
+    if (!closed) return res.status(404).json({ error: "batch not found" });
+    if (req.authUser && closed.meta?.owner && closed.meta.owner !== req.authUser) {
+      return res.status(404).json({ error: "batch not found" });
+    }
+    const { summary, meta } = closed;
+    // One-line audit trail per batch. Sanitized via logger.js — promptPreview
+    // / errorMessage on individual entries stay in the per-entry JSON, never
+    // here. reasons is a small dict of { errorCode: count } so the most
+    // common failure mode is one grep away.
+    logEvent("batch", "summary", {
+      batchId: id,
+      total: summary.total,
+      succeeded: summary.succeeded,
+      failed: summary.failed,
+      totalAttempts: summary.totalAttempts,
+      reasons: JSON.stringify(summary.reasons),
+      promptTokens: summary.totalUsage?.input_tokens ?? null,
+      reasoningTokens: summary.totalUsage?.output_tokens ?? null,
+      durationMs:
+        meta?.completedAt && meta?.startedAt ? meta.completedAt - meta.startedAt : null,
+      source: meta?.source || null,
+      stopReason: stopReason || null,
+    });
+    res.json({ meta, summary });
+  } catch (err) {
+    console.warn(`[batch] close ${id} failed: ${err?.message || err}`);
+    res.status(500).json({ error: err?.message || String(err) });
   }
 });
 

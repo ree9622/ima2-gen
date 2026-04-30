@@ -516,6 +516,18 @@ export type RefBundle = {
   createdAt: number;
 };
 
+// Saved prompt bundle (text-only). Server CRUD lives at /api/prompt-bundles
+// and parallels ref-bundles. Apply replaces the composer's prompt text.
+export type PromptBundle = {
+  id: string;
+  name: string;
+  prompt: string;
+  tags?: string[];
+  owner?: string;
+  createdAt: number;
+  updatedAt?: number;
+};
+
 type AppState = {
   provider: Provider;
   quality: Quality;
@@ -544,6 +556,17 @@ type AppState = {
   applyRefBundle: (id: string, opts?: { append?: boolean }) => Promise<void>;
   deleteRefBundle: (id: string) => Promise<void>;
   renameRefBundle: (id: string, name: string) => Promise<void>;
+  // Prompt bundles — same CRUD shape as ref bundles, text-only payload.
+  promptBundles: PromptBundle[];
+  promptBundlesLoading: boolean;
+  loadPromptBundles: () => Promise<void>;
+  savePromptBundle: (name: string, opts?: { tags?: string[] }) => Promise<PromptBundle | null>;
+  applyPromptBundle: (id: string) => void;
+  deletePromptBundle: (id: string) => Promise<void>;
+  updatePromptBundle: (
+    id: string,
+    patch: { name?: string; prompt?: string; tags?: string[] },
+  ) => Promise<void>;
   activeGenerations: number;
   inFlight: PersistedInFlight[];
   startInFlightPolling: () => void;
@@ -1129,6 +1152,98 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((s) => ({ refBundles: s.refBundles.map((b) => (b.id === id ? next : b)) }));
     } catch (e) {
       get().showToast(`이름 변경 실패: ${(e as Error).message}`, true);
+    }
+  },
+
+  // ─── Prompt bundles ─────────────────────────────────────────────────────
+  promptBundles: [],
+  promptBundlesLoading: false,
+  loadPromptBundles: async () => {
+    set({ promptBundlesLoading: true });
+    try {
+      const res = await fetch("/api/prompt-bundles");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      set({ promptBundles: Array.isArray(j?.bundles) ? j.bundles : [] });
+    } catch (e) {
+      get().showToast(`프롬프트 묶음 불러오기 실패: ${(e as Error).message}`, true);
+    } finally {
+      set({ promptBundlesLoading: false });
+    }
+  },
+  savePromptBundle: async (name, opts = {}) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      get().showToast("이름을 입력하세요.", true);
+      return null;
+    }
+    const promptText = get().prompt;
+    if (!promptText.trim()) {
+      get().showToast("저장할 프롬프트가 비어 있습니다.", true);
+      return null;
+    }
+    try {
+      const res = await fetch("/api/prompt-bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed, prompt: promptText, tags: opts.tags ?? [] }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      const j = await res.json();
+      const bundle = j.bundle as PromptBundle;
+      set((s) => ({ promptBundles: [bundle, ...s.promptBundles] }));
+      get().showToast(`프롬프트 묶음 "${bundle.name}" 저장됨.`);
+      return bundle;
+    } catch (e) {
+      get().showToast(`저장 실패: ${(e as Error).message}`, true);
+      return null;
+    }
+  },
+  applyPromptBundle: (id) => {
+    const bundle = get().promptBundles.find((b) => b.id === id);
+    if (!bundle) {
+      get().showToast("프롬프트 묶음을 찾을 수 없습니다.", true);
+      return;
+    }
+    set({ prompt: bundle.prompt });
+    get().showToast(`"${bundle.name}" 적용됨.`);
+  },
+  deletePromptBundle: async (id) => {
+    try {
+      const res = await fetch(`/api/prompt-bundles/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      set((s) => ({ promptBundles: s.promptBundles.filter((b) => b.id !== id) }));
+      get().showToast("프롬프트 묶음을 삭제했습니다.");
+    } catch (e) {
+      get().showToast(`삭제 실패: ${(e as Error).message}`, true);
+    }
+  },
+  updatePromptBundle: async (id, patch) => {
+    try {
+      const res = await fetch(`/api/prompt-bundles/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      const j = await res.json();
+      const next = j.bundle as PromptBundle;
+      set((s) => ({
+        promptBundles: s.promptBundles.map((b) => (b.id === id ? next : b)),
+      }));
+    } catch (e) {
+      get().showToast(`수정 실패: ${(e as Error).message}`, true);
     }
   },
 

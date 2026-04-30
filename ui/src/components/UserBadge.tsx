@@ -1,9 +1,11 @@
 import { useAppStore } from "../store/useAppStore";
 
-// Tiny floating badge in the top-right corner: shows the logged-in user
-// and exposes a logout action. Rendered only when auth is enabled and we
-// have a user — kept out of the way otherwise so legacy single-user
-// installs (IMA2_AUTH != "enabled") look unchanged.
+// Tiny floating badge: shows the logged-in user and exposes a logout
+// action. Anchored to the bottom-LEFT so it sits in dead space (Toast
+// owns bottom-right; the right-panel owns top-right; the sidebar logo
+// owns top-left). Rendered only when auth is enabled and we have a user
+// — kept out of the way otherwise so legacy single-user installs
+// (IMA2_AUTH != "enabled") look unchanged.
 export function UserBadge() {
   const auth = useAppStore((s) => s.auth);
   const logout = useAppStore((s) => s.logout);
@@ -14,8 +16,8 @@ export function UserBadge() {
     <div
       style={{
         position: "fixed",
-        top: 10,
-        right: 14,
+        bottom: 12,
+        left: 12,
         zIndex: 900,
         display: "flex",
         alignItems: "center",
@@ -27,7 +29,8 @@ export function UserBadge() {
         fontSize: 12,
         color: "var(--text)",
         boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-        opacity: 0.9,
+        opacity: 0.85,
+        pointerEvents: "auto",
       }}
     >
       <span style={{ color: "var(--text-dim)" }}>👤</span>

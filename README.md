@@ -1,5 +1,9 @@
 # ima2-gen
 
+<p align="center">
+  <img src="assets/logo.png" alt="ima2-gen logo" width="240">
+</p>
+
 [![npm version](https://img.shields.io/npm/v/ima2-gen)](https://www.npmjs.com/package/ima2-gen)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

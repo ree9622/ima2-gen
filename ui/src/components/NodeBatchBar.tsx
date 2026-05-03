@@ -17,8 +17,10 @@ export function NodeBatchBar() {
   const clearNodeSelection = useAppStore((s) => s.clearNodeSelection);
   const runNodeBatch = useAppStore((s) => s.runNodeBatch);
   const cancelNodeBatch = useAppStore((s) => s.cancelNodeBatch);
+  const disconnectEdges = useAppStore((s) => s.disconnectEdges);
 
   const selectedIds = nodes.filter((n) => n.selected).map((n) => n.id);
+  const selectedEdgeIds = edges.filter((e) => e.selected).map((e) => e.id);
   const selectedSet = new Set(selectedIds);
   const missingCount = nodes.filter((n) => selectedSet.has(n.id) && !nodeHasImage(n)).length;
   const staleImpact = getUnselectedDownstreamIds(edges, selectedIds).length;
@@ -35,6 +37,17 @@ export function NodeBatchBar() {
       <button type="button" onClick={selectAllGraphNodes} disabled={nodes.length === 0}>
         전체 선택
       </button>
+      {selectedEdgeIds.length > 0 ? (
+        <button
+          type="button"
+          className="node-batch-bar__danger"
+          onClick={() => disconnectEdges(selectedEdgeIds)}
+          title="선택한 연결선 끊기"
+          aria-label="선택한 연결선 끊기"
+        >
+          연결선 끊기 ({selectedEdgeIds.length})
+        </button>
+      ) : null}
       {selectedIds.length > 0 ? (
         <>
           <span className="node-batch-bar__meta">

@@ -657,6 +657,7 @@ type AppState = {
   graphEdges: GraphEdge[];
   setGraphNodes: (n: GraphNode[]) => void;
   setGraphEdges: (e: GraphEdge[]) => void;
+  disconnectEdges: (ids: string[]) => void;
   autoLayoutGraph: (direction?: LayoutDirection) => void;
   toggleNodeCollapsed: (clientId: ClientNodeId) => void;
   setNodeColorTag: (clientId: ClientNodeId, tag: ColorTag | null) => void;
@@ -1955,23 +1956,36 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       // Classic-mode image — no graph session to jump to. Prefill the
       // composer with this image's prompt + options so the click feels
       // like "open this for re-work" instead of a dead end.
+      // upstream abfb80d 흡수: prompt 없는 이미지(외부 import 등)도 dead-end
+      // 띄우지 말고 이미지를 ref로 첨부해서 "빈 prompt + ref" 상태로 진입.
       const prompt = (target.prompt ?? "").trim();
-      if (!prompt) {
-        get().showToast("이 이미지의 프롬프트 정보를 찾지 못했습니다.", true);
-        return;
-      }
+      const hasPrompt = prompt.length > 0;
       const s = get();
-      set({
-        prompt,
-        originalPrompt:
-          typeof target.originalPrompt === "string" && target.originalPrompt.length > 0
-            ? target.originalPrompt
-            : null,
+      const next: Partial<AppState> = {
         quality: (target.quality as Quality) || s.quality,
         sizePreset: (target.size as SizePreset) || s.sizePreset,
         moderation: (target.moderation as Moderation) || s.moderation,
-      });
-      get().showToast("프롬프트와 옵션을 가져왔습니다.");
+      };
+      if (hasPrompt) {
+        next.prompt = prompt;
+        next.originalPrompt =
+          typeof target.originalPrompt === "string" && target.originalPrompt.length > 0
+            ? target.originalPrompt
+            : null;
+      }
+      set(next);
+      if (!hasPrompt && target.image) {
+        try {
+          await get().addReferenceDataUrl(target.image);
+        } catch {
+          // ref 첨부 실패는 무시 — 빈 composer라도 열리게
+        }
+      }
+      get().showToast(
+        hasPrompt
+          ? "프롬프트와 옵션을 가져왔습니다."
+          : "이미지를 참조로 첨부했어요. 프롬프트 입력 후 생성하세요.",
+      );
       // Focus the composer textarea after the lightbox unmounts.
       setTimeout(() => {
         const el = document.querySelector<HTMLTextAreaElement>(
@@ -2010,6 +2024,15 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   setGraphEdges: (graphEdges) => {
     set({ graphEdges });
     get().scheduleGraphSave();
+  },
+  disconnectEdges: (ids) => {
+    if (!ids || ids.length === 0) return;
+    const idSet = new Set(ids);
+    const next = get().graphEdges.filter((e) => !idSet.has(e.id));
+    if (next.length === get().graphEdges.length) return;
+    set({ graphEdges: next });
+    get().scheduleGraphSave();
+    get().showToast("연결선을 끊었습니다.");
   },
   autoLayoutGraph: (direction = "LR") => {
     const { graphNodes, graphEdges } = get();

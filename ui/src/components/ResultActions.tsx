@@ -6,6 +6,7 @@ export function ResultActions() {
   const setPrompt = useAppStore((s) => s.setPrompt);
   const vary = useAppStore((s) => s.varyCurrentResult);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
+  const addReferenceDataUrl = useAppStore((s) => s.addReferenceDataUrl);
   const isFav = Boolean(currentImage?.favorite);
 
   if (!currentImage) return null;
@@ -34,12 +35,15 @@ export function ResultActions() {
     showToast("프롬프트를 복사했습니다");
   };
 
-  const newFromHere = () => {
-    if (!currentImage.prompt) {
-      showToast("가져올 프롬프트가 없습니다", true);
-      return;
+  const newFromHere = async () => {
+    const hasPrompt = Boolean(currentImage.prompt);
+    if (hasPrompt) setPrompt(currentImage.prompt as string);
+    // upstream abfb80d: 메타 없는 이미지도 fork 가능 — 이미지를 참조로 자동 첨부
+    try {
+      await addReferenceDataUrl(currentImage.image);
+    } catch {
+      // ref 첨부 실패는 무시 (예: 5장 한도). prompt만이라도 가져오기
     }
-    setPrompt(currentImage.prompt);
     const promptEl = document.querySelector<HTMLTextAreaElement>(
       'textarea[name="prompt"], textarea#prompt, .sidebar textarea',
     );
@@ -47,7 +51,11 @@ export function ResultActions() {
       promptEl.focus();
       promptEl.setSelectionRange(promptEl.value.length, promptEl.value.length);
     }
-    showToast("이 이미지의 프롬프트를 가져왔습니다. 수정 후 다시 생성하세요");
+    showToast(
+      hasPrompt
+        ? "이 이미지의 프롬프트를 가져왔습니다. 수정 후 다시 생성하세요"
+        : "이미지를 참조로 첨부했어요. 프롬프트 입력 후 생성하세요",
+    );
   };
 
   return (

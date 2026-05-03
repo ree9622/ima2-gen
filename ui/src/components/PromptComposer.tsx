@@ -5,6 +5,7 @@ import { EnhanceModal } from "./EnhanceModal";
 import { SexyTuneModal } from "./SexyTuneModal";
 import { RefBundlesModal } from "./RefBundlesModal";
 import { PromptBundlesModal } from "./PromptBundlesModal";
+import { MetadataRestoreCard } from "./MetadataRestoreCard";
 import { enhancePrompt as apiEnhance, closeBatch as apiCloseBatch } from "../lib/api";
 
 const MAX_REFS = 5;
@@ -382,6 +383,8 @@ export function PromptComposer() {
             참조 {refs.length}/{MAX_REFS}
           </span>
         )}
+        <div className="composer__header-spacer" />
+        <MetadataRestoreCard />
       </div>
 
       {refs.length > 0 && (

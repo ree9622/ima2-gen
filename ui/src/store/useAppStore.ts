@@ -737,6 +737,13 @@ type AppState = {
   setModeration: (m: Moderation) => void;
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
+  // Restore prompt + size + quality from a PNG's ima2:* tEXt chunks.
+  // Fields not present in the metadata are left untouched (Phase 6.2).
+  restoreFromImageMetadata: (meta: {
+    prompt?: string;
+    size?: string;
+    quality?: string;
+  }) => void;
   // Original (pre-enhance) prompt — set by EnhanceModal.onApply, cleared on
   // direct edits or external prompt changes. Used so generate / sidecar can
   // record what the user originally typed before the enhance rewrite.
@@ -3279,6 +3286,32 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     const next: Partial<AppState> = { prompt };
     if (cur.originalPrompt && prompt !== cur.prompt) next.originalPrompt = null;
     set(next);
+  },
+  restoreFromImageMetadata: (meta) => {
+    const patch: Partial<AppState> = {};
+    if (typeof meta.prompt === "string" && meta.prompt.length > 0) {
+      patch.prompt = meta.prompt;
+      patch.originalPrompt = null;
+    }
+    if (typeof meta.quality === "string" && (meta.quality === "low" || meta.quality === "medium" || meta.quality === "high")) {
+      patch.quality = meta.quality;
+    }
+    if (typeof meta.size === "string" && /^\d+x\d+$/.test(meta.size)) {
+      // Size string can match a known preset (use setSizePreset path) or be
+      // arbitrary custom (write to customW/customH and switch to "custom").
+      // We just store the literal — SizePicker reads sizePreset, so set both.
+      const [wStr, hStr] = meta.size.split("x");
+      const w = Number(wStr);
+      const h = Number(hStr);
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        patch.sizePreset = meta.size as AppState["sizePreset"];
+        patch.customW = snap16(w);
+        patch.customH = snap16(h);
+      }
+    } else if (meta.size === "auto") {
+      patch.sizePreset = "auto" as AppState["sizePreset"];
+    }
+    if (Object.keys(patch).length > 0) set(patch);
   },
   originalPrompt: null,
   applyEnhancedPrompt: (original, enhanced) => {

@@ -3630,3 +3630,123 @@ body {
   color: var(--text-dim);
   text-align: center;
 }
+
+/* Metadata restore (Phase 6.2) — PNG에 박힌 ima2:* tEXt 청크를 폼에 복원.
+   PromptComposer 헤더 우측에 트리거 버튼이 있고, 파일을 고르면 인라인 카드가
+   composer 본문 위에 오버레이된다. */
+.composer__header-spacer { flex: 1 1 auto; }
+
+.metadata-restore { position: relative; }
+
+.metadata-restore__trigger {
+  background: transparent;
+  border: 1px solid var(--border, #d4d4d8);
+  color: var(--text-muted, #71717a);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.metadata-restore__trigger:hover {
+  background: var(--surface-hover, #f4f4f5);
+  color: var(--text, #18181b);
+  border-color: var(--border-strong, #a1a1aa);
+}
+
+.metadata-restore__card {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(420px, 90vw);
+  max-height: min(60vh, 480px);
+  overflow: auto;
+  z-index: 30;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+}
+.metadata-restore__card--loading { color: var(--text-muted); }
+.metadata-restore__card--empty,
+.metadata-restore__card--error { border-color: #fbbf24; }
+.metadata-restore__card--error { border-color: #ef4444; }
+
+.metadata-restore__title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.metadata-restore__title small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.metadata-restore__hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.metadata-restore__hint code {
+  background: var(--surface-hover, #f4f4f5);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.metadata-restore__fields {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  column-gap: 12px;
+  row-gap: 6px;
+  margin: 0 0 12px;
+}
+.metadata-restore__fields dt {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+.metadata-restore__fields dd {
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.metadata-restore__prompt {
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 6.5em;
+  overflow: auto;
+}
+.metadata-restore__prompt--revised {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.metadata-restore__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.metadata-restore__actions button {
+  background: transparent;
+  border: 1px solid var(--border, #d4d4d8);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.metadata-restore__apply {
+  background: var(--accent, #18181b) !important;
+  color: var(--accent-fg, #fff) !important;
+  border-color: var(--accent, #18181b) !important;
+
+}

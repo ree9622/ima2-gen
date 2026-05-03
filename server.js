@@ -284,6 +284,32 @@ const REFERENCE_DEVELOPER_PROMPT = withDefaultPrompt(
   "Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts). Do not perform a web search; the reference image(s) are already the source of truth.",
 );
 
+// upstream 2b2b9d4 흡수 (4K 진단): 빈 응답 에러에 진단 사유를 붙여
+// failed-sidecar 에 errorCode 외 추가 컨텍스트가 남도록 한다.
+//   experimental_4k_empty_response — gpt-image-2 가 4K(>=3840) 사이즈에서
+//     빈 응답을 자주 내는 알려진 케이스
+//   reference_mime_mismatch_candidate — UI 가 declaredMime 으로 보냈지만
+//     실제 매직넘버는 다른 ref 가 있어 모델이 거부한 가능성
+function diagnose4kReason(size) {
+  if (typeof size !== "string") return null;
+  const [w, h] = size.split("x").map((p) => Number(p));
+  if (Number.isFinite(w) && Number.isFinite(h) && Math.max(w, h) >= 3840) {
+    return "experimental_4k_empty_response";
+  }
+  return null;
+}
+
+function diagnoseRefMismatch(references) {
+  // references[] 는 b64 문자열 배열. detectImageMimeFromB64 결과가
+  // null/undefined 인 경우 ref MIME 인식 실패로 간주.
+  if (!Array.isArray(references) || references.length === 0) return null;
+  for (const b64 of references) {
+    const detected = detectImageMimeFromB64(b64);
+    if (!detected) return "reference_mime_mismatch_candidate";
+  }
+  return null;
+}
+
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
@@ -356,12 +382,18 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   // retry would only strip the reference image, which defeats the purpose.
   // Fail loudly so the caller knows the reference call itself fell through.
   if (hasRefs) {
+    const reason = diagnoseRefMismatch(references) || diagnose4kReason(size);
     console.warn(
-      `${tag} stream EMPTY in ref-mode: events=${stream.eventCount} — throwing`,
+      `${tag} stream EMPTY in ref-mode: events=${stream.eventCount} — throwing` +
+      (reason ? ` (diagnostic=${reason})` : ""),
     );
-    throw new Error(
+    const e = new Error(
       `No image data received from OAuth proxy in reference mode (parsed ${stream.eventCount} events)`,
     );
+    e.code = "UPSTREAM_EMPTY";
+    if (reason) e.diagnosticReason = reason;
+    e.refsCount = references.length;
+    throw e;
   }
 
   // Stream ended without an image; proxy sometimes splits the response.
@@ -390,12 +422,17 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     return { b64: retry.b64, usage: retry.usage, webSearchCalls: stream.webSearchCalls, codexAccount: retry.codexAccount || stream.codexAccount };
   }
 
+  const finalReason = diagnose4kReason(size);
   console.warn(
-    `${tag} non-stream retry EMPTY: events=${stream.eventCount} — throwing`,
+    `${tag} non-stream retry EMPTY: events=${stream.eventCount} — throwing` +
+    (finalReason ? ` (diagnostic=${finalReason})` : ""),
   );
-  throw new Error(
+  const e = new Error(
     `No image data received from OAuth proxy (parsed ${stream.eventCount} events)`,
   );
+  e.code = "UPSTREAM_EMPTY";
+  if (finalReason) e.diagnosticReason = finalReason;
+  throw e;
 }
 
 // Errors we should NOT keep retrying: rate-limit / usage-cap responses from
@@ -876,6 +913,8 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       attemptsTotalUsage: sumAttemptsUsage(attempts),
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
+      ...(error?.diagnosticReason ? { diagnosticReason: error.diagnosticReason } : {}),
+      ...(typeof error?.refsCount === "number" ? { refsCount: error.refsCount } : {}),
       ...(outfitModule ? { outfitModule } : {}),
       ...(batchId ? { batchId, batchIndex } : {}),
     };

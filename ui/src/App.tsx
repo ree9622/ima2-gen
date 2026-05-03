@@ -6,6 +6,7 @@ import { RightPanel } from "./components/RightPanel";
 import { Toast } from "./components/Toast";
 import { GalleryModal } from "./components/GalleryModal";
 import { GenerationLogModal } from "./components/GenerationLogModal";
+import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { Lightbox } from "./components/Lightbox";
 import { LoginPage } from "./components/LoginPage";
@@ -128,6 +129,7 @@ export default function App() {
       <Toast />
       <GalleryModal />
       <GenerationLogModal />
+      <PromptLibraryModal />
       <ShortcutsHelp />
       <Lightbox />
     </>

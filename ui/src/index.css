@@ -3638,7 +3638,12 @@ body {
 
 .metadata-restore { position: relative; }
 
-.metadata-restore__trigger {
+/* Prompt library (Phase 6.3) — 자주 쓰는 프롬프트 저장/검색/재사용. */
+
+.composer__header-spacer { flex: 1 1 auto; }
+
+.metadata-restore__trigger,
+.composer__lib-btn {
   background: transparent;
   border: 1px solid var(--border, #d4d4d8);
   color: var(--text-muted, #71717a);
@@ -3649,7 +3654,8 @@ body {
   white-space: nowrap;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.metadata-restore__trigger:hover {
+.metadata-restore__trigger:hover,
+.composer__lib-btn:not(:disabled):hover {
   background: var(--surface-hover, #f4f4f5);
   color: var(--text, #18181b);
   border-color: var(--border-strong, #a1a1aa);
@@ -3748,5 +3754,201 @@ body {
   background: var(--accent, #18181b) !important;
   color: var(--accent-fg, #fff) !important;
   border-color: var(--accent, #18181b) !important;
+}
 
+.composer__lib-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.composer__save-pop {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--surface-hover, #f4f4f5);
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 8px;
+}
+.composer__save-pop input {
+  flex: 1 1 auto;
+  border: 1px solid var(--border, #d4d4d8);
+  background: var(--surface, #fff);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.composer__save-pop button {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Library modal */
+.prompt-lib__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh 16px;
+}
+.prompt-lib__modal {
+  background: var(--surface, #fff);
+  width: min(720px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.prompt-lib__header {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border, #e4e4e7);
+}
+.prompt-lib__title { font-weight: 600; flex: 1 1 auto; }
+.prompt-lib__close {
+  background: transparent;
+  border: 0;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text-muted, #71717a);
+  width: 28px; height: 28px;
+  border-radius: 6px;
+}
+.prompt-lib__close:hover { background: var(--surface-hover, #f4f4f5); }
+
+.prompt-lib__search {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #e4e4e7);
+}
+.prompt-lib__search input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface, #fff);
+}
+
+.prompt-lib__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px;
+}
+.prompt-lib__empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted, #71717a);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.prompt-lib__card {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  position: relative;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.prompt-lib__card:hover { border-color: var(--border-strong, #a1a1aa); }
+.prompt-lib__card.is-pinned {
+  background: linear-gradient(0deg, rgba(255, 220, 100, 0.08), rgba(255, 220, 100, 0.08)), var(--surface, #fff);
+  border-color: rgba(234, 179, 8, 0.5);
+}
+
+.prompt-lib__card-body {
+  flex: 1 1 auto;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.prompt-lib__card-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text, #18181b);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.prompt-lib__pin-badge { font-size: 12px; }
+.prompt-lib__card-preview {
+  font-size: 12px;
+  color: var(--text-muted, #52525b);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.prompt-lib__card-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted, #71717a);
+}
+
+.prompt-lib__card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-left: 1px solid var(--border, #e4e4e7);
+}
+.prompt-lib__card-actions button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+.prompt-lib__card-actions button:hover {
+  opacity: 1;
+  background: var(--surface-hover, #f4f4f5);
+}
+
+.prompt-lib__rename {
+  position: absolute;
+  inset: 0;
+  background: var(--surface, #fff);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+.prompt-lib__rename input {
+  flex: 1 1 auto;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.prompt-lib__rename button {
+  background: var(--accent, #18181b);
+  color: var(--accent-fg, #fff);
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
 }

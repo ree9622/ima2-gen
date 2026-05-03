@@ -83,11 +83,11 @@ describe("inflight schema migration (hotfix for the 2026-04-26 prod state)", () 
     assert.ok(idx.includes("idx_inflight_owner"), "owner index should exist");
   });
 
-  it("bumps schema_version from 2 to 3", () => {
+  it("bumps schema_version to current (4 with prompts table)", () => {
     const ver = getDb()
       .prepare("SELECT value FROM _meta WHERE key='schema_version'")
       .get();
-    assert.equal(ver.value, "3");
+    assert.equal(ver.value, "4");
   });
 
   it("startJob via the public API works against the migrated table", async () => {

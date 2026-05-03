@@ -70,21 +70,22 @@ ima2 serve
 - Filename collisions avoided via `${Date.now()}_${randomBytes(4).hex}_${idx}` (commit `7a0e2f5`). Keep the random token when adding new write paths.
 - Tests live in `tests/*.test.js` using Node's built-in test runner (`node --test`). `scripts/run-tests.mjs` handles cross-platform invocation; CI matrix is Ubuntu/macOS/Windows × Node 20/22.
 
-## Workspace sync (PC ↔ asrock, BLOCKING)
+## Workspace (asrock 단일 호스트, BLOCKING)
 
-이 레포는 두 위치에서 동시에 운용된다. **편집은 asrock에서, PC는 검토/pull만.**
+이 레포는 **asrock 한 곳에서만** 운용한다. **PC에는 클론 없음.** 검토·편집·운영 모두 asrock SSH로.
 
 | Location | Role |
 | -------- | ---- |
-| **asrock** `/home/ko/apps/ima2-gen/` | 운영 서버 + **편집 source of truth** |
-| **PC** `C:\Users\ko\Desktop\ima2-gen\` (Mac: `/Users/ko/Desktop/ima2-gen/`) | 검토·플랜만. 직접 편집 금지 |
-| **GitHub** `ree9622/ima2-gen` (origin) | 양쪽이 동기화되는 진본 |
+| **asrock** `/home/ko/apps/ima2-gen/` | 운영 + 편집 + 단일 source of truth |
+| **GitHub** `ree9622/ima2-gen` (origin) | 백업 + 원격 검토 |
 
-이 정책은 ima2-router와 **반대 방향**임을 주의. 헷갈리면 다음 한 줄: *"router는 PC→asrock scp, gen은 asrock→git→PC pull"*.
+ima2-router는 반대로 PC가 source of truth (PC→asrock scp). 헷갈리면 한 줄: *"router는 PC→asrock, gen은 asrock 단독"*.
 
 ### 왜 이 정책인가
 
-2026-05-03에 asrock에서 직접 수정한 11파일 +523/-94 가 git에 미커밋 상태로 며칠 누적된 사고 발생. PC는 그 변경을 모르고 git만 보고 있었고, asrock 디스크 사고 시 통째로 손실 위험이었다. 양쪽에서 동시에 편집하면 divergence가 누적된다 → 한 쪽으로만 편집 흐름을 고정.
+2026-05-03 1차 정책: "PC = 검토, asrock = 편집" 양쪽 운용. 하지만 PC 클론이 며칠씩 stale 상태에 빠지고, 다른 세션이 PC 코드를 보고 잘못된 추정을 하는 사례가 잦았다. PC는 검토 전용이고 asrock SSH로 충분 → 같은 날 PC 클론 자체를 제거하는 단일 호스트 정책으로 전환 (2026-05-03 KST 16시).
+
+직전 사고: asrock에서 직접 수정한 11파일 +523/-94 가 git 미커밋으로 며칠 누적, asrock 디스크 사고 시 통째 손실 위험. → "편집 즉시 commit + push" 가드는 단일 호스트 정책에서도 그대로 유지.
 
 ### asrock 편집 절차 (모든 코드 변경)
 
@@ -93,26 +94,18 @@ ima2 serve
 3. JS 파일이면 syntax 검증: `/home/ko/.nvm/versions/node/v24.15.0/bin/node --check <file>`
 4. UI 변경이면 build: `cd ui && export PATH=/home/ko/.nvm/versions/node/v24.15.0/bin:$PATH && npm run build`
 5. 서비스 재시작 + 동작 확인 (curl 또는 브라우저)
-6. **즉시 `git add -A && git commit` + `git push origin main`** ← 이 단계 누락이 회귀 사고의 진짜 원인. 동작 확인 됐으면 30분 안에 커밋해야지, "내일 커밋하자"는 사고로 직결.
-7. PC에서 `git pull --ff-only origin main`로 회수 (다음번 PC 사용 시 첫 명령)
+6. **즉시 `git add -A && git commit` + `git push origin main`** ← 30분 내. "내일 커밋하자"는 asrock 디스크 사고 = 통째 손실로 직결.
 
-### 세션 시작 시 sync 선점검 (BLOCKING)
-
-새 세션 / 며칠 만에 돌아온 세션에서는 다른 일 시작 전에 양쪽 git 상태부터:
+### 세션 시작 시 sync 선점검
 
 ```bash
-# PC
-cd /c/Users/ko/Desktop/ima2-gen && git fetch origin && git status && git log --oneline -3
-
-# asrock
 ssh asrock "cd /home/ko/apps/ima2-gen && git fetch origin && git status && git log --oneline -3"
 ```
 
 체크 항목:
 
-- 양쪽 HEAD가 같은가?
-- asrock에 uncommitted 변경이 있는가? (있으면 그 정리부터 — 다른 작업 시작 금지)
-- origin/main이 양쪽보다 앞서가는가? (있으면 둘 다 pull)
+- HEAD가 origin/main과 같은가?
+- uncommitted 변경이 있는가? (있으면 그 정리부터 — 다른 작업 시작 금지)
 
 차이를 발견하면 **그 정리가 모든 다른 작업보다 우선**.
 

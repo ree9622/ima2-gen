@@ -80,7 +80,7 @@ import {
   validateSize,
 } from "./lib/validate.js";
 import { createRequestLogger } from "./lib/requestLogger.js";
-import { validateAndNormalizeRefs } from "./lib/refs.js";
+import { detectImageMimeFromB64, validateAndNormalizeRefs } from "./lib/refs.js";
 import { logEvent, logError } from "./lib/logger.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -318,7 +318,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     ? [
         ...references.map((b64) => ({
           type: "input_image",
-          image_url: `data:image/png;base64,${b64}`,
+          image_url: `data:${detectImageMimeFromB64(b64) || "image/png"};base64,${b64}`,
         })),
         { type: "input_text", text: textPrompt },
       ]
@@ -2266,7 +2266,7 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
         {
           role: "user",
           content: [
-            { type: "input_image", image_url: `data:image/png;base64,${imageB64}` },
+            { type: "input_image", image_url: `data:${detectImageMimeFromB64(imageB64) || "image/png"};base64,${imageB64}` },
             { type: "input_text", text: boostRefPrompt(prompt) },
           ],
         },

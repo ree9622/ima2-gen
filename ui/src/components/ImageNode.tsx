@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, type CSSProperties } from "react";
+import { memo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   useAppStore,
@@ -35,6 +35,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
   const d = data as ImageNodeData;
   const updateNodePrompt = useAppStore((s) => s.updateNodePrompt);
   const generateNode = useAppStore((s) => s.generateNode);
+  const openLightbox = useAppStore((s) => s.openLightbox);
   const addChildNode = useAppStore((s) => s.addChildNode);
   const duplicateBranchRoot = useAppStore((s) => s.duplicateBranchRoot);
   const deleteNode = useAppStore((s) => s.deleteNode);
@@ -45,6 +46,15 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
     (s) => getDirectChildCount(id, s.graphEdges),
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [promptFocused, setPromptFocused] = useState(false);
+
+  const onImageClick = useCallback(() => {
+    if (!d.imageUrl) return;
+    // imageUrl is like "/generated/n_<id>.png" — pop the basename so the
+    // store can match it against the history list (sidecar-driven).
+    const filename = d.imageUrl.split("/").pop() ?? null;
+    openLightbox(filename);
+  }, [d.imageUrl, openLightbox]);
 
   const refs = d.referenceImages ?? [];
   const isRoot = !d.parentServerNodeId;
@@ -95,9 +105,14 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
   );
 
   const fanOutFromNode = useAppStore((s) => s.fanOutFromNode);
+  const addSiblingAndGenerate = useAppStore((s) => s.addSiblingAndGenerate);
   const onFanOut = useCallback(
     () => void fanOutFromNode(id, 3),
     [id, fanOutFromNode],
+  );
+  const onMakeVariant = useCallback(
+    () => void addSiblingAndGenerate(id),
+    [id, addSiblingAndGenerate],
   );
 
   const isBusy = d.status === "pending" || d.status === "reconciling";
@@ -132,7 +147,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
       ) : null}
       <div className="image-node__preview">
         {d.imageUrl && d.status !== "asset-missing" ? (
-          <img src={d.imageUrl} alt="노드 이미지" />
+          <img
+            src={d.imageUrl}
+            alt="노드 이미지"
+            onClick={onImageClick}
+            style={{ cursor: "zoom-in" }}
+            title="클릭하여 전체 화면으로 보기"
+          />
         ) : isBusy && d.partialImageUrl ? (
           <img
             className="image-node__partial"
@@ -187,13 +208,16 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
         </div>
       ) : null}
       <textarea
-        className="image-node__prompt nodrag"
+        className={`image-node__prompt nodrag${promptFocused ? " image-node__prompt--focused" : ""}`}
         value={d.prompt}
         onChange={onPromptChange}
         onKeyDown={(e) => e.stopPropagation()}
+        onFocus={() => setPromptFocused(true)}
+        onBlur={() => setPromptFocused(false)}
         placeholder={d.parentServerNodeId ? "수정 프롬프트..." : "프롬프트..."}
-        rows={2}
+        rows={promptFocused ? 10 : 2}
         disabled={isBusy}
+        style={promptFocused ? { minHeight: 200, maxHeight: 480 } : undefined}
       />
       <div className="image-node__footer">
         <div className="image-node__status-row">
@@ -215,14 +239,21 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
             type="button"
             onClick={onGenerate}
             disabled={isBusy}
-            title={d.status === "ready" ? "이 노드 다시 생성" : "이 노드 생성"}
+            title={d.status === "ready" ? "이 노드 자리에서 새 이미지로 덮어쓰기 (이전 이미지는 디스크에 남음)" : "이 노드 생성"}
           >
-            {d.status === "ready" ? "다시 생성" : "생성"}
+            {d.status === "ready" ? "다시 생성 (덮어쓰기)" : "생성"}
           </button>
           {d.status === "ready" ? (
             <>
               <button type="button" onClick={onBranch} title="자식 노드 추가">
                 자식 추가
+              </button>
+              <button
+                type="button"
+                onClick={onMakeVariant}
+                title="같은 프롬프트로 형제 노드 1개 생성"
+              >
+                변형 1
               </button>
               <button
                 type="button"

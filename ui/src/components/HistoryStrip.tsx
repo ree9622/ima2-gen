@@ -39,6 +39,7 @@ export function HistoryStrip() {
   const history = useAppStore((s) => s.history);
   const currentImage = useAppStore((s) => s.currentImage);
   const selectHistory = useAppStore((s) => s.selectHistory);
+  const openLightbox = useAppStore((s) => s.openLightbox);
   const openGallery = useAppStore((s) => s.openGallery);
 
   const favCount = history.filter((h) => h.favorite).length;
@@ -78,7 +79,14 @@ export function HistoryStrip() {
             type="button"
             key={item.filename ?? `${i}-${item.image}`}
             className={`history-thumb${active ? " active" : ""}`}
-            onClick={() => selectHistory(item)}
+            onClick={() => {
+              if (item.filename) {
+                openLightbox(item.filename);
+              } else {
+                selectHistory(item);
+                openLightbox();
+              }
+            }}
             title={buildTooltip(item)}
             aria-label={item.prompt ? `선택: ${item.prompt.slice(0, 40)}` : "이미지 선택"}
             aria-pressed={active}

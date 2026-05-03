@@ -71,6 +71,21 @@ export default function App() {
     };
   }, []);
 
+  // Step 4-A: while the node canvas is open, periodically reconcile orphan
+  // node-mode generations whose stream response was lost. Catches the case
+  // where the user stays on the page through a long generation that
+  // disconnects mid-stream — without this, they'd need to refresh manually.
+  const reconcileOrphansFromDisk = useAppStore((s) => s.reconcileOrphansFromDisk);
+  useEffect(() => {
+    if (uiMode !== "node") return;
+    if (auth.status !== "authed" && !(auth.status === "anonymous" && !auth.authEnabled)) return;
+    const intervalMs = 60_000;
+    const timer = setInterval(() => {
+      void reconcileOrphansFromDisk();
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [uiMode, auth.status, auth.authEnabled, reconcileOrphansFromDisk]);
+
   // While checkAuth is in flight, render a tiny placeholder instead of
   // flashing the LoginPage and then immediately replacing it.
   if (auth.status === "loading") {

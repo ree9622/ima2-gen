@@ -27,6 +27,7 @@ import {
   deleteSession as apiDeleteSession,
   saveSessionGraph,
   reconcileOrphans,
+  getNodeResult,
   type SessionSummary,
   type SessionFull,
   type HistoryItem,
@@ -690,6 +691,7 @@ type AppState = {
   removeNodeReference: (clientId: ClientNodeId, index: number) => void;
   clearNodeReferences: (clientId: ClientNodeId) => void;
   generateNode: (clientId: ClientNodeId) => Promise<void>;
+  addSiblingAndGenerate: (sourceClientId: ClientNodeId) => Promise<void>;
   // Fan-out: clone a parent node's prompt into N fresh children and run
   // them in parallel. Lets users explore variants without 3 manual clicks.
   fanOutFromNode: (parentClientId: ClientNodeId, count?: number) => Promise<void>;
@@ -1616,6 +1618,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           });
         }
       } catch {}
+      // Step 4-B: every poll cycle, sweep pending node-mode nodes whose
+      // streaming response was lost. reconcileGraphPending now does a result-
+      // store probe + sidecar fallback so this catches losses within ~5s
+      // instead of waiting for the user to reload or the 60s setInterval.
+      try {
+        if (get().uiMode === "node") void get().reconcileGraphPending();
+      } catch {}
       try {
         const lastKnown = get().history.reduce(
           (max, it) => (it.createdAt && it.createdAt > max ? it.createdAt : max),
@@ -2144,6 +2153,33 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       return;
     }
     const byId = new Map(jobs.map((j) => [j.requestId, j.phase] as const));
+
+    // Step 4-B: nodes that disappeared from inflight may have a cached result
+    // ready (server completed but stream was lost). Fetch results in parallel
+    // before falling back to stale.
+    const missingFromInflight = pendingNodes.filter((n) => {
+      const reqId = n.data?.pendingRequestId;
+      return reqId ? !byId.has(reqId) : false;
+    });
+    const resultsByReqId = new Map<string, Awaited<ReturnType<typeof getNodeResult>>>();
+    if (missingFromInflight.length > 0) {
+      const probes = await Promise.allSettled(
+        missingFromInflight.map(async (n) => {
+          const reqId = n.data!.pendingRequestId!;
+          const r = await getNodeResult(reqId);
+          return [reqId, r] as const;
+        }),
+      );
+      for (const p of probes) {
+        if (p.status === "fulfilled") {
+          const [reqId, result] = p.value;
+          if (result) resultsByReqId.set(reqId, result);
+        }
+      }
+    }
+
+    let recoveredCount = 0;
+    let failedCount = 0;
     const next = get().graphNodes.map((n) => {
       const reqId = n.data?.pendingRequestId;
       if (!reqId) return n;
@@ -2155,7 +2191,41 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           data: { ...n.data, status: "reconciling" as const, pendingPhase: phase },
         };
       }
-      // Not in-flight anymore — image may have landed, or job was lost
+      // Not in-flight anymore — try result store first (Step 4-B), then fall
+      // back to existing imageUrl check, then stale.
+      const cached = resultsByReqId.get(reqId);
+      if (cached && cached.status === "done") {
+        recoveredCount++;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            serverNodeId: cached.payload.nodeId,
+            imageUrl: cached.payload.url,
+            status: "ready" as const,
+            pendingRequestId: null,
+            pendingPhase: null,
+            partialImageUrl: null,
+            elapsed: cached.payload.elapsed,
+            size: cached.payload.size ?? n.data.size ?? null,
+            error: undefined,
+          },
+        };
+      }
+      if (cached && cached.status === "error") {
+        failedCount++;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            pendingRequestId: null,
+            pendingPhase: null,
+            partialImageUrl: null,
+            status: "stale" as const,
+            error: cached.error.message ?? "생성에 실패했습니다.",
+          },
+        };
+      }
       const hasAsset = !!n.data.imageUrl || !!n.data.serverNodeId;
       return {
         ...n,
@@ -2169,6 +2239,16 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       };
     });
     set({ graphNodes: next });
+    if (recoveredCount > 0 || failedCount > 0) {
+      // Mirror reconcileOrphansFromDisk's UX so the user knows what just happened.
+      const parts: string[] = [];
+      if (recoveredCount > 0) parts.push(`이미지 ${recoveredCount}개 회복`);
+      if (failedCount > 0) parts.push(`실패 ${failedCount}개 표시`);
+      get().showToast(`끊긴 노드 자동 복구: ${parts.join(", ")}`);
+      // The recovered/failed nodes are now diverged from the saved graph;
+      // persist them so reload picks up the recovery.
+      get().scheduleGraphSave();
+    }
   },
 
   async reconcileOrphansFromDisk() {
@@ -2209,6 +2289,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         graphNodes: [],
         graphEdges: [],
       });
+      // First-boot path also needs orphan reconcile — switchSession was
+      // skipped, but a previous tab might have left pending generations
+      // that completed server-side after the user closed the browser
+      // (P1-9). reconcileGraphPending is a no-op when graphNodes is empty.
+      void get().reconcileOrphansFromDisk();
     } catch (err) {
       console.warn("[sessions] create failed:", err);
       get().showToast("세션을 만들지 못했습니다.", true);
@@ -2349,9 +2434,29 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       get().showToast("노드 캔버스로 보냈습니다.");
       return clientId;
     } catch (err) {
-      set({ graphNodes: get().graphNodes.filter((n) => n.id !== clientId) });
+      // P1-7: don't drop the placeholder — server may have written the image
+      // + sidecar before the response failed. Keep it as stale so the next
+      // reconcileOrphansFromDisk pass can match it via clientNodeId.
+      set({
+        graphNodes: get().graphNodes.map((n) =>
+          n.id === clientId
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  status: "stale",
+                  error: "응답을 받지 못했습니다. 자동 복구를 시도합니다.",
+                  pendingRequestId: null,
+                  pendingPhase: null,
+                },
+              }
+            : n,
+        ),
+      });
       const msg = err instanceof Error ? err.message : "알 수 없는 오류";
-      get().showToast(`노드로 보내지 못했습니다: ${msg}`, true);
+      get().showToast(`노드로 보내지 못했습니다: ${msg} — 새로고침 또는 60초 내 자동 복구 시도`, true);
+      // Immediate reconcile attempt — file may already be on disk.
+      void get().reconcileOrphansFromDisk();
       return null;
     }
   },
@@ -2655,9 +2760,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   },
 
   async generateNode(clientId) {
-    const requestedNode = get().graphNodes.find((n) => n.id === clientId);
-    const targetClientId =
-      requestedNode?.data.status === "ready" ? get().addSiblingNode(clientId) : clientId;
+    // Capture session at start so a mid-generation switchSession does not leak
+    // this node's save into the wrong session graph (P0-1).
+    const startedSessionId = get().activeSessionId;
+    // In-place regen: ready nodes used to spawn an orphan sibling (P1-8). Now
+    // they always overwrite. Use addSiblingAndGenerate(clientId) for the
+    // explicit "variant" path (the new "변형 1" button on ImageNode).
+    const targetClientId = clientId;
     const node = get().graphNodes.find((n) => n.id === targetClientId);
     if (!node) return;
     const { prompt, parentServerNodeId } = node.data;
@@ -2854,8 +2963,27 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         activeGenerations: Math.max(0, get().activeGenerations - 1),
       });
     } finally {
-      if (!unloading) get().scheduleGraphSave();
+      if (!unloading) {
+        if (get().activeSessionId === startedSessionId) {
+          get().scheduleGraphSave();
+        } else {
+          // Session switched mid-generation. Image + sidecar are on disk;
+          // reconcileOrphansFromDisk will recover the node when user returns
+          // to the original session.
+          console.warn("[node-generate] session switched mid-flight — relying on disk reconcile", { startedSessionId, currentSessionId: get().activeSessionId });
+        }
+      }
     }
+  },
+
+  async addSiblingAndGenerate(sourceClientId) {
+    const sib = get().addSiblingNode(sourceClientId);
+    if (sib === sourceClientId) return; // addSiblingNode short-circuited
+    const source = get().graphNodes.find((n) => n.id === sourceClientId);
+    if (source?.data.prompt) {
+      get().updateNodePrompt(sib, source.data.prompt);
+    }
+    await get().generateNode(sib);
   },
 
   async fanOutFromNode(parentClientId, count = 3) {
@@ -2962,6 +3090,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     if (existing) return;
     const source = get().graphNodes.find((n) => n.id === sourceClientId);
     if (!source) return;
+    // Cycle guard: refuse if target can already reach source (P0-5). Without
+    // this, A→B→C→A connections deadlock topologicalSort/layoutGraph and
+    // freeze the tab.
+    if (wouldCreateCycle(get().graphEdges, sourceClientId, targetClientId)) {
+      get().showToast("순환 연결은 만들 수 없습니다.", true);
+      return;
+    }
     set({
       graphNodes: get().graphNodes.map((n) =>
         n.id === targetClientId
@@ -3486,7 +3621,8 @@ type GraphSaveReason =
   | "switch-session"
   | "recovery"
   | "beforeunload"
-  | "queued";
+  | "queued"
+  | "retry-after-fail";
 type GraphSaveResult = "saved" | "skipped" | "conflict" | "failed";
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -3526,7 +3662,19 @@ async function reloadSessionAfterConflict(
     graphEdges,
     activeSessionGraphVersion: graphVersion,
   });
-  get().showToast("그래프 버전이 달라져 최신 그래프를 다시 불러왔습니다.", true);
+  // P1-10: 5-second toast was too easy to miss when another tab silently
+  // overwrote your changes. Use a blocking alert so the data loss is
+  // explicit. Alert is intentionally intrusive — internal tool only.
+  const msg = "다른 탭에서 변경이 감지되어 그래프를 최신 상태로 다시 불러왔습니다.\n방금 작업한 노드 일부가 사라졌을 수 있습니다.";
+  try {
+    if (typeof window !== "undefined" && typeof window.alert === "function") {
+      window.alert(msg);
+    } else {
+      get().showToast(msg, true);
+    }
+  } catch {
+    get().showToast(msg, true);
+  }
 }
 
 async function doSave(
@@ -3566,6 +3714,9 @@ async function doSave(
       return "conflict";
     }
     console.warn("[sessions] save failed:", err);
+    try {
+      get().showToast("그래프 저장에 실패했습니다. 잠시 후 자동 재시도합니다.", true);
+    } catch {}
     return "failed";
   }
 }
@@ -3583,17 +3734,46 @@ async function runGraphSaveQueue(
   isSavingGraph = true;
   activeGraphSavePromise = (async () => {
     let nextReason = reason;
+    let lastResult: GraphSaveResult = "saved";
     do {
       needsGraphSave = false;
-      const result = await doSave(get, set, nextReason);
-      if (result === "conflict" || result === "failed") break;
+      lastResult = await doSave(get, set, nextReason);
+      if (lastResult === "conflict" || lastResult === "failed") break;
       nextReason = "queued";
     } while (needsGraphSave);
+    // On failed/conflict, any save scheduled during the in-flight save was
+    // dropped by the do-while break above. Re-schedule it via debounce so a
+    // transient failure does not permanently lose later changes (P0-2).
+    if (needsGraphSave && (lastResult === "failed" || lastResult === "conflict")) {
+      setTimeout(() => scheduleGraphSaveImpl(get, set, "retry-after-fail"), 0);
+    }
   })().finally(() => {
     isSavingGraph = false;
     activeGraphSavePromise = null;
   });
   await activeGraphSavePromise;
+}
+
+// DFS from `targetId` to see if it can already reach `sourceId`. If so,
+// adding sourceId → targetId would close a cycle. Used by connectNodes to
+// keep graph algorithms (topo sort, layout) terminating.
+function wouldCreateCycle(edges: GraphEdge[], sourceId: string, targetId: string): boolean {
+  const childrenByParent = new Map<string, string[]>();
+  for (const e of edges) {
+    if (!childrenByParent.has(e.source)) childrenByParent.set(e.source, []);
+    childrenByParent.get(e.source)!.push(e.target);
+  }
+  const visited = new Set<string>();
+  const stack = [targetId];
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (cur === sourceId) return true;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    const kids = childrenByParent.get(cur) ?? [];
+    for (const k of kids) stack.push(k);
+  }
+  return false;
 }
 
 function scheduleGraphSaveImpl(

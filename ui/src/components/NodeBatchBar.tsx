@@ -47,14 +47,9 @@ export function NodeBatchBar() {
           >
             누락만 생성
           </button>
-          <button
-            type="button"
-            onClick={() => run("regenerate-all")}
-            disabled={nodeBatchRunning}
-            title="현재 미구현 — sub-PR 6/7 의 in-place 재생성 도입 후 활성화"
-          >
-            모두 재생성
-          </button>
+          {/* "모두 재생성" temporarily removed — implementation arrives with B2 in-place regen.
+              Old button always landed on "실행할 노드가 없습니다" because regenerate-all
+              path uses the same missing-only filter (P0-4). */}
           {nodeBatchRunning ? (
             <button type="button" onClick={cancelNodeBatch} disabled={nodeBatchStopping}>
               {nodeBatchStopping ? "중지 중..." : "남은 작업 중지"}

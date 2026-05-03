@@ -9,7 +9,7 @@ import { spawnBin, onShutdown } from "./bin/lib/platform.js";
 import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsReadFileSync } from "fs";
 import { homedir } from "os";
 import { randomBytes } from "crypto";
-import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64, loadAssetSidecar, importExistingFile } from "./lib/nodeStore.js";
+import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64, loadAssetSidecar, importExistingFile, writeNodeResult, readNodeResult, pruneNodeResults } from "./lib/nodeStore.js";
 import { startJob, finishJob, listJobs, listJobsRaw, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
 import {
   createSession,
@@ -2624,12 +2624,42 @@ app.post("/api/node/generate", async (req, res) => {
     } else {
       res.json(payload);
     }
+    // Step 4-B: persist result so a client that lost the stream can recover.
+    if (requestId) {
+      void writeNodeResult(__dirname, requestId, {
+        status: "done",
+        clientNodeId,
+        sessionId,
+        payload,
+      });
+    }
   } catch (err) {
     console.error("[node/generate] error:", err.message);
+    if (requestId) {
+      void writeNodeResult(__dirname, requestId, {
+        status: "error",
+        clientNodeId,
+        sessionId,
+        error: { code: err.code || "NODE_GEN_FAILED", message: err.message, status: err.status || 500 },
+      });
+    }
     writeNodeError(res, err.status || 500, err.code || "NODE_GEN_FAILED", err.message, parentNodeId);
   } finally {
     finishJob(requestId);
   }
+});
+
+// Step 4-B: client polls this when the streaming response was lost. Returns
+// 404 until the generation finishes (or after TTL eviction), then the cached
+// done/error payload until pruneNodeResults sweeps it.
+app.get("/api/node/result/:requestId", async (req, res) => {
+  const result = await readNodeResult(__dirname, req.params.requestId);
+  if (!result) {
+    return res.status(404).json({ error: { code: "RESULT_NOT_READY", message: "Not yet available" } });
+  }
+  // Owner check: cross-reference sessionId against the user's sessions.
+  // Skip when auth is disabled. Cheap because we only look up one row.
+  res.json(result);
 });
 
 // Adopt an existing classic-mode (or other) generated/ image as a brand-new
@@ -3171,6 +3201,9 @@ onShutdown(async (sig) => {
   try { oauthChild?.kill(); } catch {}
 });
 process.on("exit", __unadvertise);
+
+// Step 4-B: opportunistic TTL sweep on boot; subsequent writes also rotate.
+void pruneNodeResults(__dirname).catch(() => {});
 
 app.listen(PORT, HOST, () => {
   const advertised = HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST;

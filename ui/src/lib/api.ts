@@ -433,6 +433,25 @@ export async function postNodeGenerateStream(
     }
   }
 
+  // P1-11: server may close the stream without a trailing \n\n, leaving the
+  // final "done" event in the buffer unparsed. Try one more parse pass.
+  if (!finalPayload && buffer.length > 0) {
+    try {
+      const parsed = parseSseBlock(buffer);
+      if (parsed?.event === "done") {
+        finalPayload = parsed.data as NodeGenerateResponse;
+      } else if (parsed?.event === "error") {
+        const err = parsed.data as NodeErrorResponse;
+        const msg = err?.error?.message ?? "Node generation failed";
+        const e = new Error(msg) as Error & { code?: string };
+        e.code = err?.error?.code;
+        throw e;
+      }
+    } catch {
+      // fall through to original error
+    }
+  }
+
   if (!finalPayload) {
     throw new Error("Node stream ended without a final image");
   }
@@ -534,6 +553,36 @@ export function reconcileOrphans(id: string): Promise<ReconcileOrphansResult> {
   return jsonFetch(`/api/sessions/${encodeURIComponent(id)}/reconcile-orphans`, {
     method: "POST",
   });
+}
+
+// Step 4-B: client polls this when the streaming response was lost. Returns
+// the cached generation result (status: "done" with payload, or "error" with
+// error info) for up to 24h after generation completes. 404 means generation
+// is still in flight or TTL has evicted the entry.
+export type NodeResultDone = {
+  status: "done";
+  clientNodeId: string | null;
+  sessionId: string | null;
+  payload: NodeGenerateResponse;
+  savedAt: number;
+};
+export type NodeResultError = {
+  status: "error";
+  clientNodeId: string | null;
+  sessionId: string | null;
+  error: { code: string; message: string; status: number };
+  savedAt: number;
+};
+export type NodeResult = NodeResultDone | NodeResultError;
+
+export async function getNodeResult(requestId: string): Promise<NodeResult | null> {
+  try {
+    return await jsonFetch(`/api/node/result/${encodeURIComponent(requestId)}`);
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 404) return null;
+    throw err;
+  }
 }
 
 export function getGenerationLog(

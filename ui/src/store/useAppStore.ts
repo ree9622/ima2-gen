@@ -737,12 +737,23 @@ type AppState = {
   setModeration: (m: Moderation) => void;
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
-  // Restore prompt + size + quality from a PNG's ima2:* tEXt chunks.
-  // Fields not present in the metadata are left untouched (Phase 6.2).
+  // Restore prompt + size + quality + moderation + fork extras from a PNG's
+  // ima2:* tEXt chunks. Fields not present in the metadata are left untouched
+  // (Phase 6.2 + fork extension). fork.originalPrompt 와 fork.maxAttempts 까지
+  // 같이 복원돼서 "이대로 채우기" 한 번으로 sexy-tune 시리즈 재현 준비가 끝난다.
   restoreFromImageMetadata: (meta: {
     prompt?: string;
     size?: string;
     quality?: string;
+    moderation?: string;
+    fork?: {
+      originalPrompt?: string;
+      outfit?: unknown;
+      maxAttempts?: string;
+      batchId?: string;
+      batchIndex?: string;
+      referenceCount?: string;
+    };
   }) => void;
   // Original (pre-enhance) prompt — set by EnhanceModal.onApply, cleared on
   // direct edits or external prompt changes. Used so generate / sidecar can
@@ -3311,6 +3322,26 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     } else if (meta.size === "auto") {
       patch.sizePreset = "auto" as AppState["sizePreset"];
     }
+    // fork extension: moderation 복원
+    if (typeof meta.moderation === "string" && (meta.moderation === "auto" || meta.moderation === "low")) {
+      patch.moderation = meta.moderation;
+    }
+    // fork extension: originalPrompt — sexy-tune 등으로 enhanced 된 prompt 의
+    // 원문 복원. patch.prompt 가 enhanced 본일 때 originalPrompt 도 같이 채움.
+    if (meta.fork?.originalPrompt && typeof meta.fork.originalPrompt === "string") {
+      patch.originalPrompt = meta.fork.originalPrompt;
+    }
+    // fork extension: maxAttempts 복원
+    if (meta.fork?.maxAttempts) {
+      const n = Number(meta.fork.maxAttempts);
+      if (Number.isFinite(n) && n >= 1 && n <= 20) {
+        patch.maxAttempts = n;
+      }
+    }
+    // 주의: meta.fork.outfit 은 sexy-tune 모달 상태와 결합돼야 의미가 있어
+    // 자동 복원 안 함 (MetadataRestoreCard 가 표시해서 사용자가 SexyTuneModal
+    // 을 열어 재현하도록 안내). 자동 복원하려면 SexyTuneModal 의 store
+    // 슬라이스에 "importOutfit(json)" 전용 액션이 필요 → 후속.
     if (Object.keys(patch).length > 0) set(patch);
   },
   originalPrompt: null,

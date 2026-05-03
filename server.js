@@ -151,15 +151,36 @@ app.use(authMiddleware);
 function stampImageMetaIfPng(buf, format, fields = {}) {
   if (format !== "png") return buf;
   try {
-    return writeTextChunks(buf, {
+    const chunks = {
       "ima2:version": IMA2_METADATA_VERSION,
       "ima2:prompt": fields.prompt ?? "",
       "ima2:revisedPrompt": fields.revisedPrompt ?? "",
       "ima2:size": fields.size ?? "",
       "ima2:quality": fields.quality ?? "",
       "ima2:model": fields.model ?? "gpt-image-2",
+      "ima2:moderation": fields.moderation ?? "",
       "ima2:createdAt": new Date().toISOString(),
-    });
+    };
+    // forkExtras 네임스페이스 — sexy-tune outfit, batch 추적, originalPrompt 등
+    // fork 자체 워크플로 정보를 "휴대 가능한 사본" 형태로 PNG 자체에 박아둔다.
+    // upstream e1b72fc 기본 스키마는 그대로 두고 fork.* 키만 부가.
+    if (fields.originalPrompt) chunks["ima2:fork.originalPrompt"] = String(fields.originalPrompt);
+    if (fields.outfitModule && typeof fields.outfitModule === "object") {
+      try { chunks["ima2:fork.outfit"] = JSON.stringify(fields.outfitModule); } catch {}
+    }
+    if (fields.batchId) {
+      chunks["ima2:fork.batchId"] = String(fields.batchId);
+      if (fields.batchIndex !== undefined && fields.batchIndex !== null) {
+        chunks["ima2:fork.batchIndex"] = String(fields.batchIndex);
+      }
+    }
+    if (fields.referenceCount !== undefined && fields.referenceCount !== null) {
+      chunks["ima2:fork.referenceCount"] = String(fields.referenceCount);
+    }
+    if (fields.maxAttempts !== undefined && fields.maxAttempts !== null) {
+      chunks["ima2:fork.maxAttempts"] = String(fields.maxAttempts);
+    }
+    return writeTextChunks(buf, chunks);
   } catch (err) {
     console.warn("[image-metadata] embed failed:", err?.message || err);
     return buf;
@@ -2185,6 +2206,13 @@ app.post("/api/generate", async (req, res) => {
           revisedPrompt: r.value.revisedPrompt,
           size,
           quality,
+          moderation,
+          originalPrompt,
+          outfitModule,
+          batchId,
+          batchIndex,
+          referenceCount: refB64s.length,
+          maxAttempts,
         });
         await writeFile(join(__dirname, "generated", filename), imageBuf);
         // Sidecar metadata for /api/history reconstruction
@@ -2461,6 +2489,7 @@ app.post("/api/edit", async (req, res) => {
       prompt,
       size,
       quality,
+      moderation: typeof moderation === "string" ? moderation : undefined,
     });
     await writeFile(join(__dirname, "generated", filename), editImageBuf);
     const meta = {

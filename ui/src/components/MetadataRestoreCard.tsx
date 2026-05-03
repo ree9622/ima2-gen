@@ -44,8 +44,11 @@ export function MetadataRestoreCard() {
       prompt: meta.prompt,
       size: meta.size,
       quality: meta.quality,
+      moderation: meta.moderation,
+      fork: meta.fork,
     });
-    showToast("이미지 설정을 복원했습니다", false);
+    const hasFork = Boolean(meta.fork && Object.keys(meta.fork).length);
+    showToast(hasFork ? "이미지 설정 복원 — 옵션/원문/maxAttempts 도 같이 적용" : "이미지 설정을 복원했습니다", false);
     close();
   }
 
@@ -138,6 +141,47 @@ export function MetadataRestoreCard() {
                 <dd className="metadata-restore__prompt metadata-restore__prompt--revised">
                   {state.meta.revisedPrompt}
                 </dd>
+              </>
+            )}
+            {state.meta.moderation && (
+              <>
+                <dt>moderation</dt>
+                <dd>{state.meta.moderation}</dd>
+              </>
+            )}
+            {state.meta.fork?.originalPrompt && (
+              <>
+                <dt>원문</dt>
+                <dd className="metadata-restore__prompt metadata-restore__prompt--revised">
+                  {state.meta.fork.originalPrompt}
+                </dd>
+              </>
+            )}
+            {state.meta.fork?.maxAttempts && (
+              <>
+                <dt>maxAttempts</dt>
+                <dd>{state.meta.fork.maxAttempts}</dd>
+              </>
+            )}
+            {state.meta.fork?.outfit ? (
+              <>
+                <dt>outfit</dt>
+                <dd className="metadata-restore__prompt metadata-restore__prompt--revised">
+                  {(() => {
+                    const o = state.meta.fork.outfit as { id?: string; label?: string; key?: string } | string | null;
+                    if (typeof o === "string") return o;
+                    if (o && typeof o === "object") {
+                      return o.label || o.id || o.key || JSON.stringify(o);
+                    }
+                    return null;
+                  })()}
+                </dd>
+              </>
+            ) : null}
+            {state.meta.fork?.batchId && (
+              <>
+                <dt>batch</dt>
+                <dd>{state.meta.fork.batchId}{state.meta.fork.batchIndex ? " #" + state.meta.fork.batchIndex : ""}</dd>
               </>
             )}
           </dl>

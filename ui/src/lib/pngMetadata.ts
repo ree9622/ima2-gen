@@ -70,6 +70,18 @@ export async function readPngMetadata(file: File): Promise<PngTextChunks> {
   return readPngTextChunksFromBytes(new Uint8Array(buf));
 }
 
+// fork-only 확장: ima2:fork.* 키는 sexy-tune outfit, batch 추적 등 fork 자체
+// 워크플로 데이터를 "휴대 가능한 사본" 으로 박아두는 네임스페이스. 기본
+// 스키마(ima2:prompt, ima2:size 등)는 upstream 호환 유지.
+export type Ima2ForkExtras = {
+  originalPrompt?: string;
+  outfit?: unknown; // JSON-stringified — caller does JSON.parse if needed
+  batchId?: string;
+  batchIndex?: string;
+  referenceCount?: string;
+  maxAttempts?: string;
+};
+
 // Restored fields object — only the ima2:* namespace, prefix stripped.
 export type Ima2Metadata = {
   version?: string;
@@ -78,18 +90,39 @@ export type Ima2Metadata = {
   size?: string;
   quality?: string;
   model?: string;
+  moderation?: string;
   createdAt?: string;
+  fork?: Ima2ForkExtras;
 };
 
-const IMA2_KEY_RE = /^ima2:([a-zA-Z0-9_]+)$/;
+const IMA2_KEY_RE = /^ima2:([a-zA-Z0-9_.]+)$/;
 
 export function pickIma2Metadata(chunks: PngTextChunks): Ima2Metadata {
   const out: Ima2Metadata = {};
+  const fork: Record<string, unknown> = {};
+  let hasFork = false;
   for (const [key, value] of Object.entries(chunks)) {
     const m = key.match(IMA2_KEY_RE);
     if (!m) continue;
-    (out as Record<string, string>)[m[1]] = value;
+    const subKey = m[1];
+    if (subKey.startsWith("fork.")) {
+      const forkKey = subKey.slice(5);
+      if (forkKey === "outfit") {
+        try {
+          fork.outfit = JSON.parse(value);
+        } catch {
+          // 파싱 실패하면 raw string 유지 (forward-compat)
+          fork.outfit = value;
+        }
+      } else {
+        fork[forkKey] = value;
+      }
+      hasFork = true;
+    } else {
+      (out as Record<string, unknown>)[subKey] = value;
+    }
   }
+  if (hasFork) out.fork = fork as Ima2ForkExtras;
   return out;
 }
 

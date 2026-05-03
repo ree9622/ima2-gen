@@ -21,12 +21,14 @@ function buildTooltip(item: {
   createdAt?: number;
   quality?: string;
   size?: string;
+  codexAccount?: string | null;
 }): string {
   const head = item.prompt ? item.prompt.slice(0, 80) : "이미지";
   const meta = [
     formatRelative(item.createdAt),
     item.quality,
     item.size,
+    item.codexAccount ? `acc:${item.codexAccount}` : null,
   ]
     .filter(Boolean)
     .join(" · ");

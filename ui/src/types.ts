@@ -43,6 +43,7 @@ export type GenerateItem = {
   originalPrompt?: string;
   elapsed?: number;
   provider?: string;
+  codexAccount?: string | null;
   quality?: string;
   size?: string;
   moderation?: string;

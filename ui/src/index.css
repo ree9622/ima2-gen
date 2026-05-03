@@ -1282,6 +1282,30 @@ body {
 .gallery__delete:hover {
   background: var(--red, #e54040);
 }
+.gallery__send-to-node {
+  position: absolute;
+  top: 6px;
+  right: 36px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 2;
+}
+.gallery__tile-wrap:hover .gallery__send-to-node {
+  opacity: 1;
+}
+.gallery__send-to-node:hover {
+  background: var(--accent, #4f8cff);
+}
 .gallery__group-toggle {
   display: inline-flex;
   gap: 4px;

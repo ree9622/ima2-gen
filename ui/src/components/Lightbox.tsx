@@ -21,6 +21,7 @@ export function Lightbox() {
   const selectHistory = useAppStore((s) => s.selectHistory);
   const jumpToImageSession = useAppStore((s) => s.jumpToImageSession);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
+  const importHistoryAsRootNode = useAppStore((s) => s.importHistoryAsRootNode);
 
   const [zoom, setZoom] = useState<ZoomMode>("fit");
   const [showCaption, setShowCaption] = useState<boolean>(() => {
@@ -205,6 +206,12 @@ export function Lightbox() {
     return () => clearInterval(id);
   }, [pendingUndo]);
 
+  const sendToNode = useCallback(async () => {
+    if (!currentImage) return;
+    const result = await importHistoryAsRootNode(currentImage);
+    if (result) close();
+  }, [currentImage, importHistoryAsRootNode, close]);
+
   const download = useCallback(async () => {
     if (!currentImage) return;
     const src = currentImage.url || currentImage.image;
@@ -302,6 +309,26 @@ export function Lightbox() {
           >
             {zoom === "fit" ? "100%" : "맞춤"}
           </button>
+          {currentImage.filename ? (
+            <button
+              type="button"
+              className="lightbox__btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                void sendToNode();
+              }}
+              aria-label="노드 캔버스로 보내기"
+              title="노드 캔버스로 보내기"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="6" cy="6" r="3" />
+                <circle cx="18" cy="18" r="3" />
+                <circle cx="18" cy="6" r="3" />
+                <line x1="9" y1="6" x2="15" y2="6" />
+                <line x1="18" y1="9" x2="18" y2="15" />
+              </svg>
+            </button>
+          ) : null}
           <button
             type="button"
             className="lightbox__btn"
@@ -431,6 +458,12 @@ export function Lightbox() {
         />
       </div>
 
+      {currentImage.codexAccount ? (
+        <div className="lightbox__account" title="이 이미지를 만든 codex 계정"
+             style={{position:"absolute",top:8,right:8,padding:"3px 8px",borderRadius:5,
+                     background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,letterSpacing:0,
+                     pointerEvents:"none"}}>acc: {currentImage.codexAccount}</div>
+      ) : null}
       {currentImage.prompt && showCaption ? (
         <div className="lightbox__caption" onClick={(e) => e.stopPropagation()}>
           <span className="lightbox__caption-text">{currentImage.prompt}</span>

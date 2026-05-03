@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { useAppStore } from "../store/useAppStore";
-import { StyleChips } from "./StyleChips";
+// import { StyleChips } from "./StyleChips"; // chip groups disabled 2026-04-30
 import { EnhanceModal } from "./EnhanceModal";
 import { SexyTuneModal } from "./SexyTuneModal";
 import { RefBundlesModal } from "./RefBundlesModal";
@@ -536,7 +536,7 @@ export function PromptComposer() {
         <span className="composer__hint">Ctrl + Enter로 생성</span>
       </div>
 
-      <StyleChips />
+      {/* <StyleChips />  // mood/portrait/quality/lens chip groups disabled 2026-04-30 */}
 
       {dragOver && (
         <div className="composer__dropzone" aria-hidden="true">

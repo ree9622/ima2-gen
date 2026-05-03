@@ -9,7 +9,7 @@ import { spawnBin, onShutdown } from "./bin/lib/platform.js";
 import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsReadFileSync } from "fs";
 import { homedir } from "os";
 import { randomBytes } from "crypto";
-import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64 } from "./lib/nodeStore.js";
+import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64, loadAssetSidecar, importExistingFile } from "./lib/nodeStore.js";
 import { startJob, finishJob, listJobs, listJobsRaw, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
 import {
   createSession,
@@ -21,6 +21,7 @@ import {
   ensureDefaultSession,
 } from "./lib/sessionStore.js";
 import { trashAsset, restoreAsset, markNodesAssetMissing } from "./lib/assetLifecycle.js";
+import { reconcileSessionFromDisk } from "./lib/reconcile.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import {
@@ -348,7 +349,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       `${tag} stream SUCCESS: b64Len=${stream.b64.length} events=${stream.eventCount} ` +
       `webSearchCalls=${stream.webSearchCalls ?? 0}`,
     );
-    return { b64: stream.b64, usage: stream.usage, webSearchCalls: stream.webSearchCalls };
+    return { b64: stream.b64, usage: stream.usage, webSearchCalls: stream.webSearchCalls, codexAccount: stream.codexAccount };
   }
 
   // Ref-mode already uses minimal tools + tool_choice:required; a fallback
@@ -386,7 +387,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     console.log(
       `${tag} non-stream retry SUCCESS: b64Len=${retry.b64.length}`,
     );
-    return { b64: retry.b64, usage: retry.usage, webSearchCalls: stream.webSearchCalls };
+    return { b64: retry.b64, usage: retry.usage, webSearchCalls: stream.webSearchCalls, codexAccount: retry.codexAccount || stream.codexAccount };
   }
 
   console.warn(
@@ -1307,6 +1308,17 @@ app.get("/api/auth/me", (req, res) => {
   res.json({ user: null, authEnabled: isAuthEnabled() });
 });
 
+// GET /api/auth/codex-router-gate — internal gate for nginx auth_request so
+// /codex-router/ inherits the main session login. Only ree9622's logged-in
+// session passes (204); everyone else gets 401 and nginx redirects to /.
+app.get("/api/auth/codex-router-gate", (req, res) => {
+  // req.authUser is the resolved username string (authMiddleware sets it
+  // from the session). req.session.user would be the full user object, not
+  // a string — comparing it to "ree9622" silently fails.
+  if (req.authUser === "ree9622") return res.status(204).end();
+  res.status(401).end();
+});
+
 // -- Provider info --
 app.get("/api/providers", (_req, res) => {
   res.json({
@@ -1405,20 +1417,35 @@ async function listImages(baseDir) {
   return out;
 }
 
-app.get("/api/history", async (req, res) => {
-  try {
-    const dir = join(__dirname, "generated");
-    await mkdir(dir, { recursive: true });
-    const limitRaw = parseInt(req.query.limit);
-    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50, 500);
-    const beforeTs = parseInt(req.query.before);
-    const beforeFn = typeof req.query.beforeFilename === "string" ? req.query.beforeFilename : null;
-    const sinceTs = parseInt(req.query.since);
-    const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
-    const groupBy = req.query.groupBy === "session" ? "session" : null;
+// Short-TTL cache for /api/history rows. New / deleted images change the
+// generated/ dir mtime so the cache invalidates automatically; favorite
+// toggles only mutate sidecar contents, so they wait out the TTL (≤5 s,
+// invisible in practice). Without this every history poll did N sidecar
+// readFile + JSON.parse — fine at 100 images, slow past 1 000.
+const HISTORY_CACHE_TTL_MS = 5000;
+let __historyRowsCache = null; // { rowsAll, generatedAt, dirMtimeMs }
 
-    const imgs = await listImages(dir);
-    const rowsAll = await Promise.all(imgs.map(async ({ full, rel, name }) => {
+function invalidateHistoryCache() {
+  __historyRowsCache = null;
+}
+
+async function loadHistoryRows(baseDir) {
+  const now = Date.now();
+  let dirMtimeMs = 0;
+  try {
+    const st = await stat(baseDir);
+    dirMtimeMs = st.mtimeMs;
+  } catch {}
+  if (
+    __historyRowsCache &&
+    now - __historyRowsCache.generatedAt < HISTORY_CACHE_TTL_MS &&
+    __historyRowsCache.dirMtimeMs === dirMtimeMs
+  ) {
+    return __historyRowsCache.rowsAll;
+  }
+  const imgs = await listImages(baseDir);
+  const rowsAll = await Promise.all(
+    imgs.map(async ({ full, rel, name }) => {
       const st = await stat(full).catch(() => null);
       let meta = null;
       try {
@@ -1439,6 +1466,7 @@ app.get("/api/history", async (req, res) => {
         format: meta?.format || name.split(".").pop(),
         moderation: meta?.moderation || null,
         provider: meta?.provider || "oauth",
+        codexAccount: typeof meta?.codexAccount === "string" ? meta.codexAccount : null,
         usage: meta?.usage || null,
         webSearchCalls: meta?.webSearchCalls || 0,
         sessionId: meta?.sessionId || null,
@@ -1454,8 +1482,25 @@ app.get("/api/history", async (req, res) => {
         requestId: typeof meta?.requestId === "string" ? meta.requestId : null,
         outfitModule: meta?.outfitModule || null,
       };
-    }));
+    }),
+  );
+  __historyRowsCache = { rowsAll, generatedAt: now, dirMtimeMs };
+  return rowsAll;
+}
 
+app.get("/api/history", async (req, res) => {
+  try {
+    const dir = join(__dirname, "generated");
+    await mkdir(dir, { recursive: true });
+    const limitRaw = parseInt(req.query.limit);
+    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50, 3000);
+    const beforeTs = parseInt(req.query.before);
+    const beforeFn = typeof req.query.beforeFilename === "string" ? req.query.beforeFilename : null;
+    const sinceTs = parseInt(req.query.since);
+    const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
+    const groupBy = req.query.groupBy === "session" ? "session" : null;
+
+    const rowsAll = await loadHistoryRows(dir);
     const rows = rowsAll.filter((r) => canAccess(r._meta, req.authUser)).map(({ _meta, ...rest }) => rest);
 
     // composite sort: createdAt DESC, filename DESC (stable tiebreaker)
@@ -1597,7 +1642,7 @@ async function listFailedSidecars(dir) {
 app.get("/api/generation-log", async (req, res) => {
   try {
     const limitRaw = parseInt(req.query.limit);
-    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 100, 500);
+    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 100, 3000);
     const statusFilter =
       req.query.status === "failed" || req.query.status === "success"
         ? req.query.status
@@ -2063,6 +2108,7 @@ app.post("/api/generate", async (req, res) => {
           format,
           moderation,
           provider: "oauth",
+          codexAccount: r.value.codexAccount || null,
           createdAt: Date.now(),
           usage: r.value.usage || null,
           webSearchCalls: r.value.webSearchCalls || 0,
@@ -2586,6 +2632,86 @@ app.post("/api/node/generate", async (req, res) => {
   }
 });
 
+// Adopt an existing classic-mode (or other) generated/ image as a brand-new
+// root node so node-mode children can branch from it immediately. The source
+// file is hardlinked (or copied) under `<newNodeId>.<ext>` and a fresh
+// sidecar is written so loadNodeB64 / loadNodeMeta / canAccess all work the
+// same way they do for natively-generated nodes.
+app.post("/api/node/import-history", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const sourceFilename = typeof body.historyFilename === "string" ? body.historyFilename.trim() : "";
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId : null;
+    const clientNodeId = typeof body.clientNodeId === "string" ? body.clientNodeId : null;
+    if (!sourceFilename) {
+      return res.status(400).json({ error: { code: "BAD_REQUEST", message: "historyFilename is required" } });
+    }
+
+    const sourceMeta = await loadAssetSidecar(__dirname, sourceFilename);
+    if (sourceMeta && !canAccess(sourceMeta, req.authUser)) {
+      return res.status(404).json({ error: { code: "NODE_NOT_FOUND", message: "Source image not found" } });
+    }
+
+    const nodeId = newNodeId();
+    const createdAt = Date.now();
+    const sourcePrompt = typeof sourceMeta?.prompt === "string" ? sourceMeta.prompt : "";
+    const sourceSize = typeof sourceMeta?.size === "string" ? sourceMeta.size : null;
+    const sourceQuality = typeof sourceMeta?.quality === "string" ? sourceMeta.quality : null;
+    const sourceFormat = typeof sourceMeta?.format === "string" ? sourceMeta.format : null;
+    const sourceModeration = typeof sourceMeta?.moderation === "string" ? sourceMeta.moderation : null;
+
+    const meta = {
+      nodeId,
+      parentNodeId: null,
+      sessionId,
+      clientNodeId,
+      prompt: sourcePrompt,
+      promptUsed: sourcePrompt,
+      options: {
+        ...(sourceQuality ? { quality: sourceQuality } : {}),
+        ...(sourceSize ? { size: sourceSize } : {}),
+        ...(sourceFormat ? { format: sourceFormat } : {}),
+        ...(sourceModeration ? { moderation: sourceModeration } : {}),
+      },
+      createdAt,
+      createdAtIso: new Date(createdAt).toISOString(),
+      provider: sourceMeta?.provider || "oauth",
+      kind: "imported",
+      importedFromFilename: sourceFilename,
+      ...(sourceQuality ? { quality: sourceQuality } : {}),
+      ...(sourceSize ? { size: sourceSize } : {}),
+      ...(sourceFormat ? { format: sourceFormat } : {}),
+      ...(sourceModeration ? { moderation: sourceModeration } : {}),
+      owner: req.authUser || LEGACY_OWNER,
+    };
+
+    let result;
+    try {
+      result = await importExistingFile(__dirname, { sourceFilename, nodeId, meta });
+    } catch (err) {
+      if (err?.code === "NODE_SOURCE_INVALID") {
+        return res.status(400).json({ error: { code: "NODE_SOURCE_INVALID", message: err.message } });
+      }
+      if (err?.code === "ENOENT") {
+        return res.status(404).json({ error: { code: "NODE_NOT_FOUND", message: "Source image not found" } });
+      }
+      throw err;
+    }
+
+    res.json({
+      nodeId,
+      filename: result.filename,
+      url: `/generated/${result.filename}`,
+      prompt: sourcePrompt,
+      size: sourceSize,
+      importedFromFilename: sourceFilename,
+    });
+  } catch (err) {
+    console.error("[node/import-history] error:", err.message);
+    res.status(500).json({ error: { code: "NODE_IMPORT_FAILED", message: err.message } });
+  }
+});
+
 app.get("/api/node/:nodeId", async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -2769,6 +2895,32 @@ app.put("/api/sessions/:id/graph", (req, res) => {
       logError("session", "graph_error", err, { sessionId, code, saveId, tabId });
     }
     res.status(err.status || 500).json(payload);
+  }
+});
+
+
+// Recover orphan node-mode generations whose stream response was lost
+// (long /api/node/generate dropped before client received "done"). Scans
+// generated/ sidecars + generated/.failed/ sidecars, matches by
+// clientNodeId, and patches graph nodes whose imageUrl is missing.
+app.post("/api/sessions/:id/reconcile-orphans", async (req, res) => {
+  const sessionId = req.params.id;
+  try {
+    const result = await reconcileSessionFromDisk(sessionId, __dirname, req.authUser);
+    if (result.recovered > 0 || result.stalified > 0) {
+      logEvent("session", "graph_reconcile", {
+        sessionId,
+        recovered: result.recovered,
+        stalified: result.stalified,
+        graphVersion: result.graphVersion,
+        authUser: req.authUser || null,
+      });
+    }
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: { code: err.code || "RECONCILE_FAILED", message: err.message },
+    });
   }
 });
 

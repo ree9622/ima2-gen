@@ -300,6 +300,40 @@ export type NodeErrorResponse = {
   parentNodeId: string | null;
 };
 
+export type NodeImportHistoryRequest = {
+  historyFilename: string;
+  sessionId?: string | null;
+  clientNodeId?: string | null;
+};
+
+export type NodeImportHistoryResponse = {
+  nodeId: string;
+  filename: string;
+  url: string;
+  prompt: string;
+  size: string | null;
+  importedFromFilename: string;
+};
+
+export async function postNodeImportHistory(
+  payload: NodeImportHistoryRequest,
+): Promise<NodeImportHistoryResponse> {
+  const res = await fetch("/api/node/import-history", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = data as { error?: { code?: string; message?: string } };
+    const msg = err?.error?.message ?? `Request failed: ${res.status}`;
+    const e = new Error(msg) as Error & { code?: string };
+    e.code = err?.error?.code;
+    throw e;
+  }
+  return data as NodeImportHistoryResponse;
+}
+
 export async function postNodeGenerate(payload: NodeGenerateRequest): Promise<NodeGenerateResponse> {
   const res = await fetch("/api/node/generate", {
     method: "POST",
@@ -484,6 +518,21 @@ export function saveSessionGraph(
     method: "PUT",
     headers,
     body: JSON.stringify({ nodes, edges }),
+  });
+}
+
+
+export type ReconcileOrphansResult = {
+  ok: boolean;
+  recovered: number;
+  stalified: number;
+  scanned: { success: number; failed: number; brokenBefore: number };
+  graphVersion: number;
+};
+
+export function reconcileOrphans(id: string): Promise<ReconcileOrphansResult> {
+  return jsonFetch(`/api/sessions/${encodeURIComponent(id)}/reconcile-orphans`, {
+    method: "POST",
   });
 }
 

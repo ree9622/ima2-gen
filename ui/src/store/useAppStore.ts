@@ -18,6 +18,7 @@ import {
   getInflight,
   cancelInflight,
   postNodeGenerateStream,
+  postNodeImportHistory,
   setFavorite,
   listSessions as apiListSessions,
   createSession as apiCreateSession,
@@ -25,6 +26,7 @@ import {
   renameSession as apiRenameSession,
   deleteSession as apiDeleteSession,
   saveSessionGraph,
+  reconcileOrphans,
   type SessionSummary,
   type SessionFull,
   type HistoryItem,
@@ -417,7 +419,7 @@ function clearUserScopedLocalStorage(): void {
   } catch {}
 }
 
-const HISTORY_LIMIT = 500;
+const HISTORY_LIMIT = 3000;
 const MAX_NODE_REFS = 5;
 
 export type ImageNodeStatus =
@@ -623,6 +625,7 @@ type AppState = {
   startInFlightPolling: () => void;
   reconcileInflight: () => Promise<void>;
   reconcileGraphPending: () => Promise<void>;
+  reconcileOrphansFromDisk: () => Promise<void>;
   syncFromStorage: () => void;
   dismissActivity: (id: string) => void;
   clearActivityHistory: () => void;
@@ -674,6 +677,7 @@ type AppState = {
   purgeTrashItem: (trashId: string) => void;
   emptyTrash: () => void;
   addRootNode: () => ClientNodeId;
+  importHistoryAsRootNode: (item: GenerateItem) => Promise<ClientNodeId | null>;
   addChildNode: (parentClientId: ClientNodeId) => ClientNodeId;
   addSiblingNode: (sourceClientId: ClientNodeId) => ClientNodeId;
   duplicateBranchRoot: (sourceClientId: ClientNodeId) => ClientNodeId;
@@ -2117,6 +2121,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         sessionLoading: false,
       });
       void get().reconcileGraphPending();
+      void get().reconcileOrphansFromDisk();
     } catch (err) {
       console.warn("[sessions] switch failed:", err);
       set({ sessionLoading: false });
@@ -2164,6 +2169,34 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       };
     });
     set({ graphNodes: next });
+  },
+
+  async reconcileOrphansFromDisk() {
+    // Recover orphan node-mode generations whose stream response was lost
+    // (long /api/node/generate dropped before client received "done" —
+    // file lands on disk but the graph node never gets imageUrl). Server
+    // scans sidecars and patches the DB; we refetch to pick up the
+    // changes. Safe to call on every session load: server returns 0/0
+    // when there is nothing to recover.
+    const sid = get().activeSessionId;
+    if (!sid) return;
+    try {
+      const orphan = await reconcileOrphans(sid);
+      if (orphan.recovered === 0 && orphan.stalified === 0) return;
+      const { session } = await apiGetSession(sid);
+      const { graphNodes, graphEdges, graphVersion } = mapSessionToGraph(session);
+      set({
+        graphNodes,
+        graphEdges,
+        activeSessionGraphVersion: graphVersion,
+      });
+      const parts: string[] = [];
+      if (orphan.recovered > 0) parts.push(`이미지 ${orphan.recovered}개 회복`);
+      if (orphan.stalified > 0) parts.push(`실패 ${orphan.stalified}개 표시`);
+      get().showToast(`끊긴 노드 자동 복구: ${parts.join(", ")}`);
+    } catch (err) {
+      console.warn("[reconcile-orphans] failed:", err);
+    }
   },
 
   async createAndSwitchSession(title = "제목 없는 세션") {
@@ -2248,6 +2281,79 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set({ graphNodes: [...get().graphNodes, node] });
     get().scheduleGraphSave();
     return clientId;
+  },
+
+  // Take a classic-mode (or any other history) image and adopt it as a fresh
+  // root node so node-mode children can branch from it without an extra
+  // generate. Switches the UI into node mode and ensures a session exists so
+  // the imported node is persisted with the rest of the graph.
+  async importHistoryAsRootNode(item) {
+    const filename = item.filename;
+    if (!filename) {
+      get().showToast("이 이미지에는 파일명이 없어 노드로 보낼 수 없습니다.", true);
+      return null;
+    }
+    if (get().uiMode !== "node") get().setUIMode("node");
+    if (!get().activeSessionId) {
+      await get().createAndSwitchSession("히스토리에서 가져옴");
+    }
+    const sessionId = get().activeSessionId;
+    if (!sessionId) {
+      get().showToast("세션이 없어 노드로 보낼 수 없습니다.", true);
+      return null;
+    }
+    const clientId = newClientNodeId();
+    const placeholder: GraphNode = {
+      id: clientId,
+      type: "imageNode",
+      position: getNextRootPosition(get().graphNodes),
+      data: {
+        clientId,
+        serverNodeId: null,
+        parentServerNodeId: null,
+        prompt: item.prompt ?? "",
+        imageUrl: item.url || item.image || null,
+        status: "ready",
+        pendingRequestId: null,
+        pendingPhase: null,
+        size: item.size ?? null,
+      },
+    };
+    set({ graphNodes: [...get().graphNodes, placeholder] });
+    try {
+      const result = await postNodeImportHistory({
+        historyFilename: filename,
+        sessionId,
+        clientNodeId: clientId,
+      });
+      set({
+        graphNodes: get().graphNodes.map((n) =>
+          n.id === clientId
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  serverNodeId: result.nodeId,
+                  imageUrl: result.url,
+                  prompt: result.prompt || n.data.prompt,
+                  size: result.size ?? n.data.size,
+                  status: "ready",
+                  pendingRequestId: null,
+                  pendingPhase: null,
+                },
+              }
+            : n,
+        ),
+      });
+      get().scheduleGraphSave();
+      get().showToast("노드 캔버스로 보냈습니다.");
+      return clientId;
+    } catch (err) {
+      set({ graphNodes: get().graphNodes.filter((n) => n.id !== clientId) });
+      const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+      get().showToast(`노드로 보내지 못했습니다: ${msg}`, true);
+      return null;
+    }
   },
 
   addChildNode: (parentClientId) => {
@@ -3243,12 +3349,16 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             `${Date.now() - slotStartedAt}ms code=${errCode ?? "?"} status=${errStatus ?? "?"}:`,
             err,
           );
-          // 429 / USAGE_LIMIT → start a 5-min cool-down so subsequent clicks
-          // don't replay the same upstream rejection. Persist via
-          // setUsageLimitedUntil so other tabs see it via storage event.
-          if (errCode === "USAGE_LIMIT" || errStatus === 429) {
-            get().setUsageLimitedUntil(Date.now() + 5 * 60 * 1000);
-          }
+          // 429 / USAGE_LIMIT cool-down DISABLED (2026-05-01) — ima2-router
+          // pools several codex accounts and puts the offending one on its
+          // own 5-min cooldown internally, then forwards the next batch
+          // item to a different account. A client-side batch-stop hides
+          // the rest of the pool's capacity, defeating the router. One
+          // failed image is now just that image's failure; the batch
+          // keeps going.
+          // if (errCode === "USAGE_LIMIT" || errStatus === 429) {
+          //   get().setUsageLimitedUntil(Date.now() + 5 * 60 * 1000);
+          // }
           if (firstErrMsg === null) {
             firstErrMsg = msg;
           }

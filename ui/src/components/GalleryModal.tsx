@@ -43,6 +43,7 @@ export function GalleryModal() {
   const openLightbox = useAppStore((s) => s.openLightbox);
   const initialFavOnly = useAppStore((s) => s.galleryFavOnly);
   const setGalleryFavOnly = useAppStore((s) => s.setGalleryFavOnly);
+  const importHistoryAsRootNode = useAppStore((s) => s.importHistoryAsRootNode);
 
   const [query, setQuery] = useState("");
   const [groupBy, setGroupBy] = useState<"date" | "session">("date");
@@ -248,6 +249,28 @@ export function GalleryModal() {
             <line x1="3" y1="21" x2="10" y2="14" />
           </svg>
         </button>
+        {item.filename && (
+          <button
+            type="button"
+            className="gallery__send-to-node"
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const result = await importHistoryAsRootNode(item);
+              if (result) close();
+            }}
+            title="노드 캔버스로 보내기"
+            aria-label="노드 캔버스로 보내기"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="6" cy="6" r="3" />
+              <circle cx="18" cy="18" r="3" />
+              <circle cx="18" cy="6" r="3" />
+              <line x1="9" y1="6" x2="15" y2="6" />
+              <line x1="18" y1="9" x2="18" y2="15" />
+            </svg>
+          </button>
+        )}
         {item.filename && (
           <button
             type="button"

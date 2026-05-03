@@ -70,9 +70,63 @@ ima2 serve
 - Filename collisions avoided via `${Date.now()}_${randomBytes(4).hex}_${idx}` (commit `7a0e2f5`). Keep the random token when adding new write paths.
 - Tests live in `tests/*.test.js` using Node's built-in test runner (`node --test`). `scripts/run-tests.mjs` handles cross-platform invocation; CI matrix is Ubuntu/macOS/Windows × Node 20/22.
 
+## Workspace sync (PC ↔ asrock, BLOCKING)
+
+이 레포는 두 위치에서 동시에 운용된다. **편집은 asrock에서, PC는 검토/pull만.**
+
+| Location | Role |
+| -------- | ---- |
+| **asrock** `/home/ko/apps/ima2-gen/` | 운영 서버 + **편집 source of truth** |
+| **PC** `C:\Users\ko\Desktop\ima2-gen\` (Mac: `/Users/ko/Desktop/ima2-gen/`) | 검토·플랜만. 직접 편집 금지 |
+| **GitHub** `ree9622/ima2-gen` (origin) | 양쪽이 동기화되는 진본 |
+
+이 정책은 ima2-router와 **반대 방향**임을 주의. 헷갈리면 다음 한 줄: *"router는 PC→asrock scp, gen은 asrock→git→PC pull"*.
+
+### 왜 이 정책인가
+
+2026-05-03에 asrock에서 직접 수정한 11파일 +523/-94 가 git에 미커밋 상태로 며칠 누적된 사고 발생. PC는 그 변경을 모르고 git만 보고 있었고, asrock 디스크 사고 시 통째로 손실 위험이었다. 양쪽에서 동시에 편집하면 divergence가 누적된다 → 한 쪽으로만 편집 흐름을 고정.
+
+### asrock 편집 절차 (모든 코드 변경)
+
+1. 편집 전 자동 백업: `cp <file> <file>.bak.$(date +%Y%m%d-%H%M%S)` (이 패턴은 `.gitignore` 처리됨)
+2. 편집 (vim/nano/Edit)
+3. JS 파일이면 syntax 검증: `/home/ko/.nvm/versions/node/v24.15.0/bin/node --check <file>`
+4. UI 변경이면 build: `cd ui && export PATH=/home/ko/.nvm/versions/node/v24.15.0/bin:$PATH && npm run build`
+5. 서비스 재시작 + 동작 확인 (curl 또는 브라우저)
+6. **즉시 `git add -A && git commit` + `git push origin main`** ← 이 단계 누락이 회귀 사고의 진짜 원인. 동작 확인 됐으면 30분 안에 커밋해야지, "내일 커밋하자"는 사고로 직결.
+7. PC에서 `git pull --ff-only origin main`로 회수 (다음번 PC 사용 시 첫 명령)
+
+### 세션 시작 시 sync 선점검 (BLOCKING)
+
+새 세션 / 며칠 만에 돌아온 세션에서는 다른 일 시작 전에 양쪽 git 상태부터:
+
+```bash
+# PC
+cd /c/Users/ko/Desktop/ima2-gen && git fetch origin && git status && git log --oneline -3
+
+# asrock
+ssh asrock "cd /home/ko/apps/ima2-gen && git fetch origin && git status && git log --oneline -3"
+```
+
+체크 항목:
+
+- 양쪽 HEAD가 같은가?
+- asrock에 uncommitted 변경이 있는가? (있으면 그 정리부터 — 다른 작업 시작 금지)
+- origin/main이 양쪽보다 앞서가는가? (있으면 둘 다 pull)
+
+차이를 발견하면 **그 정리가 모든 다른 작업보다 우선**.
+
+### Hand-edit 백업 정리
+
+`*.bak.YYYYMMDD-HHMMSS` 는 `.gitignore` 처리되어 있다. 7일 지난 것은 정리:
+
+```bash
+ssh asrock "cd /home/ko/apps/ima2-gen && find . -name '*.bak.*' -mtime +7 -delete"
+```
+
 ## Git workflow (BLOCKING)
 
-작업 단위마다 자동 분할 커밋 + push 가 이 레포의 기본값입니다. 사용자가 매번 "커밋해" 라고 안 시켜도 알아서 분할 커밋합니다.
+작업 단위마다 자동 분할 커밋 + push 가 이 레포의 기본값입니다. 사용자가 매번 "커밋해" 라고 안 시켜도 알아서 분할 커밋합니다. **모든 커밋은 asrock에서.** (위 "Workspace sync" 정책 참조.)
 
 - **트리거 (논리적 작업 1건이 끝났을 때)**:
   - 신규 기능 한 묶음 (예: "scenario 30개 추가", "framing UI 토글 추가", "ref 자동 다운샘플")

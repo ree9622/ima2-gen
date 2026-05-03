@@ -631,6 +631,9 @@ export type PromptItem = {
   createdAt: number;
   updatedAt: number;
   owner: string | null;
+  // fork extension: GitHub import 출처 추적 (PromptLibraryModal 카드에 표기).
+  source?: string | null;
+  sourceUrl?: string | null;
 };
 
 export function listPrompts(q = ""): Promise<{ items: PromptItem[] }> {
@@ -673,5 +676,21 @@ export function bumpPromptUse(
 ): Promise<{ useCount: number; lastUsedAt: number }> {
   return jsonFetch(`/api/prompts/${encodeURIComponent(id)}/use`, {
     method: "POST",
+  });
+}
+
+// fork extension: GitHub URL 의 fenced code block 들을 prompts 라이브러리에
+// source=github 로 일괄 저장.
+export type PromptImportResult = {
+  sourceUrl: string;
+  created: PromptItem[];
+  skipped: Array<{ title: string; error: string }>;
+};
+
+export function importPromptsFromGitHub(url: string): Promise<PromptImportResult> {
+  return jsonFetch("/api/prompts/import-github", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
   });
 }

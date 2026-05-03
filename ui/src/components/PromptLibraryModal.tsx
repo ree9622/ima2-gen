@@ -33,7 +33,10 @@ export function PromptLibraryModal() {
       <div className="prompt-lib__modal" onClick={(e) => e.stopPropagation()}>
         <div className="prompt-lib__header">
           <div className="prompt-lib__title">프롬프트 라이브러리</div>
-          <button type="button" className="prompt-lib__close" onClick={close} aria-label="닫기">×</button>
+          <div className="prompt-lib__actions">
+            <GitHubImportButton />
+            <button type="button" className="prompt-lib__close" onClick={close} aria-label="닫기">×</button>
+          </div>
         </div>
 
         <div className="prompt-lib__search">
@@ -151,4 +154,57 @@ function PromptCard({
       </div>
     </div>
   );
+}
+
+function GitHubImportButton() {
+  const importFromGitHub = useAppStore((s) => s.importPromptsFromGitHub);
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="prompt-lib__github-btn"
+        onClick={() => setOpen((v) => !v)}
+        title="GitHub URL 의 fenced code block 들을 일괄 가져오기"
+      >
+        📥 GitHub
+      </button>
+      {open && (
+        <div className="prompt-lib__github-pop">
+          <input
+            type="url"
+            placeholder="github.com/user/repo/blob/main/prompts.md"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !busy) {
+                e.preventDefault();
+                void onSubmit();
+              }
+            }}
+            autoFocus
+          />
+          <button
+            type="button"
+            disabled={busy || !url.trim()}
+            onClick={() => void onSubmit()}
+          >
+            {busy ? "가져오는 중…" : "가져오기"}
+          </button>
+          <button type="button" onClick={() => { setOpen(false); setUrl(""); }}>닫기</button>
+        </div>
+      )}
+    </>
+  );
+  async function onSubmit() {
+    setBusy(true);
+    try {
+      const r = await importFromGitHub(url.trim());
+      if (r.created > 0) { setOpen(false); setUrl(""); }
+    } finally {
+      setBusy(false);
+    }
+  }
 }

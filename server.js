@@ -31,6 +31,7 @@ import {
   bumpPromptUse,
   PROMPT_ERRORS,
 } from "./lib/promptStore.js";
+import { importFromGitHubUrl, PromptImportError } from "./lib/promptImport.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
 import {
@@ -3057,6 +3058,47 @@ app.post("/api/prompts/:id/use", (req, res) => {
     res.json({ useCount: r.useCount, lastUsedAt: r.lastUsedAt });
   } catch (err) {
     res.status(500).json({ error: { code: "DB_ERROR", message: err.message } });
+  }
+});
+
+// POST /api/prompts/import-github { url } → { sourceUrl, created: [...] }
+//
+// fork extension: GitHub URL 의 markdown/raw 를 fetch 해서 fenced code block
+// 들을 prompts 라이브러리에 source=github 로 일괄 저장. upstream 의 GitHub
+// search discovery 흐름은 가져오지 않고 "URL 직접 붙여넣기" 단순화 버전.
+// 결과는 created 배열 — 각 항목이 그대로 PromptLibraryModal 에 추가됨.
+app.post("/api/prompts/import-github", express.json({ limit: "32kb" }), async (req, res) => {
+  const url = String(req.body?.url || "").trim();
+  if (!url) {
+    return res.status(400).json({ error: { code: "URL_REQUIRED", message: "GitHub URL 이 필요합니다." } });
+  }
+  try {
+    const { sourceUrl, items } = await importFromGitHubUrl(url);
+    const owner = req.authUser || LEGACY_OWNER;
+    const created = [];
+    const skipped = [];
+    for (const it of items) {
+      const r = createPrompt({
+        title: it.title || "",
+        body: it.body,
+        owner,
+        source: "github",
+        sourceUrl: it.sourceUrl || sourceUrl,
+      });
+      if (r.error) {
+        skipped.push({ title: it.title || it.body.slice(0, 40), error: r.error });
+        continue;
+      }
+      created.push(r.item);
+    }
+    res.json({ sourceUrl, created, skipped });
+  } catch (err) {
+    if (err instanceof PromptImportError) {
+      const status = err.code === "FETCH_TOO_LARGE" ? 413 : 400;
+      return res.status(status).json({ error: { code: err.code, message: err.message } });
+    }
+    console.error("[prompt-import-github] failed:", err);
+    res.status(500).json({ error: { code: "IMPORT_FAILED", message: err.message } });
   }
 });
 

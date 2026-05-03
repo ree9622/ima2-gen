@@ -785,6 +785,7 @@ type AppState = {
   deletePromptFromLibrary: (id: string) => Promise<void>;
   togglePinPromptFromLibrary: (id: string) => Promise<void>;
   renamePromptInLibrary: (id: string, title: string) => Promise<void>;
+  importPromptsFromGitHub: (url: string) => Promise<{ created: number; skipped: number }>;
   retryFromLog: (item: import("../types").GenerationLogItem) => Promise<void>;
   applyPreset: (payload: PresetPayload) => void;
   selectHistory: (item: GenerateItem) => void;
@@ -919,6 +920,25 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     } catch (err) {
       console.error("[promptLibrary] save failed", err);
       get().showToast("저장 실패", true);
+    }
+  },
+  importPromptsFromGitHub: async (url) => {
+    try {
+      const api = await import("../lib/api");
+      const result = await api.importPromptsFromGitHub(url);
+      const createdN = result.created.length;
+      const skippedN = result.skipped.length;
+      const msg = createdN > 0
+        ? `${createdN}개 프롬프트 가져옴${skippedN ? ` (skip ${skippedN})` : ""}`
+        : skippedN ? `가져올 새 프롬프트 없음 (skip ${skippedN})` : "가져올 프롬프트 없음";
+      get().showToast(msg, createdN === 0);
+      if (get().promptLibraryOpen) await get().loadPromptLibrary();
+      return { created: createdN, skipped: skippedN };
+    } catch (err) {
+      console.error("[promptLibrary] github import failed", err);
+      const msg = err instanceof Error ? err.message : "GitHub 가져오기 실패";
+      get().showToast(msg, true);
+      return { created: 0, skipped: 0 };
     }
   },
   applyPromptFromLibrary: async (id) => {

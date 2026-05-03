@@ -14,6 +14,7 @@ import {
   buildEditTextPrompt,
   buildUserTextPrompt,
 } from "../lib/oauthProxy.ts";
+import { SAFETY_INTENT_POLICY } from "../lib/promptSafetyPolicy.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const serverPath = join(__dirname, "..", "server.ts");
@@ -75,6 +76,7 @@ for (const prompt of [GENERATE_DEVELOPER_PROMPT, EDIT_DEVELOPER_PROMPT]) {
   assert.ok(prompt.includes("do not search"), "developer prompt should avoid search when prompt is sufficient");
   assert.ok(!prompt.includes("AT LEAST 3"), "real-person search should not force 3+ calls");
   assert.ok(!prompt.includes("4-5"), "real-person search should not prefer 4-5 calls");
+  assert.ok(prompt.includes(SAFETY_INTENT_POLICY), "developer prompt should include safety intent policy");
 }
 
 console.log("prompt-fidelity: ok");

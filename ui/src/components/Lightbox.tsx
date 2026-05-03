@@ -22,6 +22,8 @@ export function Lightbox() {
   const jumpToImageSession = useAppStore((s) => s.jumpToImageSession);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const importHistoryAsRootNode = useAppStore((s) => s.importHistoryAsRootNode);
+  const deleteNodesByFilename = useAppStore((s) => s.deleteNodesByFilename);
+  const flushGraphSave = useAppStore((s) => s.flushGraphSave);
 
   const [zoom, setZoom] = useState<ZoomMode>("fit");
   const [showCaption, setShowCaption] = useState<boolean>(() => {
@@ -87,7 +89,11 @@ export function Lightbox() {
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        void handleDelete();
+        if (e.shiftKey) {
+          void handleDeleteWithNodes();
+        } else {
+          void handleDelete();
+        }
         return;
       }
       if (e.key === "f" || e.key === "F" || e.key === "ㄹ") {
@@ -98,7 +104,7 @@ export function Lightbox() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // handleDelete is stable via useCallback below; toggleCaption + toggleFavorite too.
+    // handleDelete / handleDeleteWithNodes / toggleCaption / toggleFavorite are stable via useCallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, close, next, prev, toggleCaption, toggleFavorite]);
 
@@ -178,6 +184,27 @@ export function Lightbox() {
       showToast("삭제에 실패했습니다", true);
     }
   }, [close, removeFromHistory, selectHistory, showToast]);
+
+  // Shift+Delete (or Shift-click on the trash button): cascade — also remove
+  // every graph node whose imageUrl matches this filename, not just the
+  // image asset. Order matters: persist the node removal BEFORE the asset
+  // trash, otherwise the server's markNodesAssetMissing bumps graph_version
+  // first and the 409 reload would re-introduce the deleted nodes as
+  // "asset-missing" placeholders.
+  const handleDeleteWithNodes = useCallback(async () => {
+    const cur = useAppStore.getState().currentImage;
+    if (!cur || !cur.filename) return;
+    const filename = cur.filename;
+    const nodeCount = deleteNodesByFilename(filename);
+    if (nodeCount > 0) {
+      try {
+        await flushGraphSave("delete-with-nodes");
+      } catch (err) {
+        console.warn("[ima2:lightbox] flushGraphSave before cascade delete failed", err);
+      }
+    }
+    await handleDelete();
+  }, [deleteNodesByFilename, flushGraphSave, handleDelete]);
 
   const handleUndo = useCallback(async () => {
     const p = pendingUndo;
@@ -373,10 +400,14 @@ export function Lightbox() {
               className="lightbox__btn lightbox__btn--danger"
               onClick={(e) => {
                 e.stopPropagation();
-                void handleDelete();
+                if (e.shiftKey) {
+                  void handleDeleteWithNodes();
+                } else {
+                  void handleDelete();
+                }
               }}
               aria-label="삭제"
-              title="삭제 (Delete)"
+              title="삭제 — Delete: 이미지만 / Shift+Delete: 매칭 노드까지"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="3 6 5 6 21 6" />

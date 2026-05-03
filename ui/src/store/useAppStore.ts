@@ -692,6 +692,7 @@ type AppState = {
   clearNodeReferences: (clientId: ClientNodeId) => void;
   generateNode: (clientId: ClientNodeId) => Promise<void>;
   addSiblingAndGenerate: (sourceClientId: ClientNodeId) => Promise<void>;
+  deleteNodesByFilename: (filename: string) => number;
   // Fan-out: clone a parent node's prompt into N fresh children and run
   // them in parallel. Lets users explore variants without 3 manual clicks.
   fanOutFromNode: (parentClientId: ClientNodeId, count?: number) => Promise<void>;
@@ -720,7 +721,7 @@ type AppState = {
   renameCurrentSession: (title: string) => Promise<void>;
   deleteSessionById: (id: string) => Promise<void>;
   scheduleGraphSave: () => void;
-  flushGraphSave: (reason?: "debounced" | "manual" | "switch-session" | "recovery" | "beforeunload" | "queued") => Promise<void>;
+  flushGraphSave: (reason?: "debounced" | "manual" | "switch-session" | "recovery" | "beforeunload" | "queued" | "retry-after-fail" | "delete-with-nodes") => Promise<void>;
 
   setProvider: (p: Provider) => void;
   setQuality: (q: Quality) => void;
@@ -2986,6 +2987,27 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     await get().generateNode(sib);
   },
 
+  // C-option Lightbox cascade: when user wants Shift+Delete to also remove
+  // the graph node card (not just leave an "asset-missing" placeholder),
+  // find every graph node whose imageUrl resolves to this filename and trash
+  // them via the existing deleteNodes action (which already handles undo
+  // history + scheduleGraphSave). Returns the count for the caller's toast.
+  // Caller MUST flushGraphSave before triggering the asset trash, otherwise
+  // the server's markNodesAssetMissing pass may bump graph_version first and
+  // a subsequent 409 reload will resurrect the deleted nodes as asset-missing.
+  deleteNodesByFilename: (filename) => {
+    const matching = get().graphNodes.filter((n) => {
+      const url = n.data?.imageUrl;
+      if (typeof url !== "string") return false;
+      const last = url.split("/").pop();
+      if (!last) return false;
+      return last.split("?")[0] === filename;
+    });
+    if (matching.length === 0) return 0;
+    get().deleteNodes(matching.map((n) => n.id));
+    return matching.length;
+  },
+
   async fanOutFromNode(parentClientId, count = 3) {
     const parent = get().graphNodes.find((n) => n.id === parentClientId);
     if (!parent) return;
@@ -3622,7 +3644,8 @@ type GraphSaveReason =
   | "recovery"
   | "beforeunload"
   | "queued"
-  | "retry-after-fail";
+  | "retry-after-fail"
+  | "delete-with-nodes";
 type GraphSaveResult = "saved" | "skipped" | "conflict" | "failed";
 
 const SAVE_DEBOUNCE_MS = 800;

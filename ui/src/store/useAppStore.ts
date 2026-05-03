@@ -152,6 +152,11 @@ export type PersistedInFlight = {
 };
 
 const INFLIGHT_TTL_MS = 180_000;            // running TTL (legacy guard against stuck items)
+
+// upstream 73f228e 흡수: 같은 노드에서 generate 가 동시에 두 번 호출되지 않게
+// module-level Set 으로 잠금. React state 가 disabled 로 전환되기 전 빠른 더블
+// 클릭 / StrictMode dev 재호출 등을 막는다.
+const nodeGenerationLocks = new Set<string>();
 const ACTIVITY_SUCCESS_TTL_MS = 10 * 60_000; // 10 min
 const ACTIVITY_ERROR_TTL_MS = 24 * 60 * 60_000; // 24 h
 const ACTIVITY_MAX_ENTRIES = 50;
@@ -2784,18 +2789,25 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   },
 
   async generateNode(clientId) {
+    // upstream 73f228e: 동시 호출 방지. lock 잡고 모든 early-return + finally 에서 해제.
+    if (nodeGenerationLocks.has(clientId)) return;
+    nodeGenerationLocks.add(clientId);
     // Capture session at start so a mid-generation switchSession does not leak
     // this node's save into the wrong session graph (P0-1).
     const startedSessionId = get().activeSessionId;
     // In-place regen: ready nodes used to spawn an orphan sibling (P1-8). Now
     // they always overwrite. Use addSiblingAndGenerate(clientId) for the
-    // explicit "variant" path (the new "변형 1" button on ImageNode).
+    // explicit "변형 1" button on ImageNode).
     const targetClientId = clientId;
     const node = get().graphNodes.find((n) => n.id === targetClientId);
-    if (!node) return;
+    if (!node) {
+      nodeGenerationLocks.delete(clientId);
+      return;
+    }
     const { prompt, parentServerNodeId } = node.data;
     if (!prompt.trim()) {
       get().showToast("프롬프트를 입력하세요.", true);
+      nodeGenerationLocks.delete(clientId);
       return;
     }
     const s = get();
@@ -2987,6 +2999,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         activeGenerations: Math.max(0, get().activeGenerations - 1),
       });
     } finally {
+      nodeGenerationLocks.delete(targetClientId);
       if (!unloading) {
         if (get().activeSessionId === startedSessionId) {
           get().scheduleGraphSave();

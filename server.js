@@ -551,8 +551,12 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           attempts: log,
         };
       }
-      lastErr = new Error("Empty response (safety refusal)");
-      lastErr.code = "SAFETY_REFUSAL";
+      // upstream 45b7892: refusalText/reasoningSummary 없으면 실제 moderation 아님 →
+      // EMPTY_RESPONSE 로 분기해서 사용자에게 "빈 응답" 메시지 안내. refusalText 있을
+      // 때만 SAFETY_REFUSAL 유지.
+      const isActualSafety = Boolean(r?.refusalText) || Boolean(r?.reasoningSummary);
+      lastErr = new Error(isActualSafety ? "Empty response (safety refusal)" : "Empty response (no image data)");
+      lastErr.code = isActualSafety ? "SAFETY_REFUSAL" : "EMPTY_RESPONSE";
       log.push({
         attempt: i + 1,
         promptUsed: attemptPrompt,
@@ -788,10 +792,11 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
             attempts: log,
           };
         }
-        // Empty response = another safety refusal even after rewrite. Record
-        // and fall through to the original failure throw below.
-        lastErr = new Error("Empty response (safety refusal after LLM rewrite)");
-        lastErr.code = "SAFETY_REFUSAL";
+        // upstream 45b7892: LLM rewrite 후에도 빈 응답 — 단 r.refusalText/reasoningSummary
+        // 가 있으면 실제 moderation, 없으면 단순 빈 응답.
+        const isActualSafetyRewrite = Boolean(r?.refusalText) || Boolean(r?.reasoningSummary);
+        lastErr = new Error(isActualSafetyRewrite ? "Empty response (safety refusal after LLM rewrite)" : "Empty response after LLM rewrite (no image data)");
+        lastErr.code = isActualSafetyRewrite ? "SAFETY_REFUSAL" : "EMPTY_RESPONSE";
         log.push({
           attempt: i + 1,
           promptUsed: rewritten,
@@ -845,9 +850,23 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
     `lastMsg=${(lastErr?.message || String(lastErr || "")).slice(0, 200)}`,
   );
 
-  const err = new Error("Content generation refused after retries");
-  err.code = lastErr?.code === "SAFETY_REFUSAL" ? "SAFETY_REFUSAL" : (lastErr?.code || "ALL_ATTEMPTS_FAILED");
-  err.status = err.code === "SAFETY_REFUSAL" ? 422 : 502;
+  // upstream 45b7892: SAFETY_REFUSAL/EMPTY_RESPONSE/UPSTREAM_EMPTY 별로 메시지/status 분기.
+  let finalCode;
+  let finalMsg;
+  if (lastErr?.code === "SAFETY_REFUSAL") {
+    finalCode = "SAFETY_REFUSAL";
+    finalMsg = "Content generation refused after retries";
+  } else if (lastErr?.code === "EMPTY_RESPONSE" || lastErr?.code === "UPSTREAM_EMPTY") {
+    finalCode = "EMPTY_RESPONSE";
+    finalMsg = "이미지 응답이 비어 있습니다. 사이즈/품질 조합을 바꾸거나 잠시 후 다시 시도해 주세요.";
+  } else {
+    finalCode = lastErr?.code || "ALL_ATTEMPTS_FAILED";
+    finalMsg = lastErr?.message || "Content generation failed after retries";
+  }
+  const err = new Error(finalMsg);
+  err.code = finalCode;
+  err.status = (finalCode === "SAFETY_REFUSAL" || finalCode === "EMPTY_RESPONSE") ? 422 : 502;
+  if (lastErr?.diagnosticReason) err.diagnosticReason = lastErr.diagnosticReason;
   err.cause = lastErr;
   err.attempts = log;
   throw err;
@@ -2221,6 +2240,16 @@ app.post("/api/generate", async (req, res) => {
       if (firstErr?.code === "SAFETY_REFUSAL") {
         return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [], batchId });
       }
+      // upstream 45b7892 흡수: 빈 응답을 SAFETY_REFUSAL 로 잘못 라벨하지 않도록 분기.
+      if (firstErr?.code === "EMPTY_RESPONSE" || firstErr?.code === "UPSTREAM_EMPTY") {
+        return res.status(422).json({
+          error: firstErr.message,
+          code: "EMPTY_RESPONSE",
+          attempts: firstErr.attempts || [],
+          batchId,
+          ...(firstErr.diagnosticReason ? { diagnosticReason: firstErr.diagnosticReason } : {}),
+        });
+      }
       if (firstErr?.code === "USAGE_LIMIT" || firstErr?.status === 429) {
         return res.status(429).json({
           error: firstErr.message || "OpenAI usage limit reached",
@@ -2602,7 +2631,7 @@ app.post("/api/node/generate", async (req, res) => {
         owner: req.authUser,
         requestId,
       });
-      return writeNodeError(res, err.status || 422, err.code || "SAFETY_REFUSAL", err.message, parentNodeId);
+      return writeNodeError(res, err.status || 422, err.code || (err?.cause?.code === "EMPTY_RESPONSE" ? "EMPTY_RESPONSE" : "SAFETY_REFUSAL"), err.message, parentNodeId);
     }
 
     const b64 = nodeResult.b64;

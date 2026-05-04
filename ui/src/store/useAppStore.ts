@@ -154,9 +154,24 @@ export type PersistedInFlight = {
 const INFLIGHT_TTL_MS = 180_000;            // running TTL (legacy guard against stuck items)
 
 // upstream 73f228e 흡수: 같은 노드에서 generate 가 동시에 두 번 호출되지 않게
-// module-level Set 으로 잠금. React state 가 disabled 로 전환되기 전 빠른 더블
+// module-level Map 으로 잠금. React state 가 disabled 로 전환되기 전 빠른 더블
 // 클릭 / StrictMode dev 재호출 등을 막는다.
-const nodeGenerationLocks = new Set<string>();
+//
+// Map(id → acquired-at ms) + TTL: 동기 setup(saveInFlight / set / polling)에서
+// 예외가 나서 lock 해제 경로를 못 타는 corner case가 생겨도 TTL 경과 후엔
+// 같은 노드를 다시 누를 수 있게 자동 escape. stale 노드에서 "생성 눌러도
+// 변화 없음" 증상의 가장 유력한 원인이었음.
+const NODE_GEN_LOCK_TTL_MS = 60_000;
+const nodeGenerationLocks = new Map<string, number>();
+function isNodeGenLocked(id: string): boolean {
+  const acquiredAt = nodeGenerationLocks.get(id);
+  if (acquiredAt === undefined) return false;
+  if (Date.now() - acquiredAt > NODE_GEN_LOCK_TTL_MS) {
+    nodeGenerationLocks.delete(id);
+    return false;
+  }
+  return true;
+}
 const ACTIVITY_SUCCESS_TTL_MS = 10 * 60_000; // 10 min
 const ACTIVITY_ERROR_TTL_MS = 24 * 60 * 60_000; // 24 h
 const ACTIVITY_MAX_ENTRIES = 50;
@@ -2930,8 +2945,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
   async generateNode(clientId) {
     // upstream 73f228e: 동시 호출 방지. lock 잡고 모든 early-return + finally 에서 해제.
-    if (nodeGenerationLocks.has(clientId)) return;
-    nodeGenerationLocks.add(clientId);
+    if (isNodeGenLocked(clientId)) {
+      // 무반응처럼 느껴지는 silent return 가시화. lock TTL 경과 시 자동 해제됨.
+      get().showToast("이미 이 노드에서 생성이 진행 중입니다. 잠시 후 다시 시도하세요.", true);
+      return;
+    }
+    nodeGenerationLocks.set(clientId, Date.now());
     // Capture session at start so a mid-generation switchSession does not leak
     // this node's save into the wrong session graph (P0-1).
     const startedSessionId = get().activeSessionId;
@@ -3102,6 +3121,63 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       // Same page-unload guard as classic generate: server keeps the request,
       // local state should not flip to "error" just because the tab tore down.
       if (unloading) return;
+
+      // SSE 끊김/타임아웃이지만 서버는 디스크에 결과를 남겼을 수 있다 (사용자
+      // 보고: "이미지 생성됐는데 노드에 안 뜨는 경우 많음"). 같은 reqId로
+      // cached result 한 번 probe — done이면 ready로 마킹하고 정상 종료
+      // path와 동일하게 처리. reconcileGraphPending이 이미 쓰는 패턴과 동일.
+      try {
+        const cached = await getNodeResult(flightId);
+        if (cached && cached.status === "done") {
+          set({
+            graphNodes: get().graphNodes.map((n) =>
+              n.id === targetClientId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      serverNodeId: cached.payload.nodeId,
+                      imageUrl: cached.payload.url,
+                      status: "ready",
+                      pendingRequestId: null,
+                      pendingPhase: null,
+                      partialImageUrl: null,
+                      elapsed: cached.payload.elapsed,
+                      size: cached.payload.size ?? n.data.size ?? size,
+                      error: undefined,
+                    },
+                  }
+                : n,
+            ),
+          });
+          get().showToast(
+            `노드 ${cached.payload.nodeId.slice(0, 8)} 생성 완료 (스트림 끊김 후 복구)`,
+          );
+          const elapsedMs =
+            Math.round(Number(cached.payload.elapsed) * 1000) || (Date.now() - startedAt);
+          const next = get().inFlight.map((f) =>
+            f.id === flightId
+              ? {
+                  ...f,
+                  status: "success" as const,
+                  endedAt: Date.now(),
+                  elapsedMs,
+                  phase: undefined,
+                  clientNodeId: targetClientId,
+                }
+              : f,
+          );
+          saveInFlight(next);
+          set({
+            inFlight: next,
+            activeGenerations: Math.max(0, get().activeGenerations - 1),
+          });
+          return;
+        }
+      } catch {
+        // probe 실패는 무시하고 정상 error path 진행.
+      }
+
       const msg = err instanceof Error ? err.message : "노드 생성에 실패했습니다.";
       set({
         graphNodes: get().graphNodes.map((n) =>

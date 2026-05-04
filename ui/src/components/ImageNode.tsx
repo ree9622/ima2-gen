@@ -213,7 +213,13 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
         onChange={onPromptChange}
         onKeyDown={(e) => e.stopPropagation()}
         onFocus={() => setPromptFocused(true)}
-        onBlur={() => setPromptFocused(false)}
+        onBlur={() => {
+          // Defer past the current click so a button mousedown→mouseup doesn't
+          // get split by the layout collapse (rows 10→2, ~170px shift) that
+          // would otherwise drop the button out from under the cursor and
+          // swallow the first click.
+          setTimeout(() => setPromptFocused(false), 0);
+        }}
         placeholder={d.parentServerNodeId ? "수정 프롬프트..." : "프롬프트..."}
         rows={promptFocused ? 10 : 2}
         disabled={isBusy}

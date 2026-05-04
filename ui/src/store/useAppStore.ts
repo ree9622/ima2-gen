@@ -673,6 +673,11 @@ type AppState = {
   uiMode: UIMode;
   setUIMode: (m: UIMode) => void;
 
+  // 갤러리 click 등으로 "이 노드로 화면을 이동시켜 달라"는 요청을 store에
+  // 남긴다. NodeCanvas의 useEffect가 reactflow fitView를 호출한 뒤 클리어.
+  pendingFocusNodeId: ClientNodeId | null;
+  setPendingFocusNodeId: (id: ClientNodeId | null) => void;
+
   graphNodes: GraphNode[];
   graphEdges: GraphEdge[];
   setGraphNodes: (n: GraphNode[]) => void;
@@ -2175,6 +2180,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set({ uiMode: m });
   },
 
+  pendingFocusNodeId: null,
+  setPendingFocusNodeId: (id) => set({ pendingFocusNodeId: id }),
+
   graphNodes: [],
   graphEdges: [],
   setGraphNodes: (graphNodes) => {
@@ -3588,6 +3596,23 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   selectHistory: (item) => {
     saveSelectedFilename(item.filename ?? null);
     set({ currentImage: item });
+
+    // 갤러리에서 이미지를 골랐을 때 해당 출처 모드로 자동 전환 + (노드면)
+    // 그 노드로 화면 이동을 예약. server.js loadHistoryRows가 sidecar의
+    // clientNodeId/kind를 그대로 노출하므로 신뢰 가능.
+    const fromNode =
+      item.kind === "node" ||
+      typeof item.clientNodeId === "string" && item.clientNodeId.length > 0;
+    if (fromNode) {
+      if (get().uiMode !== "node") get().setUIMode("node");
+      const cid = item.clientNodeId as ClientNodeId | undefined;
+      if (cid && get().graphNodes.some((n) => n.id === cid)) {
+        set({ pendingFocusNodeId: cid });
+      }
+    } else if (item.kind === "generate" || item.kind === "edit") {
+      // classic 출처 — 명시적으로 classic으로 돌려보낸다.
+      if (get().uiMode !== "classic") get().setUIMode("classic");
+    }
   },
 
   removeFromHistory: (filename) => {

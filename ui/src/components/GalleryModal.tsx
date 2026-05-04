@@ -44,6 +44,8 @@ export function GalleryModal() {
   const initialFavOnly = useAppStore((s) => s.galleryFavOnly);
   const setGalleryFavOnly = useAppStore((s) => s.setGalleryFavOnly);
   const importHistoryAsRootNode = useAppStore((s) => s.importHistoryAsRootNode);
+  const deleteNode = useAppStore((s) => s.deleteNode);
+  const graphNodes = useAppStore((s) => s.graphNodes);
 
   const [query, setQuery] = useState("");
   const [groupBy, setGroupBy] = useState<"date" | "session">("date");
@@ -174,6 +176,14 @@ export function GalleryModal() {
     try {
       const r = await deleteHistoryItem(item.filename);
       removeFromHistory(item.filename);
+      // 서버는 markNodesAssetMissing으로 status만 'asset-missing'으로 바꾸지
+      // 노드 자체를 지우진 않는다. 사용자 기대는 "이미지 지우면 노드도
+      // 사라진다" — 현재 활성 세션의 그래프에서 매칭되는 노드를 즉시 제거.
+      // (다른 세션의 노드는 store에 없어 이 호출이 noop이라 안전.)
+      const cid = item.clientNodeId;
+      if (cid && graphNodes.some((n) => n.id === cid)) {
+        deleteNode(cid as never);
+      }
       setPending({
         filename: item.filename,
         trashId: r.trashId,

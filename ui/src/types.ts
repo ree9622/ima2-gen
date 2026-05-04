@@ -52,6 +52,12 @@ export type GenerateItem = {
   createdAt?: number;
   favorite?: boolean;
   sessionId?: string | null;
+  // 노드 모드에서 생성된 이미지면 server sidecar에 저장된 노드 식별자가
+  // 함께 따라온다 (server.js loadHistoryRows 매핑). 갤러리에서 클릭/삭제
+  // 시 해당 노드로 점프하거나 함께 지우는 데 사용.
+  nodeId?: string | null;
+  clientNodeId?: string | null;
+  kind?: string | null;
   references?: ReferenceImageRef[];
 };
 

@@ -165,6 +165,27 @@ function NodeCanvasInner() {
     [autoLayoutGraph, fitView],
   );
 
+  // 갤러리에서 노드 출처 이미지를 클릭하면 store가 pendingFocusNodeId를
+  // 채운다. 캔버스가 그 노드로 카메라를 옮긴 뒤 즉시 클리어 — 같은 노드
+  // 두 번째 click도 다시 발화하도록.
+  const pendingFocusNodeId = useAppStore((s) => s.pendingFocusNodeId);
+  const setPendingFocusNodeId = useAppStore((s) => s.setPendingFocusNodeId);
+  useEffect(() => {
+    if (!pendingFocusNodeId) return;
+    if (!nodes.some((n) => n.id === pendingFocusNodeId)) {
+      // 노드가 아직 그래프에 없으면 (세션 hydrate 진행 중) 다음 변화에서
+      // 다시 시도. 클리어는 노드가 도착한 뒤로 미룬다.
+      return;
+    }
+    fitView({
+      nodes: [{ id: pendingFocusNodeId }],
+      padding: 0.4,
+      duration: 600,
+      maxZoom: 1.2,
+    });
+    setPendingFocusNodeId(null);
+  }, [pendingFocusNodeId, nodes, fitView, setPendingFocusNodeId]);
+
   return (
     <main className="node-canvas" ref={wrapperRef}>
       {sessionLoading && <div className="node-canvas__loading">세션 불러오는 중...</div>}

@@ -2947,6 +2947,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     // upstream 73f228e: 동시 호출 방지. lock 잡고 모든 early-return + finally 에서 해제.
     if (isNodeGenLocked(clientId)) {
       // 무반응처럼 느껴지는 silent return 가시화. lock TTL 경과 시 자동 해제됨.
+      dwarn("node-gen", "lock held, skipping", clientId);
       get().showToast("이미 이 노드에서 생성이 진행 중입니다. 잠시 후 다시 시도하세요.", true);
       return;
     }
@@ -2960,15 +2961,29 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     const targetClientId = clientId;
     const node = get().graphNodes.find((n) => n.id === targetClientId);
     if (!node) {
+      // Was a silent return — surfaces a toast + dwarn so the "click does
+      // nothing, but inflight log shows queued" mismatch is diagnosable.
+      dwarn("node-gen", "node not found in store", clientId, {
+        graphNodeIds: get().graphNodes.map((n) => n.id),
+      });
+      get().showToast("노드를 찾을 수 없습니다. 새로고침 후 다시 시도하세요.", true);
       nodeGenerationLocks.delete(clientId);
       return;
     }
     const { prompt, parentServerNodeId } = node.data;
     if (!prompt.trim()) {
-      get().showToast("프롬프트를 입력하세요.", true);
+      dwarn("node-gen", "empty prompt", clientId, { status: node.data.status });
+      get().showToast("프롬프트가 비어있습니다. 노드를 클릭해 프롬프트를 입력하세요.", true);
       nodeGenerationLocks.delete(clientId);
       return;
     }
+    dlog("node-gen", "start", {
+      clientId,
+      promptLen: prompt.length,
+      parentServerNodeId,
+      status: node.data.status,
+      hasServerNodeId: !!node.data.serverNodeId,
+    });
     const s = get();
     const size = s.getResolvedSize();
 

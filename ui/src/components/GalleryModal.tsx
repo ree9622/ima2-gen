@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useAppStore } from "../store/useAppStore";
 import type { GenerateItem } from "../types";
 import { deleteHistoryItem, restoreHistoryItem, getHistoryGrouped } from "../lib/api";
@@ -32,6 +32,27 @@ function dateBucket(createdAt: number | undefined): string {
   });
 }
 
+const PAGE_SIZE = 50;
+
+// Take items from grouped collections in order until `max` is reached.
+// Trailing groups beyond `max` are dropped; the boundary group is sliced.
+function takeFirstFromGroups<T>(groups: T[][], max: number): T[][] {
+  if (max <= 0) return [];
+  const out: T[][] = [];
+  let remaining = max;
+  for (const g of groups) {
+    if (remaining <= 0) break;
+    if (g.length <= remaining) {
+      out.push(g);
+      remaining -= g.length;
+    } else {
+      out.push(g.slice(0, remaining));
+      remaining = 0;
+    }
+  }
+  return out;
+}
+
 export function GalleryModal() {
   const open = useAppStore((s) => s.galleryOpen);
   const close = useAppStore((s) => s.closeGallery);
@@ -53,6 +74,9 @@ export function GalleryModal() {
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>([]);
   const [loose, setLoose] = useState<GenerateItem[]>([]);
   const [pending, setPending] = useState<TrashPending | null>(null);
+  const [page, setPage] = useState(1);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -67,6 +91,7 @@ export function GalleryModal() {
     if (!open) {
       setQuery("");
       setPending(null);
+      setPage(1);
       return;
     }
     // Honor whatever the store says (e.g. HistoryStrip ★ button opened
@@ -129,6 +154,12 @@ export function GalleryModal() {
     return (h: GenerateItem) => h.favorite === true && textPred(h);
   }, [normalizedQuery, favOnly]);
 
+  // Reset to page 1 whenever the visible result set changes — otherwise a
+  // narrow query filtered down to 12 items would still claim "page 5".
+  useEffect(() => {
+    setPage(1);
+  }, [normalizedQuery, favOnly, groupBy]);
+
   const hasFilter = Boolean(normalizedQuery) || favOnly;
 
   const filtered = useMemo(() => {
@@ -157,6 +188,61 @@ export function GalleryModal() {
     }
     return Array.from(map.entries());
   }, [filtered]);
+
+  // ── Pagination (50 per page, infinite scroll) ───────────────────────
+  const pageMax = page * PAGE_SIZE;
+
+  const totalAvailable = useMemo(() => {
+    if (groupBy === "session") {
+      return (
+        filteredSessionGroups.reduce((a, g) => a + g.items.length, 0) +
+        filteredLoose.length
+      );
+    }
+    return filtered.length;
+  }, [groupBy, filteredSessionGroups, filteredLoose, filtered]);
+
+  const dateGroupsPaged = useMemo(
+    () =>
+      takeFirstFromGroups<GenerateItem>(
+        dateGroups.map(([, items]) => items),
+        pageMax,
+      ).map((items, i) => [dateGroups[i][0], items] as [string, GenerateItem[]]),
+    [dateGroups, pageMax],
+  );
+
+  const sessionPaged = useMemo(() => {
+    if (groupBy !== "session") return { sessionGroups: [], loose: [] as GenerateItem[] };
+    const all: GenerateItem[][] = [
+      ...filteredSessionGroups.map((g) => g.items),
+      filteredLoose,
+    ];
+    const taken = takeFirstFromGroups<GenerateItem>(all, pageMax);
+    const sessionGroups = filteredSessionGroups
+      .map((g, i) => ({ ...g, items: taken[i] ?? [] }))
+      .filter((g) => g.items.length > 0);
+    const looseTaken = taken[filteredSessionGroups.length] ?? [];
+    return { sessionGroups, loose: looseTaken };
+  }, [groupBy, filteredSessionGroups, filteredLoose, pageMax]);
+
+  const shownCount = Math.min(pageMax, totalAvailable);
+  const hasMore = shownCount < totalAvailable;
+
+  useEffect(() => {
+    if (!open || !hasMore) return;
+    const sentinel = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setPage((p) => p + 1);
+      },
+      { root, threshold: 0, rootMargin: "400px 0px" },
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [open, hasMore, pageMax]);
+
 
   useEffect(() => {
     if (!pending) return;
@@ -297,10 +383,6 @@ export function GalleryModal() {
   };
 
   const showSessions = groupBy === "session";
-  const totalVisible = showSessions
-    ? filteredSessionGroups.reduce((a, g) => a + g.items.length, 0) +
-      filteredLoose.length
-    : filtered.length;
 
   return (
     <div className="gallery-backdrop" onClick={close} role="presentation">
@@ -315,8 +397,8 @@ export function GalleryModal() {
           <div className="gallery__title-row">
             <div className="gallery__title">갤러리</div>
             <div className="gallery__meta">
-              총 {totalVisible}장
-              {hasFilter ? ` / 전체 ${history.length}장` : ""}
+              표시 {shownCount} / 전체 {totalAvailable}장
+              {hasFilter ? ` (필터 적용, 전체 ${history.length}장 중)` : ""}
             </div>
             <div className="gallery__group-toggle" role="tablist" aria-label="정렬 기준">
               <button
@@ -367,10 +449,10 @@ export function GalleryModal() {
           </button>
         </div>
 
-        <div className="gallery__scroll">
+        <div className="gallery__scroll" ref={scrollRef}>
           {showSessions ? (
             <>
-              {filteredSessionGroups.map((g) => (
+              {sessionPaged.sessionGroups.map((g) => (
                 <section key={g.sessionId} className="gallery__group">
                   <header className="gallery__group-header">
                     <span className="gallery__group-label">세션 {g.label}</span>
@@ -381,18 +463,18 @@ export function GalleryModal() {
                   </div>
                 </section>
               ))}
-              {filteredLoose.length > 0 && (
+              {sessionPaged.loose.length > 0 && (
                 <section className="gallery__group">
                   <header className="gallery__group-header">
                     <span className="gallery__group-label">독립 이미지</span>
-                    <span className="gallery__group-count">{filteredLoose.length}</span>
+                    <span className="gallery__group-count">{sessionPaged.loose.length}</span>
                   </header>
                   <div className="gallery__grid">
-                    {filteredLoose.map((item, i) => renderTile(item, "loose", i))}
+                    {sessionPaged.loose.map((item, i) => renderTile(item, "loose", i))}
                   </div>
                 </section>
               )}
-              {filteredSessionGroups.length === 0 && filteredLoose.length === 0 && (
+              {sessionPaged.sessionGroups.length === 0 && sessionPaged.loose.length === 0 && (
                 <div className="gallery__empty">
                   {hasFilter
                     ? "검색 결과가 없습니다."
@@ -409,7 +491,7 @@ export function GalleryModal() {
                   : "아직 생성된 이미지가 없습니다."}
             </div>
           ) : (
-            dateGroups.map(([label, items]) => (
+            dateGroupsPaged.map(([label, items]) => (
               <section key={label} className="gallery__group">
                 <header className="gallery__group-header">
                   <span className="gallery__group-label">{label}</span>
@@ -420,6 +502,17 @@ export function GalleryModal() {
                 </div>
               </section>
             ))
+          )}
+          {hasMore && (
+            <div ref={sentinelRef} className="gallery__sentinel" aria-hidden="true">
+              <button
+                type="button"
+                className="gallery__load-more"
+                onClick={() => setPage((p) => p + 1)}
+              >
+                더 보기 (+{Math.min(PAGE_SIZE, totalAvailable - shownCount)}장)
+              </button>
+            </div>
           )}
         </div>
 

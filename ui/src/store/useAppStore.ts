@@ -3609,8 +3609,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       if (cid && get().graphNodes.some((n) => n.id === cid)) {
         set({ pendingFocusNodeId: cid });
       }
-    } else if (item.kind === "generate" || item.kind === "edit") {
-      // classic 출처 — 명시적으로 classic으로 돌려보낸다.
+    } else {
+      // classic 출처(또는 출처 미상) — 일관되게 classic 으로 보낸다.
+      // 노드모드에서 갤러리로 옛 이미지를 골랐는데 탭이 그대로 머물러
+      // 사용자가 수동으로 "기본" 을 눌러야 했던 회귀를 막는다.
       if (get().uiMode !== "classic") get().setUIMode("classic");
     }
   },

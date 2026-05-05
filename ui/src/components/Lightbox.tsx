@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { webVariant, fallbackTo } from "../lib/imageVariants";
 import { useAppStore } from "../store/useAppStore";
 import { deleteHistoryItem, restoreHistoryItem } from "../lib/api";
 import type { GenerateItem } from "../types";
@@ -258,7 +259,8 @@ export function Lightbox() {
 
   if (!open || !currentImage) return null;
 
-  const src = currentImage.url || currentImage.image;
+  const originalSrc = currentImage.url || currentImage.image;
+  const src = webVariant(currentImage.url ?? null) ?? originalSrc;
   const idx = history.findIndex(
     (h) =>
       (currentImage.filename && h.filename === currentImage.filename) ||
@@ -483,6 +485,7 @@ export function Lightbox() {
         <img
           className="lightbox__img"
           src={src}
+          onError={fallbackTo(originalSrc)}
           alt={currentImage.prompt ?? "전체 보기"}
           draggable={false}
           title="클릭: 이 이미지로 재작업 (프롬프트·옵션 가져오기) · Space: 100%/맞춤"

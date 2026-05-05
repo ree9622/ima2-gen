@@ -7,6 +7,7 @@ import {
   COLOR_TAGS,
 } from "../store/useAppStore";
 import { getDirectChildCount } from "../lib/nodeCollapse";
+import { thumbVariant, fallbackTo } from "../lib/imageVariants";
 
 const MAX_NODE_REFS = 5;
 
@@ -148,7 +149,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
       <div className="image-node__preview">
         {d.imageUrl && d.status !== "asset-missing" ? (
           <img
-            src={d.imageUrl}
+            src={thumbVariant(d.imageUrl) ?? d.imageUrl}
+            onError={fallbackTo(d.imageUrl)}
             alt="노드 이미지"
             onClick={onImageClick}
             style={{ cursor: "zoom-in" }}

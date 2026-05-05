@@ -10,6 +10,7 @@ import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsRea
 import { homedir } from "os";
 import { randomBytes } from "crypto";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64, loadAssetSidecar, importExistingFile, writeNodeResult, readNodeResult, pruneNodeResults } from "./lib/nodeStore.js";
+import { derivePreviews, variantUrls } from "./lib/imageVariants.js";
 import { startJob, finishJob, listJobs, listJobsRaw, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
 import {
   createSession,
@@ -287,6 +288,26 @@ app.use("/generated", async (req, res, next) => {
   // skipping the owner check is safe and keeps the Lightbox lineage
   // thumbnails visible across sessions.
   if (decoded.startsWith("/.refs/")) {
+    return generatedStatic(req, res, next);
+  }
+  if (decoded.startsWith("/.thumbs/")) {
+    // Variant assets are owned by their source — derive sidecar path by
+    // stripping the .thumb.webp / .web.webp suffix.
+    const m = decoded.match(/^\/\.thumbs\/(.+?)\.(thumb|web)\.webp$/);
+    if (!m) return res.status(404).end();
+    const sourceRel = m[1];
+    const sourceTarget = join(GENERATED_DIR, sourceRel);
+    if (sourceTarget !== GENERATED_DIR && !sourceTarget.startsWith(GENERATED_DIR + "/")) {
+      return res.status(403).end();
+    }
+    let variantMeta = null;
+    try {
+      variantMeta = JSON.parse(await readFile(sourceTarget + ".json", "utf-8"));
+    } catch {
+      // Legacy items without a sidecar are treated as legacy owner — same
+      // behaviour as the main /generated/ branch below.
+    }
+    if (!canAccess(variantMeta, req.authUser)) return res.status(404).end();
     return generatedStatic(req, res, next);
   }
   // Resolve sidecar path safely under GENERATED_DIR
@@ -1512,7 +1533,7 @@ app.get("/api/health", async (req, res) => {
 //   .failed   failure sidecars
 //   .refs     reference-image content archive (hashed blobs)
 // These leaked into /api/history and rendered as "프롬프트 없음" placeholders.
-const SKIP_DIRS = new Set([".trash", ".failed", ".refs"]);
+const SKIP_DIRS = new Set([".trash", ".failed", ".refs", ".thumbs"]);
 
 async function listImages(baseDir) {
   const out = [];
@@ -1573,6 +1594,8 @@ async function loadHistoryRows(baseDir) {
         _meta: meta,
         filename: rel,
         url: `/generated/${rel.split("/").map(encodeURIComponent).join("/")}`,
+        thumb: variantUrls(rel).thumb,
+        web: variantUrls(rel).web,
         createdAt: meta?.createdAt || st?.mtimeMs || 0,
         prompt: meta?.prompt || null,
         originalPrompt: typeof meta?.originalPrompt === "string" ? meta.originalPrompt : null,
@@ -2751,6 +2774,8 @@ app.post("/api/node/generate", async (req, res) => {
       image: dataUrlFromB64(format, b64),
       filename,
       url: `/generated/${filename}`,
+      thumb: variantUrls(filename).thumb,
+      web: variantUrls(filename).web,
       elapsed,
       usage,
       webSearchCalls,
@@ -2876,6 +2901,8 @@ app.post("/api/node/import-history", async (req, res) => {
       nodeId,
       filename: result.filename,
       url: `/generated/${result.filename}`,
+      thumb: variantUrls(result.filename).thumb,
+      web: variantUrls(result.filename).web,
       prompt: sourcePrompt,
       size: sourceSize,
       importedFromFilename: sourceFilename,
@@ -2901,6 +2928,8 @@ app.get("/api/node/:nodeId", async (req, res) => {
       nodeId,
       meta,
       url: `/generated/${nodeId}.${ext}`,
+      thumb: variantUrls(`${nodeId}.${ext}`).thumb,
+      web: variantUrls(`${nodeId}.${ext}`).web,
     });
   } catch (err) {
     res.status(err.status || 500).json({

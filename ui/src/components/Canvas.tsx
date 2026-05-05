@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { ResultActions } from "./ResultActions";
+import { webVariant, fallbackTo } from "../lib/imageVariants";
 
 export function Canvas() {
   const currentImage = useAppStore((s) => s.currentImage);
@@ -114,7 +115,8 @@ export function Canvas() {
           <img
             className="result-img"
             key={currentImage.filename ?? currentImage.url ?? currentImage.image}
-            src={currentImage.url ?? currentImage.image}
+            src={(currentImage as any).web ?? webVariant(currentImage.url ?? null) ?? currentImage.url ?? currentImage.image}
+            onError={fallbackTo(currentImage.url ?? currentImage.image)}
             alt="생성 결과"
             role="button"
             tabIndex={0}

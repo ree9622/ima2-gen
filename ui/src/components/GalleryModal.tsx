@@ -114,6 +114,8 @@ export function GalleryModal() {
           image: h.url,
           url: h.url,
           filename: h.filename,
+          thumb: h.thumb,
+          web: h.web,
           prompt: h.prompt ?? undefined,
           size: h.size ?? undefined,
           quality: h.quality ?? undefined,

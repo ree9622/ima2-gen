@@ -49,6 +49,7 @@ export type GenerateItem = {
   moderation?: string;
   usage?: { total_tokens?: number } & Record<string, unknown>;
   thumb?: string;
+  web?: string;
   createdAt?: number;
   favorite?: boolean;
   sessionId?: string | null;

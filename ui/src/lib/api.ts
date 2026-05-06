@@ -155,6 +155,8 @@ export function postEdit(payload: GenerateRequest): Promise<GenerateResponse> {
 export type HistoryItem = {
   filename: string;
   url: string;
+  thumb?: string;
+  web?: string;
   createdAt: number;
   prompt: string | null;
   originalPrompt?: string | null;
@@ -285,6 +287,8 @@ export type NodeGenerateResponse = {
   image: string;
   filename: string;
   url: string;
+  thumb?: string;
+  web?: string;
   elapsed: number;
   usage?: { total_tokens?: number } & Record<string, unknown>;
   webSearchCalls: number;

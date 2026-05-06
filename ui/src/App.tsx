@@ -1,18 +1,39 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Canvas } from "./components/Canvas";
-import { NodeCanvas } from "./components/NodeCanvas";
 import { RightPanel } from "./components/RightPanel";
 import { Toast } from "./components/Toast";
-import { GalleryModal } from "./components/GalleryModal";
-import { GenerationLogModal } from "./components/GenerationLogModal";
-import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
-import { Lightbox } from "./components/Lightbox";
-import { LoginPage } from "./components/LoginPage";
 import { useAppStore, flushGraphSaveBeacon } from "./store/useAppStore";
 import { ENABLE_NODE_MODE } from "./lib/devMode";
 import { useLightboxUrlSync } from "./lib/urlSync";
+
+// Heavy / open-on-demand components are split out of the entry chunk.
+// First paint only loads Sidebar + Canvas + RightPanel + Toast +
+// ShortcutsHelp. Node canvas and modals fetch their chunks only when the
+// user actually opens them.
+const NodeCanvas = lazy(() =>
+  import("./components/NodeCanvas").then((m) => ({ default: m.NodeCanvas })),
+);
+const GalleryModal = lazy(() =>
+  import("./components/GalleryModal").then((m) => ({ default: m.GalleryModal })),
+);
+const Lightbox = lazy(() =>
+  import("./components/Lightbox").then((m) => ({ default: m.Lightbox })),
+);
+const GenerationLogModal = lazy(() =>
+  import("./components/GenerationLogModal").then((m) => ({
+    default: m.GenerationLogModal,
+  })),
+);
+const PromptLibraryModal = lazy(() =>
+  import("./components/PromptLibraryModal").then((m) => ({
+    default: m.PromptLibraryModal,
+  })),
+);
+const LoginPage = lazy(() =>
+  import("./components/LoginPage").then((m) => ({ default: m.LoginPage })),
+);
 
 export default function App() {
   const hydrateHistory = useAppStore((s) => s.hydrateHistory);
@@ -27,6 +48,13 @@ export default function App() {
   // until we know the user is authed (or auth is server-side disabled).
   const auth = useAppStore((s) => s.auth);
   const checkAuth = useAppStore((s) => s.checkAuth);
+
+  // Modal open states drive conditional mount so a lazy chunk only fetches
+  // the first time the user actually opens that modal.
+  const galleryOpen = useAppStore((s) => s.galleryOpen);
+  const lightboxOpen = useAppStore((s) => s.lightboxOpen);
+  const logModalOpen = useAppStore((s) => s.logModalOpen);
+  const promptLibraryOpen = useAppStore((s) => s.promptLibraryOpen);
 
   useEffect(() => {
     void checkAuth();
@@ -107,13 +135,13 @@ export default function App() {
     );
   }
 
-  // Auth required and we don't have one — show the LoginPage. Toast layer
-  // stays mounted so login failures can still surface a brief notice if
-  // we ever route them through showToast (currently inline in LoginPage).
+  // Auth required and we don't have one — show the LoginPage.
   if (auth.status === "anonymous" && auth.authEnabled) {
     return (
       <>
-        <LoginPage />
+        <Suspense fallback={null}>
+          <LoginPage />
+        </Suspense>
         <Toast />
       </>
     );
@@ -123,15 +151,52 @@ export default function App() {
     <>
       <div className="app">
         <Sidebar />
-        {uiMode === "classic" ? <Canvas /> : <NodeCanvas />}
+        {uiMode === "classic" ? (
+          <Canvas />
+        ) : (
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flex: 1,
+                  color: "var(--text-dim)",
+                  fontSize: 13,
+                }}
+              >
+                노드 캔버스 로딩 중…
+              </div>
+            }
+          >
+            <NodeCanvas />
+          </Suspense>
+        )}
         <RightPanel />
       </div>
       <Toast />
-      <GalleryModal />
-      <GenerationLogModal />
-      <PromptLibraryModal />
       <ShortcutsHelp />
-      <Lightbox />
+      {galleryOpen && (
+        <Suspense fallback={null}>
+          <GalleryModal />
+        </Suspense>
+      )}
+      {logModalOpen && (
+        <Suspense fallback={null}>
+          <GenerationLogModal />
+        </Suspense>
+      )}
+      {promptLibraryOpen && (
+        <Suspense fallback={null}>
+          <PromptLibraryModal />
+        </Suspense>
+      )}
+      {lightboxOpen && (
+        <Suspense fallback={null}>
+          <Lightbox />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -308,6 +308,17 @@ app.use("/generated", async (req, res, next) => {
       // behaviour as the main /generated/ branch below.
     }
     if (!canAccess(variantMeta, req.authUser)) return res.status(404).end();
+    // Cache miss safety net: if the variant file is missing (a generate
+    // race or sharp failure left no derivative on disk), regenerate it on
+    // demand before handing off to the static handler. Cheap because
+    // derivePreviews is idempotent (skips when target exists).
+    try {
+      await access(join(GENERATED_DIR, ".thumbs", sourceRel + "." + m[2] + ".webp"));
+    } catch {
+      try { await derivePreviews(__dirname, sourceRel); } catch (err) {
+        console.warn("[thumbs] on-demand derive failed:", sourceRel, err?.message || err);
+      }
+    }
     return generatedStatic(req, res, next);
   }
   // Resolve sidecar path safely under GENERATED_DIR

@@ -96,6 +96,12 @@ export function HistoryStrip() {
               alt=""
               loading="lazy"
               decoding="async"
+              onError={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.fb === "1") return;
+                el.dataset.fb = "1";
+                el.src = item.url || item.image;
+              }}
             />
             {item.favorite ? (
               <span className="history-thumb__fav" aria-label="즐겨찾기">★</span>

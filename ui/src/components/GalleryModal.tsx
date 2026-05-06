@@ -320,7 +320,18 @@ export function GalleryModal() {
           }}
           title={`${item.prompt ?? ""}${item.prompt ? "\n" : ""}더블클릭: 전체 보기`}
         >
-          <img src={item.thumb || item.image} alt={item.prompt ?? "생성 이미지"} loading="lazy" decoding="async" />
+          <img
+            src={item.thumb || item.image}
+            alt={item.prompt ?? "생성 이미지"}
+            loading="lazy"
+            decoding="async"
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (el.dataset.fb === "1") return;
+              el.dataset.fb = "1";
+              el.src = item.url || item.image;
+            }}
+          />
           {item.prompt && (
             <div className="gallery__caption">
               <span className="gallery__caption-text">{item.prompt}</span>

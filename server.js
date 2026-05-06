@@ -1962,12 +1962,17 @@ app.post("/api/storage/prune", async (req, res) => {
 // -- OAuth status --
 app.get("/api/oauth/status", async (_req, res) => {
   try {
-    const r = await fetch(`${OAUTH_URL}/v1/models`, { signal: AbortSignal.timeout(3000) });
+    // ima2-router /admin/ 는 단순 정적 페이지라 codex 계정이 모두 busy
+    // 일 때도 200 을 응답한다. /v1/models 로 ping 하면 503 "all codex
+    // accounts busy" 가 나와 router 자체는 살아있는데 UI 가 "OAuth 프록시
+    // 오프라인" 으로 잘못 표시되던 회귀 회복 (2026-05-06).
+    const r = await fetch(`${OAUTH_URL}/admin/`, { signal: AbortSignal.timeout(5000) });
     if (r.ok) {
-      const data = await r.json();
-      res.json({ status: "ready", models: data.data?.map((m) => m.id) || [] });
-    } else {
+      res.json({ status: "ready" });
+    } else if (r.status === 401 || r.status === 403) {
       res.json({ status: "auth_required" });
+    } else {
+      res.json({ status: "offline" });
     }
   } catch {
     res.json({ status: "offline" });

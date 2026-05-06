@@ -11,12 +11,22 @@ import { useAppStore } from "../store/useAppStore";
 import { useOAuthStatus } from "../hooks/useOAuthStatus";
 import { ENABLE_NODE_MODE } from "../lib/devMode";
 
+// Only this account sees the Codex Router admin link in the header. The
+// /codex-router/ route is gated server-side by nginx auth_request → the
+// ima2-gen `/api/auth/codex-router-gate` endpoint, so the UI gate is purely
+// cosmetic — other users wouldn't be able to enter even if the link
+// rendered. Hardcoded because there is no role flag on AuthUser yet.
+const CODEX_ADMIN_USERNAME = "ree9622";
+
 export function Sidebar() {
   const uiModeRaw = useAppStore((s) => s.uiMode);
   const uiMode = ENABLE_NODE_MODE ? uiModeRaw : "classic";
   const openLogModal = useAppStore((s) => s.openLogModal);
+  const auth = useAppStore((s) => s.auth);
   const oauth = useOAuthStatus();
   const oauthOk = oauth?.status === "ready";
+  const isCodexAdmin =
+    auth.status === "authed" && auth.user.username === CODEX_ADMIN_USERNAME;
 
   return (
     <aside className="sidebar">
@@ -27,6 +37,31 @@ export function Sidebar() {
             <span className="logo-name">이미지 생성기</span>
           </div>
           <div className="sidebar__head-actions">
+            {isCodexAdmin && (
+              <a
+                href="/codex-router/"
+                target="_blank"
+                rel="noopener"
+                className="sidebar__head-btn"
+                title="Codex 계정 풀 + 한도 관리"
+                aria-label="Codex 계정 관리"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </a>
+            )}
             <OAuthIndicator />
             <button
               type="button"

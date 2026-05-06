@@ -22,11 +22,27 @@ export default defineConfig({
         icons: [],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,ico}"],
-        // .thumbs/ 변형은 immutable + content-addressed 라 cache-first 가
-        // 이상적. 한 번 본 썸네일은 영구 캐시 (max 30 일, 2000개) 까지
-        // 네트워크 미접속에도 즉시 표시.
+        // 새 SW 즉시 활성화 + 모든 탭 점유 — 그렇지 않으면 사용자가 옛 dist
+        // 를 한 번 더 새로고침 해야 새 코드를 받게 된다 (vite-plugin-pwa
+        // autoUpdate 의 디폴트는 '활성화 시도' 일 뿐 강제 swap 은 안 함).
+        skipWaiting: true,
+        clientsClaim: true,
+        // navigation 요청(/, /codex-router 등)은 NetworkFirst — 옛 index.html
+        // 캐시 때문에 새 dist 자산 hash 가 안 갱신되어 ⚙ Codex 버튼처럼 새
+        // 컴포넌트가 사라져 보이던 회귀 방지. 네트워크 3초 안에 응답이 오지
+        // 않을 때만 캐시 폴백. precache 안 하므로 globPatterns 에 html 제외.
+        globPatterns: ["**/*.{js,css,svg,ico,webmanifest}"],
+        navigateFallback: undefined,
         runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === "navigate",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "ima2-html",
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 4, maxAgeSeconds: 24 * 60 * 60 },
+            },
+          },
           {
             urlPattern: /\/generated\/\.thumbs\//,
             handler: "CacheFirst",
@@ -55,8 +71,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          // @xyflow/react 는 노드 캔버스에서만 사용 — 메인 진입 chunk 에서
-          // 분리해 reactflow 런타임을 노드 모드 첫 진입 시점까지 미룬다.
           xyflow: ["@xyflow/react"],
         },
       },

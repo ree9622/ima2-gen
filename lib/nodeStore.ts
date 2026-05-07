@@ -3,6 +3,7 @@ import { join, resolve, sep } from "path";
 import { randomBytes } from "crypto";
 import { config } from "../config.js";
 import { embedImageMetadataBestEffort } from "./imageMetadataStore.js";
+import { invalidateHistoryIndex } from "./historyIndex.js";
 
 export function newNodeId() {
   return "n_" + randomBytes(config.ids.nodeHexBytes).toString("hex");
@@ -33,6 +34,7 @@ export async function saveNode(rootDir: string, { nodeId, b64, meta, ext = "png"
   }
   await writeFile(join(generatedDir, filename), embedded.buffer);
   await writeFile(join(generatedDir, filename + ".json"), JSON.stringify(meta, null, 2));
+  invalidateHistoryIndex();
   return { filename };
 }
 

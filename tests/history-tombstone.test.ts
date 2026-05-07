@@ -147,16 +147,19 @@ describe("History: delete tombstone + pagination", () => {
 
   it("favoritesOnly filters favorites before pagination", async () => {
     const favoriteTarget = createdFiles[2];
+    const secondFavoriteTarget = createdFiles[1];
     const browserId = "history_favorites_before_page";
-    const favRes = await fetch(`${base}/api/history/favorite`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Ima2-Browser-Id": browserId,
-      },
-      body: JSON.stringify({ filename: favoriteTarget }),
-    });
-    assert.strictEqual(favRes.status, 200);
+    for (const filename of [favoriteTarget, secondFavoriteTarget]) {
+      const favRes = await fetch(`${base}/api/history/favorite`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Ima2-Browser-Id": browserId,
+        },
+        body: JSON.stringify({ filename }),
+      });
+      assert.strictEqual(favRes.status, 200);
+    }
 
     const normalRes = await fetch(`${base}/api/history?limit=1`, {
       headers: { "X-Ima2-Browser-Id": browserId },
@@ -175,8 +178,23 @@ describe("History: delete tombstone + pagination", () => {
     assert.strictEqual(favoriteRes.status, 200);
     const favoritePage = await favoriteRes.json();
     assert.strictEqual(favoritePage.items.length, 1);
-    assert.strictEqual(favoritePage.items[0].filename, favoriteTarget);
     assert.strictEqual(favoritePage.items[0].isFavorite, true);
+    assert.ok(favoritePage.nextCursor, "favorite cursor exposes older favorites");
+
+    const cursor = favoritePage.nextCursor;
+    const olderFavoriteRes = await fetch(
+      `${base}/api/history?limit=1&favoritesOnly=1&before=${cursor.before}&beforeFilename=${encodeURIComponent(cursor.beforeFilename)}`,
+      { headers: { "X-Ima2-Browser-Id": browserId } },
+    );
+    assert.strictEqual(olderFavoriteRes.status, 200);
+    const olderFavoritePage = await olderFavoriteRes.json();
+    assert.strictEqual(olderFavoritePage.items.length, 1);
+    assert.notStrictEqual(
+      olderFavoritePage.items[0].filename,
+      favoritePage.items[0].filename,
+      "favorite pages do not duplicate the first favorite",
+    );
+    assert.strictEqual(olderFavoritePage.items[0].isFavorite, true);
   });
 
   it("groupBy=session returns sessions + loose arrays", async () => {

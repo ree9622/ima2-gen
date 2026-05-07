@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "fs/promises";
 import { basename, join, normalize } from "path";
 import { randomBytes } from "crypto";
 import { embedImageMetadataBestEffort } from "./imageMetadataStore.js";
+import { invalidateHistoryIndex } from "./historyIndex.js";
 
 const PNG_SIGNATURE_HEX = "89504e470d0a1a0a";
 const JPEG_SIGNATURE_HEX = "ffd8ff";
@@ -80,6 +81,7 @@ export async function createLocalImport(ctx: RuntimeContext, { buffer, originalF
   });
   await writeFile(fullPath, embedded.buffer);
   await writeFile(`${fullPath}.json`, JSON.stringify(meta)).catch(() => {});
+  invalidateHistoryIndex();
 
   const url = `/generated/${encodeURIComponent(filename)}`;
   return {

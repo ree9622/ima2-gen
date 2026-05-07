@@ -14,6 +14,7 @@ import {
 } from "../lib/generationCancel.js";
 import { logEvent, logError } from "../lib/logger.js";
 import { hasPngAlphaChannel, parsePngInfo } from "../lib/pngInfo.js";
+import { invalidateHistoryIndex } from "../lib/historyIndex.js";
 
 import { errInfo } from "../lib/errInfo.js";
 import { requireRuntimeContext, type RouteRuntimeContext, type RuntimeContext } from "../lib/runtimeContext.js";
@@ -223,6 +224,7 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         webSearchEnabled,
       };
       await writeFile(join(ctx.config.storage.generatedDir, filename + ".json"), JSON.stringify(meta)).catch(() => {});
+      invalidateHistoryIndex();
       finishHttpStatus = 200;
       finishMeta = { filename, imageChars: resultB64.length };
       logEvent("edit", "saved", {

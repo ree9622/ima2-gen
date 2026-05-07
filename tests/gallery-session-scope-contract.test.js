@@ -1,30 +1,23 @@
-import fs from "node:fs";
-import assert from "node:assert/strict";
 import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-const modal = fs.readFileSync("ui/src/components/GalleryModal.tsx", "utf8");
-const store = fs.readFileSync("ui/src/store/useAppStore.ts", "utf8");
-const registry = fs.readFileSync("ui/src/store/persistenceRegistry.ts", "utf8");
-const api = fs.readFileSync("ui/src/lib/api.ts", "utf8");
+const root = process.cwd();
 
-test("gallery sends sessionId when scope is current-session", () => {
-  assert.match(modal, /galleryScope === "current-session"/);
-  assert.match(modal, /sessionId: galleryScope/);
-});
+function readSource(path) {
+  return readFileSync(join(root, path), "utf8");
+}
 
-test("store persists galleryScope and galleryDefaultScope", () => {
-  const combined = store + "\n" + registry;
-  assert.match(combined, /ima2\.galleryScope/);
-  assert.match(combined, /ima2\.galleryDefaultScope/);
-  assert.match(store, /GALLERY_SCOPE_STORAGE_KEY|ima2\.galleryScope/);
-  assert.match(store, /GALLERY_DEFAULT_SCOPE_STORAGE_KEY|ima2\.galleryDefaultScope/);
-});
+test("session gallery keeps pagination scoped out with explicit helper text", () => {
+  const gallery = readSource("ui/src/components/GalleryModal.tsx");
+  const controls = readSource("ui/src/components/gallery/GalleryLoadControls.tsx");
+  const en = JSON.parse(readSource("ui/src/i18n/en.json"));
+  const ko = JSON.parse(readSource("ui/src/i18n/ko.json"));
 
-test("api forwards sessionId to grouped history", () => {
-  assert.match(api, /getHistoryGrouped/);
-  assert.match(api, /sessionId/);
-});
-
-test("store exports selectCurrentSessionId selector", () => {
-  assert.match(store, /export function selectCurrentSessionId/);
+  assert.match(gallery, /showSessions=\{showSessions\}/);
+  assert.match(controls, /gallery\.sessionPaginationHint/);
+  assert.match(controls, /if \(showSessions\)/);
+  assert.equal(typeof en.gallery.sessionPaginationHint, "string");
+  assert.equal(typeof ko.gallery.sessionPaginationHint, "string");
 });

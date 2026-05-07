@@ -484,6 +484,23 @@ function mapHistoryItem(it: Awaited<ReturnType<typeof getHistory>>["items"][numb
   };
 }
 
+function historyKey(item: Pick<GenerateItem, "filename" | "image">): string {
+  return item.filename ?? item.image;
+}
+
+function mergeHistoryItems(current: GenerateItem[], incoming: GenerateItem[]): GenerateItem[] {
+  const byKey = new Map(current.map((item) => [historyKey(item), item]));
+  for (const item of incoming) byKey.set(historyKey(item), item);
+  return [
+    ...current.map((item) => byKey.get(historyKey(item)) ?? item),
+    ...incoming.filter((item) => !current.some((h) => historyKey(h) === historyKey(item))),
+  ];
+}
+
+function retainHistoryItems(items: GenerateItem[], limit: number): GenerateItem[] {
+  return items.slice(0, Math.max(HISTORY_LIMIT, limit));
+}
+
 function stripDataUrlPrefix(dataUrl: string): string {
   return dataUrl.replace(/^data:[^;]+;base64,/, "");
 }
@@ -714,8 +731,12 @@ type AppState = {
   history: GenerateItem[];
   historyNextCursor: HistoryCursor | null;
   historyLoadingOlder: boolean;
+  favoriteHistoryNextCursor: HistoryCursor | null;
+  favoriteHistoryLoadingOlder: boolean;
+  loadedHistoryRetainLimit: number;
   loadOlderHistory: () => Promise<void>;
   loadFavoriteHistory: () => Promise<void>;
+  loadOlderFavoriteHistory: () => Promise<void>;
   trashPending: TrashPendingState;
   toast: ToastState;
   toastLog: ToastEntry[];
@@ -1536,8 +1557,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       history: item.filename
         ? s.history.some((h) => h.filename === item.filename)
           ? s.history.map((h) => (h.filename === item.filename ? item : h))
-          : [item, ...s.history].slice(0, HISTORY_LIMIT)
+          : retainHistoryItems([item, ...s.history], s.loadedHistoryRetainLimit + 1)
         : s.history,
+      loadedHistoryRetainLimit: Math.max(
+        s.loadedHistoryRetainLimit,
+        Math.min(s.history.length + 1, s.loadedHistoryRetainLimit + 1),
+      ),
     }));
   },
   addGeneratedHistoryItem: async (item) => {
@@ -1546,6 +1571,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   history: [],
   historyNextCursor: null,
   historyLoadingOlder: false,
+  favoriteHistoryNextCursor: null,
+  favoriteHistoryLoadingOlder: false,
+  loadedHistoryRetainLimit: HISTORY_LIMIT,
   loadOlderHistory: async () => {
     const cursor = get().historyNextCursor;
     if (!cursor || get().historyLoadingOlder) return;
@@ -1565,6 +1593,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           history: [...s.history, ...appended],
           historyNextCursor: res.nextCursor,
           historyLoadingOlder: false,
+          loadedHistoryRetainLimit: Math.max(
+            s.loadedHistoryRetainLimit,
+            s.history.length + appended.length,
+          ),
         };
       });
     } catch {
@@ -1577,15 +1609,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await getHistory({ limit: HISTORY_LIMIT, favoritesOnly: true });
       const incoming = res.items.map(mapHistoryItem);
       set((s) => {
-        const byKey = new Map(s.history.map((item) => [item.filename ?? item.image, item]));
-        for (const item of incoming) {
-          byKey.set(item.filename ?? item.image, item);
-        }
+        const history = mergeHistoryItems(s.history, incoming);
         return {
-          history: [
-            ...s.history.map((item) => byKey.get(item.filename ?? item.image) ?? item),
-            ...incoming.filter((item) => !s.history.some((h) => (h.filename ?? h.image) === (item.filename ?? item.image))),
-          ],
+          history,
+          favoriteHistoryNextCursor: res.nextCursor,
+          loadedHistoryRetainLimit: Math.max(s.loadedHistoryRetainLimit, history.length),
           galleryFavorites: new Set([
             ...Array.from(s.galleryFavorites),
             ...incoming.filter((item) => item.filename).map((item) => item.filename!),
@@ -1593,6 +1621,31 @@ export const useAppStore = create<AppState>((set, get) => ({
         };
       });
     } catch {
+      get().showToast(t("gallery.loadOlderFailed"), true);
+    }
+  },
+  loadOlderFavoriteHistory: async () => {
+    const cursor = get().favoriteHistoryNextCursor;
+    if (!cursor || get().favoriteHistoryLoadingOlder) return;
+    set({ favoriteHistoryLoadingOlder: true });
+    try {
+      const res = await getHistory({ limit: HISTORY_LIMIT, cursor, favoritesOnly: true });
+      const incoming = res.items.map(mapHistoryItem);
+      set((s) => {
+        const history = mergeHistoryItems(s.history, incoming);
+        return {
+          history,
+          favoriteHistoryNextCursor: res.nextCursor,
+          favoriteHistoryLoadingOlder: false,
+          loadedHistoryRetainLimit: Math.max(s.loadedHistoryRetainLimit, history.length),
+          galleryFavorites: new Set([
+            ...Array.from(s.galleryFavorites),
+            ...incoming.filter((item) => item.filename).map((item) => item.filename!),
+          ]),
+        };
+      });
+    } catch {
+      set({ favoriteHistoryLoadingOlder: false });
       get().showToast(t("gallery.loadOlderFailed"), true);
     }
   },
@@ -2881,7 +2934,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...item,
       createdAt: item.createdAt || Date.now(),
     };
-    set({ history: [withDefaults, ...s.history].slice(0, HISTORY_LIMIT) });
+    set({
+      history: retainHistoryItems([withDefaults, ...s.history], s.loadedHistoryRetainLimit + 1),
+      loadedHistoryRetainLimit: Math.max(
+        s.loadedHistoryRetainLimit,
+        Math.min(s.history.length + 1, s.loadedHistoryRetainLimit + 1),
+      ),
+    });
   },
 
   importLocalImageToHistory: async (file) => {
@@ -3261,7 +3320,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         const res = await getHistory({ limit: HISTORY_LIMIT });
         const history: GenerateItem[] = res.items.map(mapHistoryItem);
-        set({ historyNextCursor: res.nextCursor });
+        set({ historyNextCursor: res.nextCursor, loadedHistoryRetainLimit: HISTORY_LIMIT });
         if (history.length > 0) {
           const selected = loadSelectedFilename();
           const matched = selected
@@ -3272,7 +3331,12 @@ export const useAppStore = create<AppState>((set, get) => ({
             (matched ? resolveVisibleShortcutCurrent(history, matched) : null) ??
             visibleHistory[0] ??
             null;
-          set({ history, currentImage, historyNextCursor: res.nextCursor });
+          set({
+            history,
+            currentImage,
+            historyNextCursor: res.nextCursor,
+            loadedHistoryRetainLimit: Math.max(HISTORY_LIMIT, history.length),
+          });
           if (currentImage?.filename !== selected) {
             saveSelectedFilename(currentImage?.filename ?? null);
           }
@@ -3723,11 +3787,19 @@ async function addHistory(
     url,
     createdAt: item.createdAt || Date.now(),
   };
-  const history = [withThumb, ...get().history].slice(0, HISTORY_LIMIT);
+  const state = get();
+  const history = retainHistoryItems(
+    [withThumb, ...state.history],
+    state.loadedHistoryRetainLimit + 1,
+  );
   saveSelectedFilename(withThumb.filename ?? null);
   set({
     history,
     currentImage: withThumb,
+    loadedHistoryRetainLimit: Math.max(
+      state.loadedHistoryRetainLimit,
+      Math.min(state.history.length + 1, state.loadedHistoryRetainLimit + 1),
+    ),
     unseenGeneratedCount: get().unseenGeneratedCount + 1,
   });
 }

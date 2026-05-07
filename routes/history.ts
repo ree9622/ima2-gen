@@ -1,6 +1,11 @@
 import type { Express, Request, Response } from "express";
-import { listHistoryRows } from "../lib/historyList.js";
 import { trashAsset, restoreAsset, deleteAssetPermanent } from "../lib/assetLifecycle.js";
+import {
+  getHistoryIndex,
+  invalidateFavoriteOverlay,
+  invalidateHistoryIndex,
+  type HistoryIndexRow,
+} from "../lib/historyIndex.js";
 import { getSessionTitleMap } from "../lib/sessionStore.js";
 import { logError, logEvent } from "../lib/logger.js";
 import { getDb } from "../lib/db.js";
@@ -10,6 +15,51 @@ import { requireRuntimeContext, type RouteRuntimeContext } from "../lib/runtimeC
 
 function asStr(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function matchesHistoryFilters(
+  row: HistoryIndexRow,
+  params: {
+    sinceTs: number;
+    beforeTs: number;
+    beforeFn: string | null;
+    sessionId: string | null;
+    favoritesOnly: boolean;
+    favoriteSet: Set<string>;
+  },
+): boolean {
+  if (Number.isFinite(params.sinceTs) && row.createdAt <= params.sinceTs) return false;
+  if (Number.isFinite(params.beforeTs)) {
+    if (row.createdAt > params.beforeTs) return false;
+    if (row.createdAt === params.beforeTs) {
+      if (!params.beforeFn || row.filename >= params.beforeFn) return false;
+    }
+  }
+  if (params.sessionId && row.sessionId !== params.sessionId) return false;
+  if (params.favoritesOnly && !params.favoriteSet.has(row.filename)) return false;
+  return true;
+}
+
+function selectHistoryPage(
+  rows: HistoryIndexRow[],
+  limit: number,
+  params: Parameters<typeof matchesHistoryFilters>[1],
+) {
+  const selected: HistoryIndexRow[] = [];
+  for (const row of rows) {
+    if (!matchesHistoryFilters(row, params)) continue;
+    selected.push(row);
+    if (selected.length > limit) break;
+  }
+  const pageRows = selected.slice(0, limit);
+  const page = pageRows.map((r) => ({ ...r, isFavorite: params.favoriteSet.has(r.filename) }));
+  const last = page[page.length - 1];
+  return {
+    page,
+    nextCursor: selected.length > limit && last
+      ? { before: last.createdAt, beforeFilename: last.filename }
+      : null,
+  };
 }
 
 export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
@@ -32,7 +82,7 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
         ? req.headers["x-ima2-browser-id"]
         : null;
 
-      const rows = await listHistoryRows(ctx.config.storage.generatedDir);
+      const { rows } = await getHistoryIndex(ctx.config.storage.generatedDir);
 
       // Enrich with favorite status
       let favoriteSet = new Set<string>();
@@ -42,28 +92,14 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
         favoriteSet = new Set(favRows.map((r) => r.filename));
       }
 
-      let filtered = rows;
-      if (Number.isFinite(sinceTs)) {
-        filtered = filtered.filter((r) => r.createdAt > sinceTs);
-      }
-      if (Number.isFinite(beforeTs)) {
-        filtered = filtered.filter((r) => {
-          if (r.createdAt < beforeTs) return true;
-          if (r.createdAt === beforeTs && beforeFn) return r.filename < beforeFn;
-          return false;
-        });
-      }
-      if (sessionId) {
-        filtered = filtered.filter((r) => r.sessionId === sessionId);
-      }
-      if (favoritesOnly) {
-        filtered = filtered.filter((r) => favoriteSet.has(r.filename));
-      }
-
-      const page = filtered.slice(0, limit).map((r) => ({ ...r, isFavorite: favoriteSet.has(r.filename) }));
-      const nextCursor = page.length === limit && filtered.length > limit
-        ? { before: page[page.length - 1].createdAt, beforeFilename: page[page.length - 1].filename }
-        : null;
+      const { page, nextCursor } = selectHistoryPage(rows, limit, {
+        sinceTs,
+        beforeTs,
+        beforeFn,
+        sessionId,
+        favoritesOnly,
+        favoriteSet,
+      });
 
       if (groupBy === "session") {
         const groups = new Map<string, { sessionId: any; items: any[]; lastUsedAt: any }>();
@@ -109,6 +145,7 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
     try {
       const filename = decodeURIComponent(req.params.filename);
       const result = await deleteAssetPermanent(ctx.rootDir, filename);
+      invalidateHistoryIndex();
       res.json(result);
     } catch (e) {
       const err = errInfo(e);
@@ -120,6 +157,7 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
     try {
       const filename = decodeURIComponent(req.params.filename);
       const result = await trashAsset(ctx.rootDir, filename);
+      invalidateHistoryIndex();
       res.json(result);
     } catch (e) {
       const err = errInfo(e);
@@ -134,6 +172,7 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
       const trashId = typeof body.trashId === "string" ? body.trashId : null;
       if (!trashId) return res.status(400).json({ error: "trashId required" });
       const result = await restoreAsset(ctx.rootDir, trashId, filename);
+      invalidateHistoryIndex();
       res.json(result);
     } catch (e) {
       const err = errInfo(e);
@@ -159,12 +198,14 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
 
       if (existing) {
         db.prepare("DELETE FROM gallery_favorites WHERE browser_id = ? AND filename = ?").run(browserId, filename);
+        invalidateFavoriteOverlay();
         res.json({ isFavorite: false });
       } else {
         const id = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
         db.prepare(
           "INSERT INTO gallery_favorites (id, browser_id, filename, favorited_at) VALUES (?, ?, ?, ?)"
         ).run(id, browserId, filename, Math.floor(Date.now() / 1000));
+        invalidateFavoriteOverlay();
         res.json({ isFavorite: true });
       }
     } catch (e) {

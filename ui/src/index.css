@@ -2712,6 +2712,24 @@ body {
   gap: 10px;
   align-content: start;
 }
+.gallery__virtual {
+  position: relative;
+  width: 100%;
+}
+.gallery__virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0 18px;
+  will-change: transform;
+}
+.gallery__group-header--virtual {
+  margin: 8px 0 0;
+}
+.gallery__grid--virtual {
+  padding-top: 8px;
+}
 .gallery__tile {
   position: relative;
   padding: 0;
@@ -2864,6 +2882,12 @@ body {
   display: flex;
   justify-content: center;
   padding: 14px 0 4px;
+}
+.gallery__load-more--hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  padding-inline: 18px;
+  text-align: center;
 }
 .gallery__load-more button {
   min-height: 36px;

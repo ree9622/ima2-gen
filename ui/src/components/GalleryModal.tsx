@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { selectCurrentSessionId, useAppStore } from "../store/useAppStore";
 import { useCardNewsStore } from "../store/cardNewsStore";
 import type { GenerateItem } from "../types";
@@ -14,13 +14,10 @@ import { getGalleryItemKey } from "../lib/galleryNavigation";
 import { useI18n } from "../i18n";
 import { CardNewsGalleryTile } from "./CardNewsGalleryTile";
 import { GalleryImageTile } from "./GalleryImageTile";
-type SessionGroup = {
-  sessionId: string;
-  title: string | null;
-  label: string | null;
-  displayLabel: string;
-  items: GenerateItem[];
-};
+import { GalleryDateGrid } from "./gallery/GalleryDateGrid";
+import { GalleryLoadControls } from "./gallery/GalleryLoadControls";
+import { GallerySessionGroups, type GallerySessionGroup } from "./gallery/GallerySessionGroups";
+import { GalleryStorageBar } from "./gallery/GalleryStorageBar";
 
 const STORAGE_NOTICE_DISMISSED_KEY = "ima2.storageNoticeDismissed.0.09.23";
 
@@ -42,14 +39,17 @@ export function GalleryModal() {
   const setGalleryScope = useAppStore((s) => s.setGalleryScope);
   const historyNextCursor = useAppStore((s) => s.historyNextCursor);
   const historyLoadingOlder = useAppStore((s) => s.historyLoadingOlder);
+  const favoriteHistoryNextCursor = useAppStore((s) => s.favoriteHistoryNextCursor);
+  const favoriteHistoryLoadingOlder = useAppStore((s) => s.favoriteHistoryLoadingOlder);
   const loadOlderHistory = useAppStore((s) => s.loadOlderHistory);
   const loadFavoriteHistory = useAppStore((s) => s.loadFavoriteHistory);
+  const loadOlderFavoriteHistory = useAppStore((s) => s.loadOlderFavoriteHistory);
   const currentSessionId = useAppStore(selectCurrentSessionId);
 
   const [query, setQuery] = useState("");
   const [groupBy, setGroupBy] = useState<"date" | "session">("date");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>([]);
+  const [sessionGroups, setSessionGroups] = useState<GallerySessionGroup[]>([]);
   const [loose, setLoose] = useState<GenerateItem[]>([]);
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [storageDismissed, setStorageDismissed] = useState(() => {
@@ -60,8 +60,13 @@ export function GalleryModal() {
     }
   });
   const scrollRef = useRef<HTMLDivElement | null>(null), itemRefs = useRef<Record<string, HTMLElement | null>>({});
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
   const galleryHistory = useMemo(() => history.filter(isGalleryVisibleItem), [history]);
+  const setScrollNode = useCallback((node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    setScrollElement(node);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -318,14 +323,7 @@ export function GalleryModal() {
   };
 
   const showSessions = groupBy === "session";
-  const canLoadOlder = !showSessions && !favoritesOnly && !query.trim() && Boolean(historyNextCursor);
-  const showStorageNotice =
-    storageStatus != null && storageStatus.state !== "ok" && !storageDismissed;
-  const storageNoticeKey =
-    storageStatus?.state === "recoverable" ? "gallery.storageNoticeRecoverable"
-    : storageStatus?.state === "not_found" ? "gallery.storageNoticeNotFound"
-    : "gallery.storageNoticeUnknown";
-
+  const selectedKey = currentImage ? getGalleryItemKey(currentImage) : null;
   return (
     <div className="gallery-backdrop" onClick={close} role="presentation">
       <div
@@ -424,87 +422,44 @@ export function GalleryModal() {
           </button>
         </div>
 
-        <div className={`gallery__storage-bar${showStorageNotice ? " gallery__storage-bar--notice" : ""}`}>
-          {showStorageNotice ? (
-            <div className="gallery__storage-copy">
-              <div className="gallery__storage-title">{t("gallery.storageNoticeTitle")}</div>
-              <div className="gallery__storage-text">{t(storageNoticeKey)}</div>
-            </div>
-          ) : (
-            <div className="gallery__storage-copy gallery__storage-copy--quiet">
-              {storageStatus?.generatedDirLabel ?? "~/.ima2/generated"}
-            </div>
-          )}
-          <div className="gallery__storage-actions">
-            <button
-              type="button"
-              className="gallery__storage-button"
-              onClick={handleOpenGeneratedDir}
-              title={t("gallery.openGeneratedDirTitle")}
-            >
-              {t("gallery.openGeneratedDir")}
-            </button>
-            {showStorageNotice && (
-              <button
-                type="button"
-                className="gallery__storage-button gallery__storage-button--ghost"
-                onClick={dismissStorageNotice}
-              >
-                {t("common.close")}
-              </button>
-            )}
-          </div>
-        </div>
+        <GalleryStorageBar
+          status={storageStatus}
+          dismissed={storageDismissed}
+          onOpenFolder={handleOpenGeneratedDir}
+          onDismiss={dismissStorageNotice}
+          t={t}
+        />
 
         <div
           className="gallery__scroll"
-          ref={scrollRef}
+          ref={setScrollNode}
           onScroll={() => {
             lastScrollTopRef.current = scrollRef.current?.scrollTop ?? 0;
           }}
         >
           {showSessions ? (
             <>
-              {visibleSessionGroups.map((g) => (
-                <section key={g.sessionId} className="gallery__group">
-                  <header className="gallery__group-header">
-                    <span className="gallery__group-label" title={g.sessionId}>
-                      {g.title ? g.displayLabel : t("gallery.sessionLabel", { name: g.displayLabel })}
-                    </span>
-                    <span className="gallery__group-count">{g.items.length}</span>
-                  </header>
-                  <div className="gallery__grid">
-                    {g.items.map((item, i) => renderTile(item, g.sessionId, i))}
-                  </div>
-                </section>
-              ))}
-              {visibleLoose.length > 0 && (
-                <section className="gallery__group">
-                  <header className="gallery__group-header">
-                    <span className="gallery__group-label">{t("gallery.standalone")}</span>
-                    <span className="gallery__group-count">{visibleLoose.length}</span>
-                  </header>
-                  <div className="gallery__grid">
-                    {visibleLoose.map((item, i) => renderTile(item, "loose", i))}
-                  </div>
-                </section>
-              )}
-              {visibleSessionGroups.length === 0 && visibleLoose.length === 0 && (
-                <div className="gallery__empty">
-                  {favoritesOnly ? (
-                    t("gallery.emptyFavorites")
-                  ) : galleryScope === "current-session" ? (
-                    <>
-                      <p>{t("gallery.empty.currentSession")}</p>
-                      <button type="button" onClick={() => setGalleryScope("all")}>
-                        {t("gallery.scope.all")}
-                      </button>
-                    </>
-                  ) : (
-                    t("gallery.emptySessions")
-                  )}
-                </div>
-              )}
+              <GallerySessionGroups
+                groups={visibleSessionGroups}
+                loose={visibleLoose}
+                favoritesOnly={favoritesOnly}
+                galleryScope={galleryScope}
+                setGalleryScope={setGalleryScope}
+                renderTile={renderTile}
+                t={t}
+              />
+              <GalleryLoadControls
+                showSessions={showSessions}
+                favoritesOnly={favoritesOnly}
+                query={query}
+                historyNextCursor={historyNextCursor}
+                favoriteHistoryNextCursor={favoriteHistoryNextCursor}
+                historyLoadingOlder={historyLoadingOlder}
+                favoriteHistoryLoadingOlder={favoriteHistoryLoadingOlder}
+                onLoadOlder={() => void loadOlderHistory()}
+                onLoadOlderFavorites={() => void loadOlderFavoriteHistory()}
+                t={t}
+              />
             </>
           ) : filtered.length === 0 ? (
             <div className="gallery__empty">
@@ -516,28 +471,25 @@ export function GalleryModal() {
             </div>
           ) : (
             <>
-              {dateGroups.map(([label, items]) => (
-                <section key={label} className="gallery__group">
-                  <header className="gallery__group-header">
-                    <span className="gallery__group-label">{localizeBucket(label)}</span>
-                    <span className="gallery__group-count">{items.length}</span>
-                  </header>
-                  <div className="gallery__grid">
-                    {items.map((item, i) => renderTile(item, label, i))}
-                  </div>
-                </section>
-              ))}
-              {canLoadOlder && (
-                <div className="gallery__load-more">
-                  <button
-                    type="button"
-                    onClick={() => void loadOlderHistory()}
-                    disabled={historyLoadingOlder}
-                  >
-                    {historyLoadingOlder ? t("gallery.loadingOlder") : t("gallery.loadOlder")}
-                  </button>
-                </div>
-              )}
+              <GalleryDateGrid
+                dateGroups={dateGroups}
+                selectedKey={selectedKey}
+                scrollElement={scrollElement}
+                localizeBucket={localizeBucket}
+                renderTile={renderTile}
+              />
+              <GalleryLoadControls
+                showSessions={showSessions}
+                favoritesOnly={favoritesOnly}
+                query={query}
+                historyNextCursor={historyNextCursor}
+                favoriteHistoryNextCursor={favoriteHistoryNextCursor}
+                historyLoadingOlder={historyLoadingOlder}
+                favoriteHistoryLoadingOlder={favoriteHistoryLoadingOlder}
+                onLoadOlder={() => void loadOlderHistory()}
+                onLoadOlderFavorites={() => void loadOlderFavoriteHistory()}
+                t={t}
+              />
             </>
           )}
         </div>

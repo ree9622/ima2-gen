@@ -3,6 +3,7 @@ import { constants } from "fs";
 import { basename, join, normalize, parse } from "path";
 import { randomBytes } from "crypto";
 import { embedImageMetadataBestEffort } from "./imageMetadataStore.js";
+import { invalidateHistoryIndex } from "./historyIndex.js";
 import type { RuntimeContext } from "./runtimeContext.js";
 
 interface CanvasMeta {
@@ -107,6 +108,7 @@ async function writeCanvasPng(ctx: RuntimeContext, filename: string, buffer: Buf
   });
   await writeFile(full, embedded.buffer);
   await writeFile(`${full}.json`, JSON.stringify(meta)).catch(() => {});
+  invalidateHistoryIndex();
 }
 
 async function readGeneratedMetadata(ctx: RuntimeContext, filename: string | null | undefined): Promise<StoredGeneratedMeta | null> {

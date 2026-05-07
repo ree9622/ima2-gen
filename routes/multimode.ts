@@ -15,6 +15,7 @@ import {
 } from "../lib/generationCancel.js";
 import { logEvent, logError } from "../lib/logger.js";
 import { embedImageMetadataBestEffort } from "../lib/imageMetadataStore.js";
+import { invalidateHistoryIndex } from "../lib/historyIndex.js";
 
 import { errInfo } from "../lib/errInfo.js";
 import { requireRuntimeContext, type RouteRuntimeContext, type RuntimeContext } from "../lib/runtimeContext.js";
@@ -239,6 +240,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
         });
         await writeFile(join(ctx.config.storage.generatedDir, filename), embedded.buffer);
         await writeFile(join(ctx.config.storage.generatedDir, filename + ".json"), JSON.stringify(meta)).catch(() => {});
+        invalidateHistoryIndex();
         const item = {
           image: `data:${mime};base64,${image.b64}`,
           filename,

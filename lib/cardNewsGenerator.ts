@@ -5,6 +5,7 @@ import { generateViaOAuth } from "./oauthProxy.js";
 import type { OAuthReferenceRef } from "./oauthProxy/references.js";
 import { readTemplateBaseB64 } from "./cardNewsTemplateStore.js";
 import { writeCardNewsManifest, writeCardSidecar } from "./cardNewsManifestStore.js";
+import { invalidateHistoryIndex } from "./historyIndex.js";
 import { requireRuntimeContext, type RouteRuntimeContext } from "./runtimeContext.js";
 
 import { errInfo } from "./errInfo.js";
@@ -199,6 +200,7 @@ export async function generateCardNewsSet(ctxIn: RouteRuntimeContext, input: Gen
         error = { code: "CARD_NEWS_EMPTY_IMAGE", message: "No image data returned" };
       } else {
         await writeFile(join(dir, imageFilename), Buffer.from(result.b64, "base64"));
+        invalidateHistoryIndex();
       }
     } catch (e) {
       const err = errInfo(e);
@@ -231,6 +233,7 @@ export async function generateCardNewsSet(ctxIn: RouteRuntimeContext, input: Gen
       revisedPrompt: result?.revisedPrompt || null,
     };
     await writeCardSidecar(dir, sidecarFilename, sidecar);
+    invalidateHistoryIndex();
     if (typeof options.onCardDone === "function") await options.onCardDone(sidecar);
     return sidecar;
   });
@@ -250,6 +253,7 @@ export async function generateCardNewsSet(ctxIn: RouteRuntimeContext, input: Gen
     cards: generatedCards,
   };
   await writeCardNewsManifest(ctx.config.storage.generatedDir, manifest);
+  invalidateHistoryIndex();
   return {
     setId,
     manifest,

@@ -1,7 +1,7 @@
 # Issue #52 - Windows Gallery Feedback Split Plan
 
 **GitHub**: https://github.com/lidge-jun/ima2-gen/issues/52
-**Status**: implementation gated / Pro PASS
+**Status**: done / archived to `_fin`
 **Date**: 2026-05-06
 **External review**: ChatGPT Pro via `agbrowse web-ai`, repo-link-only prompt
 
@@ -444,6 +444,18 @@ edits applied here:
 9. Follow-up issues were created: #53 for gallery cap/favorites/performance and
    #54 for true in-flight cancellation.
 ```
+
+## Closeout 2026-05-07
+
+This split plan is complete.
+
+- #52 is closed with `status: split`.
+- Same-day low-risk items shipped: Windows generated-folder opening, in-flight
+  prompt hover/accessibility, and PgUp/PgDn gallery navigation.
+- Follow-up issues were created and linked: #53 for gallery cap/favorites scale
+  and #54 for true in-flight cancellation.
+- #53/#54 implementation work landed afterward; #53 remains the active place for
+  dynamic gallery depth, index/cache, and virtualization planning.
 
 ## #52 Closure Semantics
 

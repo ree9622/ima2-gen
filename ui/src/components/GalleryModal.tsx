@@ -57,6 +57,10 @@ export function GalleryModal() {
   const open = useAppStore((s) => s.galleryOpen);
   const close = useAppStore((s) => s.closeGallery);
   const history = useAppStore((s) => s.history);
+  const historyTotal = useAppStore((s) => s.historyTotal);
+  const historyNextCursor = useAppStore((s) => s.historyNextCursor);
+  const historyLoadingMore = useAppStore((s) => s.historyLoadingMore);
+  const loadOlderHistory = useAppStore((s) => s.loadOlderHistory);
   const selectHistory = useAppStore((s) => s.selectHistory);
   const currentImage = useAppStore((s) => s.currentImage);
   const removeFromHistory = useAppStore((s) => s.removeFromHistory);
@@ -194,7 +198,7 @@ export function GalleryModal() {
   // ── Pagination (50 per page, infinite scroll) ───────────────────────
   const pageMax = page * PAGE_SIZE;
 
-  const totalAvailable = useMemo(() => {
+  const loadedAvailable = useMemo(() => {
     if (groupBy === "session") {
       return (
         filteredSessionGroups.reduce((a, g) => a + g.items.length, 0) +
@@ -203,6 +207,10 @@ export function GalleryModal() {
     }
     return filtered.length;
   }, [groupBy, filteredSessionGroups, filteredLoose, filtered]);
+  const totalAvailable =
+    groupBy === "date" && !hasFilter
+      ? Math.max(historyTotal, loadedAvailable)
+      : loadedAvailable;
 
   const dateGroupsPaged = useMemo(
     () =>
@@ -227,8 +235,21 @@ export function GalleryModal() {
     return { sessionGroups, loose: looseTaken };
   }, [groupBy, filteredSessionGroups, filteredLoose, pageMax]);
 
-  const shownCount = Math.min(pageMax, totalAvailable);
-  const hasMore = shownCount < totalAvailable;
+  const shownCount = Math.min(pageMax, loadedAvailable);
+  const hasMoreLoaded = shownCount < loadedAvailable;
+  const hasOlderCursor = groupBy === "date" && Boolean(historyNextCursor);
+  const canLoadOlder = hasOlderCursor && !historyLoadingMore;
+  const hasMore = hasMoreLoaded || hasOlderCursor;
+
+  function handleLoadMore() {
+    if (hasMoreLoaded) {
+      setPage((p) => p + 1);
+      return;
+    }
+    if (canLoadOlder) {
+      void loadOlderHistory();
+    }
+  }
 
   useEffect(() => {
     if (!open || !hasMore) return;
@@ -237,13 +258,13 @@ export function GalleryModal() {
     if (!sentinel || !root) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) setPage((p) => p + 1);
+        if (entries[0]?.isIntersecting) handleLoadMore();
       },
       { root, threshold: 0, rootMargin: "400px 0px" },
     );
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [open, hasMore, pageMax]);
+  }, [open, hasMore, hasMoreLoaded, canLoadOlder, pageMax]);
 
 
   useEffect(() => {
@@ -521,9 +542,14 @@ export function GalleryModal() {
               <button
                 type="button"
                 className="gallery__load-more"
-                onClick={() => setPage((p) => p + 1)}
+                onClick={handleLoadMore}
+                disabled={historyLoadingMore}
               >
-                더 보기 (+{Math.min(PAGE_SIZE, totalAvailable - shownCount)}장)
+                {hasMoreLoaded
+                  ? `더 보기 (+${Math.min(PAGE_SIZE, loadedAvailable - shownCount)}장)`
+                  : historyLoadingMore
+                    ? "이전 기록 불러오는 중..."
+                    : "이전 기록 더 불러오기"}
               </button>
             </div>
           )}

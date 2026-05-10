@@ -165,6 +165,7 @@ export type HistoryItem = {
   moderation?: string | null;
   format: string;
   provider: string;
+  codexAccount?: string | null;
   usage: Record<string, unknown> | null;
   webSearchCalls: number;
   sessionId?: string | null;

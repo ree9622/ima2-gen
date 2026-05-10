@@ -32,6 +32,7 @@ import {
   type SessionSummary,
   type SessionFull,
   type HistoryItem,
+  type HistoryCursor,
   type InflightJob,
 } from "../lib/api";
 import { compressImage } from "../lib/image";
@@ -431,6 +432,9 @@ function userScopedResetSlice() {
     referenceImages: [] as string[],
     referenceMetaHints: [] as (import("../types").ReferenceMetaHint | null)[],
     inFlight: [] as PersistedInFlight[],
+    historyNextCursor: null as HistoryCursor | null,
+    historyTotal: 0,
+    historyLoadingMore: false,
   };
 }
 
@@ -441,8 +445,51 @@ function clearUserScopedLocalStorage(): void {
   } catch {}
 }
 
-const HISTORY_LIMIT = 3000;
+const HISTORY_INITIAL_LIMIT = 500;
+const HISTORY_PAGE_LIMIT = 500;
+const HISTORY_POLL_LIMIT = 500;
+const HISTORY_MAX_RETAIN = 10000;
 const MAX_NODE_REFS = 5;
+
+function historyItemToGenerateItem(it: HistoryItem): GenerateItem {
+  return {
+    image: it.url,
+    url: it.url,
+    filename: it.filename,
+    thumb: it.thumb ?? it.url,
+    web: it.web ?? undefined,
+    prompt: it.prompt ?? undefined,
+    originalPrompt: it.originalPrompt ?? undefined,
+    size: it.size ?? undefined,
+    quality: it.quality ?? undefined,
+    provider: it.provider,
+    codexAccount: it.codexAccount ?? undefined,
+    usage: (it.usage as GenerateItem["usage"]) ?? undefined,
+    createdAt: it.createdAt,
+    favorite: it.favorite === true,
+    sessionId: it.sessionId ?? null,
+    nodeId: it.nodeId ?? null,
+    clientNodeId: it.clientNodeId ?? null,
+    kind: it.kind ?? null,
+    ...(it.references && it.references.length > 0
+      ? { references: it.references }
+      : {}),
+  };
+}
+
+function appendUniqueHistory(
+  existing: GenerateItem[],
+  incoming: GenerateItem[],
+): GenerateItem[] {
+  const seen = new Set(existing.map((h) => h.filename).filter(Boolean));
+  const fresh = incoming.filter((item) => {
+    if (!item.filename) return true;
+    if (seen.has(item.filename)) return false;
+    seen.add(item.filename);
+    return true;
+  });
+  return [...existing, ...fresh];
+}
 
 export type ImageNodeStatus =
   | "empty"
@@ -664,6 +711,10 @@ type AppState = {
   selectActivity: (id: string) => void;
   currentImage: GenerateItem | null;
   history: GenerateItem[];
+  historyNextCursor: HistoryCursor | null;
+  historyTotal: number;
+  historyLoadingMore: boolean;
+  loadOlderHistory: () => Promise<void>;
   toast: ToastState;
   rightPanelOpen: boolean;
   toggleRightPanel: () => void;
@@ -1813,25 +1864,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           (max, it) => (it.createdAt && it.createdAt > max ? it.createdAt : max),
           0,
         );
-        const { items } = await getHistory({ limit: HISTORY_LIMIT, since: lastKnown });
-        const arr: GenerateItem[] = items.map((it) => ({
-          image: it.url,
-          url: it.url,
-          filename: it.filename,
-          thumb: it.thumb ?? it.url,
-          web: it.web ?? undefined,
-          prompt: it.prompt ?? undefined,
-          originalPrompt: it.originalPrompt ?? undefined,
-          size: it.size ?? undefined,
-          quality: it.quality ?? undefined,
-          format: it.format as Format | undefined,
-          createdAt: it.createdAt,
-          sessionId: it.sessionId ?? null,
-          favorite: it.favorite === true,
-          ...(it.references && it.references.length > 0
-            ? { references: it.references }
-            : {}),
-        }));
+        const { items, total } = await getHistory({
+          limit: HISTORY_POLL_LIMIT,
+          since: lastKnown,
+        });
+        const arr = items.map(historyItemToGenerateItem);
         const existing = get().history;
         const fresh = arr.filter(
           (a) => !existing.some((e) => e.filename === a.filename),
@@ -1844,10 +1881,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               saveSelectedFilename(fresh[0].filename);
             }
             return {
-              history: [...fresh, ...s.history].slice(0, HISTORY_LIMIT),
+              history: [...fresh, ...s.history].slice(0, HISTORY_MAX_RETAIN),
+              historyTotal: Math.max(total, s.historyTotal, s.history.length + fresh.length),
               currentImage: nextCurrent,
             };
           });
+        } else if (total !== get().historyTotal) {
+          set({ historyTotal: total });
         }
         // Reconcile running inflight against fresh history rows by requestId.
         // A running entry whose requestId matches a new history row is the
@@ -1996,28 +2036,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       // Hydrate history with the slice we just read so subsequent polling
       // ticks have a recent baseline (avoids first-tick refetch race).
       if (historyItems.length > 0) {
-        const fresh: GenerateItem[] = historyItems.map((it) => ({
-          image: it.url,
-          url: it.url,
-          filename: it.filename,
-          thumb: it.url,
-          prompt: it.prompt ?? undefined,
-          originalPrompt: it.originalPrompt ?? undefined,
-          size: it.size ?? undefined,
-          quality: it.quality ?? undefined,
-          format: it.format as Format | undefined,
-          createdAt: it.createdAt,
-          sessionId: it.sessionId ?? null,
-          favorite: it.favorite === true,
-          ...(it.references && it.references.length > 0
-            ? { references: it.references }
-            : {}),
-        }));
+        const fresh = historyItems.map(historyItemToGenerateItem);
         const existing = get().history;
         const newOnes = fresh.filter((a) => !existing.some((e) => e.filename === a.filename));
         if (newOnes.length > 0) {
           set((s) => ({
-            history: [...newOnes, ...s.history].slice(0, HISTORY_LIMIT),
+            history: [...newOnes, ...s.history].slice(0, HISTORY_MAX_RETAIN),
+            historyTotal: Math.max(s.historyTotal, s.history.length + newOnes.length),
           }));
         }
       }
@@ -2059,6 +2084,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   },
   currentImage: null,
   history: [],
+  historyNextCursor: null,
+  historyTotal: 0,
+  historyLoadingMore: false,
   toast: null,
   rightPanelOpen: loadRightPanelOpen(),
   toggleRightPanel: () =>
@@ -3641,7 +3669,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     const history = s.history.filter((h) => h.filename !== filename);
     const stillCurrent =
       s.currentImage && s.currentImage.filename === filename ? null : s.currentImage;
-    set({ history, currentImage: stillCurrent });
+    set({
+      history,
+      historyTotal: Math.max(0, s.historyTotal - (history.length === s.history.length ? 0 : 1)),
+      currentImage: stillCurrent,
+    });
     if (stillCurrent === null) saveSelectedFilename(null);
   },
 
@@ -3655,7 +3687,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       ...item,
       createdAt: item.createdAt || Date.now(),
     };
-    set({ history: [withDefaults, ...s.history].slice(0, HISTORY_LIMIT) });
+    set({
+      history: [withDefaults, ...s.history].slice(0, HISTORY_MAX_RETAIN),
+      historyTotal: s.historyTotal + 1,
+    });
   },
 
   toggleFavorite: async (filename?: string) => {
@@ -3936,26 +3971,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   hydrateHistory() {
     void (async () => {
       try {
-        const res = await getHistory({ limit: HISTORY_LIMIT });
-        const history: GenerateItem[] = res.items.map((it) => ({
-          image: it.url,
-          url: it.url,
-          filename: it.filename,
-          prompt: it.prompt || undefined,
-          originalPrompt: it.originalPrompt || undefined,
-          provider: it.provider,
-          quality: it.quality || undefined,
-          size: it.size || undefined,
-          usage: (it.usage as GenerateItem["usage"]) ?? undefined,
-          thumb: it.thumb ?? it.url,
-          web: it.web ?? undefined,
-          createdAt: it.createdAt,
-          favorite: it.favorite === true,
-          sessionId: it.sessionId ?? null,
-          ...(it.references && it.references.length > 0
-            ? { references: it.references }
-            : {}),
-        }));
+        const res = await getHistory({ limit: HISTORY_INITIAL_LIMIT });
+        const history = res.items.map(historyItemToGenerateItem);
         // Always replace the store, even when the response is empty. The
         // previous `if (history.length > 0)` guard meant a freshly logged-in
         // user with zero history would keep seeing the PREVIOUS account's
@@ -3968,6 +3985,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           : null;
         set({
           history,
+          historyNextCursor: res.nextCursor,
+          historyTotal: res.total,
           currentImage: matched ?? history[0] ?? null,
         });
         if (!matched) saveSelectedFilename(history[0]?.filename ?? null);
@@ -3975,6 +3994,29 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         console.warn("[history] load failed:", err);
       }
     })();
+  },
+
+  loadOlderHistory: async () => {
+    const s = get();
+    if (!s.historyNextCursor || s.historyLoadingMore) return;
+    set({ historyLoadingMore: true });
+    try {
+      const res = await getHistory({
+        limit: HISTORY_PAGE_LIMIT,
+        cursor: s.historyNextCursor,
+      });
+      const older = res.items.map(historyItemToGenerateItem);
+      set((state) => ({
+        history: appendUniqueHistory(state.history, older),
+        historyNextCursor: res.nextCursor,
+        historyTotal: res.total,
+        historyLoadingMore: false,
+      }));
+    } catch (err) {
+      console.warn("[history] load older failed:", err);
+      set({ historyLoadingMore: false });
+      get().showToast("이전 기록을 불러오지 못했습니다.", true);
+    }
   },
 
   showToast(message, error = false) {
@@ -4262,7 +4304,8 @@ async function addHistory(
   };
   saveSelectedFilename(withUrl.filename ?? null);
   set((state) => ({
-    history: [withUrl, ...state.history].slice(0, HISTORY_LIMIT),
+    history: [withUrl, ...state.history].slice(0, HISTORY_MAX_RETAIN),
+    historyTotal: state.historyTotal + 1,
     currentImage: withUrl,
   }));
 

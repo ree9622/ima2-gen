@@ -279,6 +279,8 @@ export type NodeGenerateRequest = {
   clientNodeId?: string | null;
   maxAttempts?: number;
   originalPrompt?: string;
+  systemPrompt?: string;
+  includeSystemPrompt?: boolean;
 };
 
 export type NodeGenerateResponse = {

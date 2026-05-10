@@ -1,7 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 
-import { DEFAULT_PROMPT_INJECTION, withDefaultPrompt } from "../lib/defaultPrompt.js";
+import {
+  DEFAULT_PROMPT_INJECTION,
+  buildDeveloperPrompt,
+  resolveSystemPrompt,
+  withDefaultPrompt,
+} from "../lib/defaultPrompt.js";
 
 describe("Default prompt injection", () => {
   it("prepends the always-on prompt to a base developer prompt", () => {
@@ -40,4 +45,28 @@ describe("Default prompt injection", () => {
       assert.equal(merged.includes(phrase), false, `should not include: ${phrase}`);
     }
   });
+
+  it("honors a custom per-request system prompt", () => {
+    const merged = buildDeveloperPrompt("Wrapper instruction.", {
+      systemPrompt: "Custom system instruction.",
+    });
+
+    assert.equal(merged, "Custom system instruction.\n\nWrapper instruction.");
+  });
+
+  it("omits system text when disabled or blank", () => {
+    assert.equal(
+      buildDeveloperPrompt("Wrapper instruction.", { includeSystemPrompt: false }),
+      "Wrapper instruction.",
+    );
+    assert.equal(
+      buildDeveloperPrompt("Wrapper instruction.", { systemPrompt: "   " }),
+      "Wrapper instruction.",
+    );
+  });
+
+  it("falls back to the default prompt when no per-request value is sent", () => {
+    assert.equal(resolveSystemPrompt({}), DEFAULT_PROMPT_INJECTION);
+  });
+
 });

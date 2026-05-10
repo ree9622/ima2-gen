@@ -1,6 +1,7 @@
 import { ProviderSelect } from "./ProviderSelect";
 import { UIModeSwitch } from "./UIModeSwitch";
 import { PromptComposer } from "./PromptComposer";
+import { SystemPromptSection } from "./SystemPromptSection";
 import { GenerateButton } from "./GenerateButton";
 import { InFlightList } from "./InFlightList";
 import { HistoryStrip } from "./HistoryStrip";
@@ -96,6 +97,7 @@ export function Sidebar() {
           <>
             {/* OAuth 가 ready 상태(99%)일 때는 헤더 dot 만으로 충분 — 카드 숨김. */}
             {!oauthOk && <ProviderSelect />}
+            <SystemPromptSection />
             <PromptComposer />
             <GenerateButton />
             <InFlightList />
@@ -103,6 +105,7 @@ export function Sidebar() {
         ) : (
           <>
             <SessionPicker />
+            <SystemPromptSection />
             <div className="sidebar__node-hint">
               노드 모드에서는 노드를 눌러 프롬프트를 수정한 뒤 생성하세요. 오른쪽 패널의 설정
               (품질/크기)은 새로 만드는 모든 결과에 적용됩니다.

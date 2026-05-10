@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { DEFAULT_SYSTEM_PROMPT, SYSTEM_PROMPT_MAX_LEN } from "../lib/defaultSystemPrompt";
 import type {
   Count,
   Format,
@@ -603,6 +604,14 @@ type AppState = {
   moderation: Moderation;
   count: Count;
   prompt: string;
+  // 좌측 패널 "기본 프롬프트(시스템)" 섹션 — 모든 generate/edit 요청 직전에
+  // 사용자 프롬프트와 별도로 developer-role 메시지로 주입된다. enabled=false
+  // 면 서버는 wrapper 본문만 사용 (시스템 텍스트 미포함).
+  systemPrompt: string;
+  systemPromptEnabled: boolean;
+  setSystemPrompt: (text: string) => void;
+  setSystemPromptEnabled: (enabled: boolean) => void;
+  resetSystemPrompt: () => void;
   referenceImages: string[];
   // Lineage hint per reference, index-aligned with referenceImages. The store
   // keeps the two arrays in lock-step (length always equal). null entries
@@ -868,6 +877,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   moderation: "low",
   count: 1,
   prompt: "",
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  systemPromptEnabled: true,
+  setSystemPrompt: (text) =>
+    set({ systemPrompt: text.slice(0, SYSTEM_PROMPT_MAX_LEN) }),
+  setSystemPromptEnabled: (enabled) => set({ systemPromptEnabled: !!enabled }),
+  resetSystemPrompt: () =>
+    set({ systemPrompt: DEFAULT_SYSTEM_PROMPT, systemPromptEnabled: true }),
   maxAttempts: loadMaxAttempts(),
   usageLimitedUntil: (() => {
     try {
@@ -3051,6 +3067,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           sessionId: s.activeSessionId,
           clientNodeId: targetClientId,
           maxAttempts: s.maxAttempts,
+          systemPrompt: s.systemPrompt,
+          includeSystemPrompt: s.systemPromptEnabled,
           ...(s.originalPrompt && s.originalPrompt !== prompt
             ? { originalPrompt: s.originalPrompt }
             : {}),
@@ -3765,6 +3783,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             ...(s.originalPrompt && s.originalPrompt !== prompt
               ? { originalPrompt: s.originalPrompt }
               : {}),
+            systemPrompt: s.systemPrompt,
+            includeSystemPrompt: s.systemPromptEnabled,
             ...(references ? { references } : {}),
             ...(referenceMeta ? { referenceMeta } : {}),
             ...(overrides?.outfitModule ? { outfitModule: overrides.outfitModule } : {}),
@@ -3975,6 +3995,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     format: state.format,
     moderation: state.moderation,
     count: state.count,
+    systemPrompt: state.systemPrompt,
+    systemPromptEnabled: state.systemPromptEnabled,
   }),
 }));
 

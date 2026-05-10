@@ -11,7 +11,7 @@ describe("buildEnhancePayload", () => {
     const body = buildEnhancePayload("셀카 한 장", "ko");
     assert.equal(body.model, "gpt-5.5");
     assert.equal(body.stream, true);
-    assert.equal(body.reasoning?.effort, "medium");
+    assert.equal(body.reasoning?.effort, "low");
     assert.ok(Array.isArray(body.input));
     assert.ok(!body.tools || body.tools.length === 0);
   });

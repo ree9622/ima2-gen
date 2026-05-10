@@ -4153,3 +4153,137 @@ body {
   background: var(--surface-2);
 }
 
+/* === 시스템 프롬프트 섹션 (좌측 패널) === */
+/* 색상은 모두 테마 변수만 사용. 라이트/다크 자동 대응. */
+.sys-prompt {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  margin: 8px 0;
+  overflow: hidden;
+}
+.sys-prompt--off {
+  opacity: 0.75;
+}
+.sys-prompt__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+.sys-prompt__toggle-collapse {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.sys-prompt__chev {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.15s ease;
+}
+.sys-prompt__chev.is-open {
+  transform: rotate(90deg);
+}
+.sys-prompt__title {
+  letter-spacing: 0.2px;
+}
+.sys-prompt__badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.sys-prompt__badge--off {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.sys-prompt__badge--mod {
+  background: var(--surface-2);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sys-prompt__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-dim);
+  user-select: none;
+}
+.sys-prompt__switch input {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.sys-prompt__body {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sys-prompt__hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin: 0 0 2px;
+}
+.sys-prompt__textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.sys-prompt__textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.sys-prompt__textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.sys-prompt__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.sys-prompt__reset {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sys-prompt__reset:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.sys-prompt__reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+

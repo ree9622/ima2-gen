@@ -131,6 +131,10 @@ export type GenerateRequest = {
   batchIndex?: number;
   batchTotal?: number;
   batchSource?: string;
+  // 좌측 패널 "기본 프롬프트(시스템)" 섹션. 사용자가 편집한 텍스트.
+  // 비어있거나 includeSystemPrompt=false 면 시스템 프롬프트 미주입.
+  systemPrompt?: string;
+  includeSystemPrompt?: boolean;
 };
 
 export type OutfitModuleMeta = {

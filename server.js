@@ -81,7 +81,7 @@ import {
 import { boostRefPrompt } from "./lib/refPrompt.js";
 import { resolveRefLineage } from "./lib/refLineage.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
-import { withDefaultPrompt } from "./lib/defaultPrompt.js";
+import { withDefaultPrompt, buildDeveloperPrompt } from "./lib/defaultPrompt.js";
 import {
   validatePrompt,
   validateQuality,
@@ -353,15 +353,17 @@ function send400(res, result) {
 // per-prompt whether to invoke it. No prompt-side suffix — that pollutes the
 // user's prompt and reduces model autonomy.
 
-const GENERATE_DEVELOPER_PROMPT = withDefaultPrompt(
-  "Generate the image the user describes. If the input is abstract, vague, or non-visual, interpret it creatively and still produce an image. Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts, cropped, duplicate).",
-);
+// developer-prompt 본문(wrapper)만 모듈 상수로. 시스템 프롬프트(기본 주입
+// 텍스트 또는 사용자가 좌측 패널에서 편집/비활성화한 값)는 매 요청마다
+// buildDeveloperPrompt(wrapper, { systemPrompt, includeSystemPrompt }) 로
+// 합성한다.
+const GENERATE_DEVELOPER_WRAPPER =
+  "Generate the image the user describes. If the input is abstract, vague, or non-visual, interpret it creatively and still produce an image. Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts, cropped, duplicate).";
 
-const EDIT_DEVELOPER_PROMPT = withDefaultPrompt(
-  "Apply the user's edit to the original image. Preserve the person's FACE and IDENTITY exactly — the result must be unambiguously the SAME individual. Preserve the original's style and composition unless the edit specifies otherwise. Vary only what the user explicitly requests. Avoid technical defects (deformed anatomy, watermark, jpeg artifacts).",
-);
+const EDIT_DEVELOPER_WRAPPER =
+  "Apply the user's edit to the original image. Preserve the person's FACE and IDENTITY exactly — the result must be unambiguously the SAME individual. Preserve the original's style and composition unless the edit specifies otherwise. Vary only what the user explicitly requests. Avoid technical defects (deformed anatomy, watermark, jpeg artifacts).";
 
-const REFERENCE_DEVELOPER_PROMPT = withDefaultPrompt(
+const REFERENCE_DEVELOPER_WRAPPER =
   "Reference mode. The user has attached one or more reference images of an AI-generated synthetic character (a fictional virtual person, not a real individual).\n" +
   "PRESERVATION HIERARCHY (most important first — never compromise the higher items):\n" +
   "  1. FACE — preserve EXACTLY. Same facial features, same eye shape and spacing, same nose shape, same lip contour, same jawline, same eyebrow shape, same skin tone, same apparent age. The person's face must be instantly recognizable as the SAME individual across every variation. This is the single most important constraint.\n" +
@@ -370,8 +372,21 @@ const REFERENCE_DEVELOPER_PROMPT = withDefaultPrompt(
   "WHAT MAY VARY — and only what the user explicitly asks for: pose, angle, expression, framing, camera distance, outfit, background, location, time of day, lighting.\n" +
   "If the user says 'change the outfit', do change it — do NOT keep the reference outfit. The reference is authoritative for FACE and IDENTITY only; for outfit/pose/background follow the user's request literally.\n" +
   "When multiple reference images are attached, treat them as multi-angle references of the same person; the FIRST image is the primary identity anchor.\n" +
-  "Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts). Do not perform a web search; the reference image(s) are already the source of truth.",
-);
+  "Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts). Do not perform a web search; the reference image(s) are already the source of truth.";
+
+// 클라이언트가 매 요청마다 보낸 systemPrompt/includeSystemPrompt 를 정규화.
+// req.body 에서 추출 후 generate/edit 함수로 plumb 한다.
+function readSystemPromptOpts(body) {
+  if (!body || typeof body !== "object") return {};
+  const out = {};
+  if (typeof body.systemPrompt === "string") {
+    out.systemPrompt = body.systemPrompt.slice(0, 8000);
+  }
+  if (body.includeSystemPrompt === false) {
+    out.includeSystemPrompt = false;
+  }
+  return out;
+}
 
 // upstream 2b2b9d4 흡수 (4K 진단): 빈 응답 에러에 진단 사유를 붙여
 // failed-sidecar 에 errorCode 외 추가 컨텍스트가 남도록 한다.
@@ -399,7 +414,7 @@ function diagnoseRefMismatch(references) {
   return null;
 }
 
-async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}) {
+async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}, systemPromptOpts = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
   const { partialImages, onPartialImage } = options;
@@ -440,7 +455,10 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     : textPrompt;
 
   const onPhase = requestId ? (phase) => setJobPhase(requestId, phase) : undefined;
-  const developerPrompt = hasRefs ? REFERENCE_DEVELOPER_PROMPT : GENERATE_DEVELOPER_PROMPT;
+  const developerPrompt = buildDeveloperPrompt(
+    hasRefs ? REFERENCE_DEVELOPER_WRAPPER : GENERATE_DEVELOPER_WRAPPER,
+    systemPromptOpts,
+  );
 
   const stream = await runResponses({
     url: OAUTH_URL,
@@ -497,7 +515,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       model: "gpt-5.5",
       reasoning: { effort: "medium" },
       input: [
-        { role: "developer", content: GENERATE_DEVELOPER_PROMPT },
+        { role: "developer", content: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts) },
         { role: "user", content: prompt },
       ],
       tools: [{ type: "image_generation", quality, size, moderation }],
@@ -2228,11 +2246,12 @@ app.post("/api/generate", async (req, res) => {
       }
     }
 
+    const systemPromptOpts = readSystemPromptOpts(req.body);
     const generateOne = () =>
       runPromptAttempts(
         prompt,
         (attemptPrompt) =>
-          generateViaOAuth(attemptPrompt, quality, size, moderation, refB64s, requestId),
+          generateViaOAuth(attemptPrompt, quality, size, moderation, refB64s, requestId, {}, systemPromptOpts),
         "generate",
         maxAttempts,
         requestId ? (i, _n) => setJobAttempt(requestId, i) : null,
@@ -2430,7 +2449,7 @@ app.post("/api/generate", async (req, res) => {
 });
 
 // -- OAuth edit: send image as input to Responses API --
-async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto") {
+async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto", systemPromptOpts = {}) {
   // user role carries only the user's prompt (plus boostRefPrompt's face-lock
   // cue when short/variation). Wrapper text lives in EDIT_DEVELOPER_PROMPT.
   const { b64, usage } = await runResponses({
@@ -2439,7 +2458,7 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
       model: "gpt-5.5",
       reasoning: { effort: "medium" },
       input: [
-        { role: "developer", content: EDIT_DEVELOPER_PROMPT },
+        { role: "developer", content: buildDeveloperPrompt(EDIT_DEVELOPER_WRAPPER, systemPromptOpts) },
         {
           role: "user",
           content: [
@@ -2495,11 +2514,12 @@ app.post("/api/edit", async (req, res) => {
     console.log(`[edit][${req.get("x-ima2-client") || "ui"}] provider=oauth quality=${quality} size=${size} moderation=${moderation}`);
     const startTime = Date.now();
 
+    const systemPromptOpts = readSystemPromptOpts(req.body);
     let editResult;
     try {
       editResult = await runPromptAttempts(
         prompt,
-        (attemptPrompt) => editViaOAuth(attemptPrompt, imageB64, quality, size, moderation),
+        (attemptPrompt) => editViaOAuth(attemptPrompt, imageB64, quality, size, moderation, systemPromptOpts),
         "edit",
         maxAttempts,
         null,
@@ -2697,13 +2717,14 @@ app.post("/api/node/generate", async (req, res) => {
       parentB64 = await loadAssetB64(__dirname, externalSrc);
     }
 
+    const systemPromptOpts = readSystemPromptOpts(body);
     let nodeResult;
     try {
       nodeResult = await runPromptAttempts(
         prompt,
         (attemptPrompt) =>
           parentB64
-            ? editViaOAuth(attemptPrompt, parentB64, quality, size, moderation)
+            ? editViaOAuth(attemptPrompt, parentB64, quality, size, moderation, systemPromptOpts)
             : generateViaOAuth(
                 attemptPrompt,
                 quality,
@@ -2722,6 +2743,7 @@ app.post("/api/node/generate", async (req, res) => {
                         })
                     : null,
                 },
+                systemPromptOpts,
               ),
         "node",
         maxAttempts,

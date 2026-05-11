@@ -2,12 +2,19 @@ import { parseArgs } from "../lib/args.js";
 import { resolveServer, request } from "../lib/client.js";
 import { fileToDataUri, dataUriToFile, defaultOutName } from "../lib/files.js";
 import { out, die, color, json, exitCodeForError } from "../lib/output.js";
+import { randomBytes } from "node:crypto";
+
+function newRequestId() {
+  return `cli_${Date.now()}_${randomBytes(4).toString("hex")}`;
+}
 
 const SPEC = {
   flags: {
     prompt:  { short: "p", type: "string" },
     quality: { short: "q", type: "string", default: "low" },
     size:    { short: "s", type: "string", default: "1024x1024" },
+    moderation: { type: "string", default: "low" },
+    "max-attempts": { type: "string", default: "7" },
     out:     { short: "o", type: "string" },
     json:    {              type: "boolean" },
     timeout: {              type: "string", default: "180" },
@@ -25,6 +32,8 @@ const HELP = `
     -p, --prompt <text>        Edit instruction (required)
     -q, --quality <low|medium|high|auto>
     -s, --size <WxH>
+        --moderation <auto|low>
+        --max-attempts <1..10>
     -o, --out <file>
         --json
 `;
@@ -44,15 +53,24 @@ export default async function editCmd(argv) {
   const imageB64 = imageDataUri.split(",")[1];
 
   const timeoutMs = (parseInt(args.timeout) || 180) * 1000;
+  const maxAttempts = Math.max(1, Math.min(10, parseInt(args["max-attempts"]) || 7));
   let resp;
   try {
     resp = await request(server.base, "/api/edit", {
       method: "POST",
-      body: { prompt: args.prompt, image: imageB64, quality: args.quality, size: args.size },
+      body: {
+        requestId: newRequestId(),
+        prompt: args.prompt,
+        image: imageB64,
+        quality: args.quality,
+        size: args.size,
+        moderation: args.moderation,
+        maxAttempts,
+      },
       timeoutMs,
     });
   } catch (e) {
-    if (args.json) json({ ok: false, error: e.message, code: e.code });
+    if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status });
     die(exitCodeForError(e), e.message);
   }
 

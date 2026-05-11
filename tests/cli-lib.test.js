@@ -96,6 +96,11 @@ describe("files", () => {
     const n = defaultOutName(2, 4);
     assert.match(n, /^ima2-\d{8}-\d{6}-2\.png$/);
   });
+
+  it("defaultOutName honors a custom extension", () => {
+    const n = defaultOutName(0, 1, "webp");
+    assert.match(n, /^ima2-\d{8}-\d{6}\.webp$/);
+  });
 });
 
 describe("exitCodeForError", () => {

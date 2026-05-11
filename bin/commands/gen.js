@@ -2,11 +2,25 @@ import { parseArgs } from "../lib/args.js";
 import { resolveServer, request, normalizeGenerate } from "../lib/client.js";
 import { fileToDataUri, dataUriToFile, defaultOutName, readStdin } from "../lib/files.js";
 import { out, err, die, color, json, exitCodeForError } from "../lib/output.js";
+import { randomBytes } from "node:crypto";
+
+function newRequestId() {
+  return `cli_${Date.now()}_${randomBytes(4).toString("hex")}`;
+}
+
+function outputExtension(format) {
+  if (format === "jpeg") return "jpg";
+  if (format === "webp") return "webp";
+  return "png";
+}
 
 const SPEC = {
   flags: {
     quality:   { short: "q", type: "string", default: "low" },
     size:      { short: "s", type: "string", default: "1024x1024" },
+    format:    {              type: "string", default: "png" },
+    moderation:{              type: "string", default: "low" },
+    "max-attempts": {         type: "string", default: "7" },
     count:     { short: "n", type: "string", default: "1" },
     ref:       {              type: "string", repeatable: true },
     out:       { short: "o", type: "string" },
@@ -29,6 +43,9 @@ const HELP = `
   Options:
     -q, --quality <low|medium|high|auto>    Default: low
     -s, --size <WxH | auto>                 Default: 1024x1024
+        --format <png|jpeg|webp>            Default: png
+        --moderation <auto|low>             Default: low
+        --max-attempts <1..10>              Default: 7
     -n, --count <1..8>                      Default: 1
         --ref <file>                        Attach reference image (repeatable, max 5)
     -o, --out <file>                        Single-image output path (implies -n 1)
@@ -60,6 +77,9 @@ export default async function genCmd(argv) {
   if (refs.length > 5) die(2, "max 5 --ref attachments");
 
   const n = Math.max(1, Math.min(8, parseInt(args.count) || 1));
+  const maxAttempts = Math.max(1, Math.min(10, parseInt(args["max-attempts"]) || 7));
+  const format = String(args.format || "png").toLowerCase();
+  const outExt = outputExtension(format);
   const timeoutMs = (parseInt(args.timeout) || 180) * 1000;
 
   let server;
@@ -72,9 +92,13 @@ export default async function genCmd(argv) {
   const references = await Promise.all(refs.map((p) => fileToDataUri(p)));
 
   const body = {
+    requestId: newRequestId(),
     prompt,
     quality: args.quality,
     size: args.size,
+    format: format,
+    moderation: args.moderation,
+    maxAttempts,
     n,
     references,
   };
@@ -114,9 +138,9 @@ export default async function genCmd(argv) {
     if (explicitOut) {
       target = explicitOut;
     } else if (outDir) {
-      target = `${outDir}/${defaultOutName(i, norm.images.length)}`;
+      target = `${outDir}/${defaultOutName(i, norm.images.length, outExt)}`;
     } else {
-      target = defaultOutName(i, norm.images.length);
+      target = defaultOutName(i, norm.images.length, outExt);
     }
     await dataUriToFile(im.image, target);
     savedPaths.push(target);

@@ -1,7 +1,7 @@
 import { parseArgs } from "../lib/args.js";
-import { resolveServer, request } from "../lib/client.js";
+import { resolveServer, request, recoverGeneratedImages, isTimeoutError } from "../lib/client.js";
 import { fileToDataUri, dataUriToFile, defaultOutName } from "../lib/files.js";
-import { out, die, color, json, exitCodeForError } from "../lib/output.js";
+import { out, err, die, color, json, exitCodeForError } from "../lib/output.js";
 import { randomBytes } from "node:crypto";
 
 function newRequestId() {
@@ -54,12 +54,13 @@ export default async function editCmd(argv) {
 
   const timeoutMs = (parseInt(args.timeout) || 180) * 1000;
   const maxAttempts = Math.max(1, Math.min(10, parseInt(args["max-attempts"]) || 7));
+  const requestId = newRequestId();
   let resp;
   try {
     resp = await request(server.base, "/api/edit", {
       method: "POST",
       body: {
-        requestId: newRequestId(),
+        requestId,
         prompt: args.prompt,
         image: imageB64,
         quality: args.quality,
@@ -70,8 +71,20 @@ export default async function editCmd(argv) {
       timeoutMs,
     });
   } catch (e) {
-    if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status });
-    die(exitCodeForError(e), e.message);
+    if (isTimeoutError(e)) {
+      try {
+        const recovered = await recoverGeneratedImages(server.base, requestId);
+        const first = recovered.images[0];
+        resp = { image: first?.image, filename: first?.filename, requestId, elapsed: null, recovered: true };
+        if (!args.json) err(color.dim(`request timed out; recovered output for ${requestId}`));
+      } catch (recoverErr) {
+        if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status, recoverError: recoverErr.message, recoverCode: recoverErr.code });
+        die(exitCodeForError(e), `${e.message}; recovery failed: ${recoverErr.message}`);
+      }
+    } else {
+      if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status });
+      die(exitCodeForError(e), e.message);
+    }
   }
 
   const image = resp.image;
@@ -80,7 +93,7 @@ export default async function editCmd(argv) {
   await dataUriToFile(image, target);
 
   if (args.json) {
-    json({ ok: true, path: target, requestId: resp.requestId, elapsed: resp.elapsed });
+    json({ ok: true, path: target, requestId: resp.requestId, elapsed: resp.elapsed, recovered: resp.recovered === true });
   } else {
     out(color.green("✓ ") + target);
     if (resp.elapsed) out(color.dim(`elapsed ${resp.elapsed}s`));

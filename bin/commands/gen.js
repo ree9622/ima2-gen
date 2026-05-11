@@ -1,5 +1,5 @@
 import { parseArgs } from "../lib/args.js";
-import { resolveServer, request, normalizeGenerate } from "../lib/client.js";
+import { resolveServer, request, normalizeGenerate, recoverGeneratedImages, isTimeoutError } from "../lib/client.js";
 import { fileToDataUri, dataUriToFile, defaultOutName, readStdin } from "../lib/files.js";
 import { out, err, die, color, json, exitCodeForError } from "../lib/output.js";
 import { randomBytes } from "node:crypto";
@@ -91,8 +91,9 @@ export default async function genCmd(argv) {
 
   const references = await Promise.all(refs.map((p) => fileToDataUri(p)));
 
+  const requestId = newRequestId();
   const body = {
-    requestId: newRequestId(),
+    requestId,
     prompt,
     quality: args.quality,
     size: args.size,
@@ -107,8 +108,18 @@ export default async function genCmd(argv) {
   try {
     resp = await request(server.base, "/api/generate", { method: "POST", body, timeoutMs });
   } catch (e) {
-    if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status });
-    die(exitCodeForError(e), e.message);
+    if (isTimeoutError(e)) {
+      try {
+        resp = await recoverGeneratedImages(server.base, requestId);
+        if (!args.json) err(color.dim(`request timed out; recovered output for ${requestId}`));
+      } catch (recoverErr) {
+        if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status, recoverError: recoverErr.message, recoverCode: recoverErr.code });
+        die(exitCodeForError(e), `${e.message}; recovery failed: ${recoverErr.message}`);
+      }
+    } else {
+      if (args.json) json({ ok: false, error: e.message, code: e.code, status: e.status });
+      die(exitCodeForError(e), e.message);
+    }
   }
 
   const norm = normalizeGenerate(resp);
@@ -151,6 +162,7 @@ export default async function genCmd(argv) {
       ok: true,
       requestId: norm.requestId,
       elapsed: norm.elapsed,
+      recovered: norm.recovered === true,
       images: savedPaths.map((p, i) => ({ path: p, filename: norm.images[i].filename })),
     });
   } else {

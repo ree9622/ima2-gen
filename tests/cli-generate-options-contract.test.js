@@ -8,7 +8,8 @@ test("ima2 gen exposes UI parity options and sends them to /api/generate", () =>
   assert.match(gen, /format:\s*\{\s*type:\s*"string",\s*default:\s*"png"\s*\}/);
   assert.match(gen, /moderation:\s*\{\s*type:\s*"string",\s*default:\s*"low"\s*\}/);
   assert.match(gen, /"max-attempts":\s*\{\s*type:\s*"string",\s*default:\s*"7"\s*\}/);
-  assert.match(gen, /requestId:\s*newRequestId\(\)/);
+  assert.match(gen, /const requestId = newRequestId\(\)/);
+  assert.match(gen, /requestId,/);
   assert.match(gen, /format:\s*format/);
   assert.match(gen, /moderation:\s*args\.moderation/);
   assert.match(gen, /maxAttempts/);
@@ -20,7 +21,8 @@ test("ima2 edit sends moderation, maxAttempts, and requestId to /api/edit", () =
 
   assert.match(edit, /moderation:\s*\{\s*type:\s*"string",\s*default:\s*"low"\s*\}/);
   assert.match(edit, /"max-attempts":\s*\{\s*type:\s*"string",\s*default:\s*"7"\s*\}/);
-  assert.match(edit, /requestId:\s*newRequestId\(\)/);
+  assert.match(edit, /const requestId = newRequestId\(\)/);
+  assert.match(edit, /requestId,/);
   assert.match(edit, /moderation:\s*args\.moderation/);
   assert.match(edit, /maxAttempts/);
 });

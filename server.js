@@ -227,6 +227,46 @@ app.use(createRequestLogger());
 // state are gated.
 // ─────────────────────────────────────────────────────────────────────────
 let SHUTTING_DOWN = false;
+const activeGenerationControllers = new Map();
+
+function makeGenerationCanceledError(requestId) {
+  const err = new Error("Generation canceled by user");
+  err.code = "GENERATION_CANCELED";
+  err.status = 499;
+  err.requestId = requestId || null;
+  return err;
+}
+
+function isGenerationCanceledError(err) {
+  return err?.code === "GENERATION_CANCELED" || err?.status === 499;
+}
+
+function registerActiveGeneration(requestId) {
+  if (!requestId) return { signal: null, cleanup: () => {} };
+  const controller = new AbortController();
+  activeGenerationControllers.set(requestId, controller);
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      if (activeGenerationControllers.get(requestId) === controller) {
+        activeGenerationControllers.delete(requestId);
+      }
+    },
+  };
+}
+
+function abortActiveGeneration(requestId) {
+  if (!requestId) return false;
+  const controller = activeGenerationControllers.get(requestId);
+  if (!controller) return false;
+  if (!controller.signal.aborted) {
+    controller.abort(makeGenerationCanceledError(requestId));
+  }
+  activeGenerationControllers.delete(requestId);
+  logEvent("inflight", "abort", { requestId });
+  return true;
+}
+
 const SHUTDOWN_GATED_ROUTES = new Set([
   "POST /api/generate",
   "POST /api/edit",
@@ -417,7 +457,7 @@ function diagnoseRefMismatch(references) {
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}, systemPromptOpts = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
-  const { partialImages, onPartialImage } = options;
+  const { partialImages, onPartialImage, abortSignal } = options;
   console.log(
     `${tag} call: quality=${quality} size=${size} moderation=${moderation} ` +
     `refs=${references.length} promptLen=${prompt.length}` +
@@ -475,6 +515,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     },
     onPhase,
     onPartialImage,
+    signal: abortSignal,
   });
 
   if (stream.b64) {
@@ -521,6 +562,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       tools: [{ type: "image_generation", quality, size, moderation }],
       stream: false,
     },
+    signal: abortSignal,
   });
   if (retry.b64) {
     console.log(
@@ -603,6 +645,38 @@ function isNetworkError(e) {
 const NETWORK_RETRY_DELAY_MS = 5000;
 const NETWORK_RETRY_MAX_CONSECUTIVE = 2;
 
+function getGenerationCancelReason(signal, requestId) {
+  const reason = signal?.reason;
+  const err = reason instanceof Error ? reason : makeGenerationCanceledError(requestId);
+  if (!err.code) err.code = "GENERATION_CANCELED";
+  if (!err.status) err.status = 499;
+  return err;
+}
+
+function throwIfGenerationCanceled(signal, requestId) {
+  if (signal?.aborted) throw getGenerationCancelReason(signal, requestId);
+}
+
+function waitWithGenerationCancel(ms, signal, requestId) {
+  throwIfGenerationCanceled(signal, requestId);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      cleanup();
+      resolve();
+    }
+    function onAbort() {
+      cleanup();
+      reject(getGenerationCancelReason(signal, requestId));
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      signal?.removeEventListener?.("abort", onAbort);
+    }
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+  });
+}
+
 async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttempt = null, ctx = {}) {
   const attempts = buildAttemptSequence(prompt, maxAttempts, { hasRefs: ctx.hasRefs === true });
   const log = [];
@@ -619,6 +693,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   );
 
   for (let i = 0; i < attempts.length; i++) {
+    throwIfGenerationCanceled(ctx.abortSignal, ctx.requestId);
     const attemptPrompt = attempts[i];
     const isCompliantRetry = attemptPrompt !== prompt;
     const startedAt = Date.now();
@@ -695,6 +770,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       const violation = parseSafetyViolation(e);
       const networkErr = isNetworkError(e);
       const authErr = isAuthError(e);
+      const cancelErr = isGenerationCanceledError(e);
       log.push({
         attempt: i + 1,
         promptUsed: attemptPrompt,
@@ -707,6 +783,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         violationCategories: violation ? Array.from(violation.categories) : null,
         networkError: networkErr || null,
         authError: authErr || null,
+        canceled: cancelErr || null,
         // Partial usage / event histogram captured by oauthStream before
         // the error surfaced. Important for token-spend audits — a "failed"
         // attempt can still bill reasoning + image_generation tool tokens.
@@ -720,8 +797,18 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         `code=${e?.code || e?.cause?.code || "?"} msg=${(e?.message || String(e)).slice(0, 200)}` +
         (violation ? ` violation=[${Array.from(violation.categories).join(",")}]` : "") +
         (networkErr ? ` [NETWORK]` : "") +
-        (authErr ? ` [AUTH]` : ""),
+        (authErr ? ` [AUTH]` : "") +
+        (cancelErr ? ` [CANCELED]` : ""),
       );
+      if (cancelErr) {
+        const stop = getGenerationCancelReason(ctx.abortSignal, ctx.requestId);
+        stop.cause = e;
+        stop.attempts = log;
+        console.warn(
+          `${tag} canceled — aborting after ${i + 1}/${attempts.length}`,
+        );
+        throw stop;
+      }
       // Auth-invalidated path: upstream OAuth token was revoked. No prompt
       // rewrite or wrapper can fix this — only re-auth (codex login). Bail
       // after the FIRST attempt to avoid burning the rest of the safety
@@ -766,7 +853,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           `${tag} network error (${consecutiveNetErrors}/${NETWORK_RETRY_MAX_CONSECUTIVE}) — ` +
             `sleeping ${NETWORK_RETRY_DELAY_MS}ms then retrying SAME variant`,
         );
-        await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAY_MS));
+        await waitWithGenerationCancel(NETWORK_RETRY_DELAY_MS, ctx.abortSignal, ctx.requestId);
         i -= 1; // re-attempt the same variant (decremented before for-loop ++)
         continue;
       }
@@ -832,6 +919,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   // like a skin-related safety refusal, since rewriting a non-safety
   // failure (transient 5xx, network reset) wastes tokens.
   // ───────────────────────────────────────────────────────────────────────
+  throwIfGenerationCanceled(ctx.abortSignal, ctx.requestId);
   const lastViolation = parseSafetyViolation(lastErr);
   const lastLog = log[log.length - 1] || {};
   const llmRewriteEnabled = process.env.IMA2_DISABLE_LLM_REWRITE !== "1" &&
@@ -854,6 +942,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         refusalText: lastLog.refusalText || null,
         reasoningSummary: lastLog.reasoningSummary || null,
         tag,
+        signal: ctx.abortSignal,
       });
     } catch (e) {
       console.warn(`${tag} LLM-rewrite call threw: ${e?.message?.slice(0, 200)}`);
@@ -2015,6 +2104,7 @@ app.delete("/api/inflight/:requestId", (req, res) => {
     const job = getJob(req.params.requestId);
     if (job && job.owner !== req.authUser) return res.status(404).end();
   }
+  abortActiveGeneration(req.params.requestId);
   finishJob(req.params.requestId, { canceled: true });
   res.status(204).end();
 });
@@ -2131,6 +2221,7 @@ app.get("/api/batch/:id", async (req, res) => {
 // -- Generate image (supports parallel via n) --
 app.post("/api/generate", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
+  let generationAbort = { signal: null, cleanup: () => {} };
   try {
     const sessionId =
       typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
@@ -2198,6 +2289,7 @@ app.post("/api/generate", async (req, res) => {
         n: count,
       },
     });
+    generationAbort = registerActiveGeneration(requestId);
 
     const refCheck = validateAndNormalizeRefs(references);
     if (refCheck.error) return res.status(400).json({ error: { code: refCheck.code, message: refCheck.error } });
@@ -2251,11 +2343,20 @@ app.post("/api/generate", async (req, res) => {
       runPromptAttempts(
         prompt,
         (attemptPrompt) =>
-          generateViaOAuth(attemptPrompt, quality, size, moderation, refB64s, requestId, {}, systemPromptOpts),
+          generateViaOAuth(
+            attemptPrompt,
+            quality,
+            size,
+            moderation,
+            refB64s,
+            requestId,
+            { abortSignal: generationAbort.signal },
+            systemPromptOpts,
+          ),
         "generate",
         maxAttempts,
         requestId ? (i, _n) => setJobAttempt(requestId, i) : null,
-        { requestId, hasRefs: refB64s.length > 0 },
+        { requestId, hasRefs: refB64s.length > 0, abortSignal: generationAbort.signal },
       );
 
     const results = await Promise.allSettled(Array.from({ length: count }, generateOne));
@@ -2378,6 +2479,14 @@ app.post("/api/generate", async (req, res) => {
           ...(firstErr.diagnosticReason ? { diagnosticReason: firstErr.diagnosticReason } : {}),
         });
       }
+      if (firstErr?.code === "GENERATION_CANCELED" || firstErr?.status === 499) {
+        return res.status(499).json({
+          error: firstErr.message || "Generation canceled by user",
+          code: "GENERATION_CANCELED",
+          attempts: firstErr.attempts || [],
+          batchId,
+        });
+      }
       if (firstErr?.code === "USAGE_LIMIT" || firstErr?.status === 429) {
         return res.status(429).json({
           error: firstErr.message || "OpenAI usage limit reached",
@@ -2442,14 +2551,19 @@ app.post("/api/generate", async (req, res) => {
     }
   } catch (err) {
     console.error("Generate error:", err.message);
+    if (err?.code === "GENERATION_CANCELED" || err?.status === 499) {
+      return res.status(499).json({ error: err.message, code: "GENERATION_CANCELED", requestId });
+    }
     res.status(err.status || 500).json({ error: err.message, code: err.code, requestId });
   } finally {
+    generationAbort.cleanup();
     finishJob(requestId);
   }
 });
 
 // -- OAuth edit: send image as input to Responses API --
-async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto", systemPromptOpts = {}) {
+async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto", systemPromptOpts = {}, options = {}) {
+  const { abortSignal } = options;
   // user role carries only the user's prompt (plus boostRefPrompt's face-lock
   // cue when short/variation). Wrapper text lives in EDIT_DEVELOPER_PROMPT.
   const { b64, usage } = await runResponses({
@@ -2472,6 +2586,7 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
       tool_choice: "required",
       stream: true,
     },
+    signal: abortSignal,
   });
   if (b64) {
     console.log("[oauth-edit] got image, b64 length:", b64.length);
@@ -2483,6 +2598,7 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
 // -- Edit image (inpainting) --
 app.post("/api/edit", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
+  let generationAbort = { signal: null, cleanup: () => {} };
   try {
     const { prompt: rawPrompt, image: imageB64, mask: maskB64, quality: rawQuality = "low", size: rawSize = "1024x1024", moderation: rawModeration = "auto", provider = "oauth", maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt } =
       req.body;
@@ -2513,17 +2629,42 @@ app.post("/api/edit", async (req, res) => {
     }
     console.log(`[edit][${req.get("x-ima2-client") || "ui"}] provider=oauth quality=${quality} size=${size} moderation=${moderation}`);
     const startTime = Date.now();
+    startJob({
+      requestId,
+      kind: "classic",
+      prompt,
+      maxAttempts,
+      owner: req.authUser || LEGACY_OWNER,
+      meta: {
+        kind: "edit",
+        sessionId: null,
+        parentNodeId: null,
+        clientNodeId: null,
+        quality,
+        size,
+      },
+    });
+    generationAbort = registerActiveGeneration(requestId);
 
     const systemPromptOpts = readSystemPromptOpts(req.body);
     let editResult;
     try {
       editResult = await runPromptAttempts(
         prompt,
-        (attemptPrompt) => editViaOAuth(attemptPrompt, imageB64, quality, size, moderation, systemPromptOpts),
+        (attemptPrompt) =>
+          editViaOAuth(
+            attemptPrompt,
+            imageB64,
+            quality,
+            size,
+            moderation,
+            systemPromptOpts,
+            { abortSignal: generationAbort.signal },
+          ),
         "edit",
         maxAttempts,
         null,
-        { requestId, hasRefs: true },
+        { requestId, hasRefs: true, abortSignal: generationAbort.signal },
       );
     } catch (e) {
       await writeFailureSidecar({
@@ -2595,7 +2736,13 @@ app.post("/api/edit", async (req, res) => {
     });
   } catch (err) {
     console.error("Edit error:", err.message);
+    if (err?.code === "GENERATION_CANCELED" || err?.status === 499) {
+      return res.status(499).json({ error: err.message, code: "GENERATION_CANCELED", requestId });
+    }
     res.status(err.status || 500).json({ error: err.message });
+  } finally {
+    generationAbort.cleanup();
+    finishJob(requestId);
   }
 });
 
@@ -2645,6 +2792,7 @@ app.post("/api/node/generate", async (req, res) => {
       clientNodeId,
     },
   });
+  const generationAbort = registerActiveGeneration(requestId);
   try {
     const {
       prompt: rawPrompt,
@@ -2724,7 +2872,15 @@ app.post("/api/node/generate", async (req, res) => {
         prompt,
         (attemptPrompt) =>
           parentB64
-            ? editViaOAuth(attemptPrompt, parentB64, quality, size, moderation, systemPromptOpts)
+            ? editViaOAuth(
+                attemptPrompt,
+                parentB64,
+                quality,
+                size,
+                moderation,
+                systemPromptOpts,
+                { abortSignal: generationAbort.signal },
+              )
             : generateViaOAuth(
                 attemptPrompt,
                 quality,
@@ -2733,6 +2889,7 @@ app.post("/api/node/generate", async (req, res) => {
                 refB64s,
                 requestId,
                 {
+                  abortSignal: generationAbort.signal,
                   partialImages: streamResponse ? 2 : 0,
                   onPartialImage: streamResponse
                     ? (partial) =>
@@ -2748,7 +2905,7 @@ app.post("/api/node/generate", async (req, res) => {
         "node",
         maxAttempts,
         requestId ? (i) => setJobAttempt(requestId, i) : null,
-        { requestId, hasRefs: !!parentB64 || refB64s.length > 0 },
+        { requestId, hasRefs: !!parentB64 || refB64s.length > 0, abortSignal: generationAbort.signal },
       );
     } catch (err) {
       await writeFailureSidecar({
@@ -2852,6 +3009,7 @@ app.post("/api/node/generate", async (req, res) => {
     }
     writeNodeError(res, err.status || 500, err.code || "NODE_GEN_FAILED", err.message, parentNodeId);
   } finally {
+    generationAbort.cleanup();
     finishJob(requestId);
   }
 });

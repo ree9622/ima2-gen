@@ -603,7 +603,9 @@ function mapSessionToGraph(session: SessionFull): {
   };
 }
 
-type ToastState = { message: string; error: boolean; id: number } | null;
+type ToastEntry = { message: string; error: boolean; id: number; createdAt: number };
+type ToastState = ToastEntry | null;
+const TOAST_STACK_LIMIT = 5;
 
 export type RefBundleItem = {
   hash: string;
@@ -716,6 +718,8 @@ type AppState = {
   historyLoadingMore: boolean;
   loadOlderHistory: () => Promise<void>;
   toast: ToastState;
+  toastLog: ToastEntry[];
+  dismissToast: (id: number) => void;
   rightPanelOpen: boolean;
   toggleRightPanel: () => void;
   galleryOpen: boolean;
@@ -2088,6 +2092,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   historyTotal: 0,
   historyLoadingMore: false,
   toast: null,
+  toastLog: [],
   rightPanelOpen: loadRightPanelOpen(),
   toggleRightPanel: () =>
     set((s) => {
@@ -4019,8 +4024,29 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     }
   },
 
+  dismissToast: (id) =>
+    set((state) => {
+      const next = state.toastLog.filter((toast) => toast.id !== id);
+      return {
+        toastLog: next,
+        toast: state.toast?.id === id ? (next[next.length - 1] ?? null) : state.toast,
+      };
+    }),
   showToast(message, error = false) {
-    set({ toast: { message, error, id: Date.now() + Math.random() } });
+    const now = Date.now();
+    const entry: ToastEntry = {
+      message,
+      error,
+      id: now + Math.random(),
+      createdAt: now,
+    };
+    set((state) => {
+      const next = [...state.toastLog, entry];
+      return {
+        toast: entry,
+        toastLog: next.slice(-TOAST_STACK_LIMIT),
+      };
+    });
   },
 }), {
   name: "ima2.userPrefs",

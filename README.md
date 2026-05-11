@@ -65,12 +65,17 @@ All preset sizes follow the current GPT Image sizing constraints: every side is 
 - **Download** · **Copy to clipboard** · **Copy prompt** directly from the canvas
 - **Sticky gallery strip** at the bottom, fixed-position so it never scrolls away
 - **Gallery modal (+)** — grid view of everything in history
+- **Paged history loading** — the gallery starts fast, then loads older pages on demand without duplicating rows
+- **Stacked toasts** — multiple errors or notices stay visible in the bottom-right stack until dismissed or timed out
+- **Real cancel** — canceling an in-flight generation aborts queued waits, rewrite calls, and upstream image requests instead of only hiding the UI row
 - **Session persistence** — refresh mid-generation and your pending jobs reconcile automatically
+- **Prompt intent policy** — safety retries judge explicit user intent/context rather than treating clothing, body type, or camera angle as intent by itself
 
 ### CLI (headless automation)
 ```bash
-ima2 gen "a shiba in space" -q high -o shiba.png
-ima2 gen "merge these" --ref a.png --ref b.png -n 4 -d out/
+ima2 gen "a shiba in space" -q high --format webp -o shiba.webp
+ima2 gen "merge these" --ref a.png --ref b.png -n 4 --moderation low --max-attempts 7 -d out/
+ima2 edit input.png --prompt "make it editorial" --moderation low -o edited.png
 ima2 ls -n 10
 ima2 ps
 ima2 ping
@@ -106,8 +111,22 @@ Full command matrix below ↓
 
 The running server advertises itself at `~/.ima2/server.json`. Client commands auto-discover it; override with `--server <url>` or `IMA2_SERVER=...`.
 
+### CLI generation options
+`ima2 gen` mirrors the web UI generation controls:
+
+| Option | Description |
+|--------|-------------|
+| `--format <png|jpeg|webp>` | Output format requested from the server; default `png` |
+| `--moderation <auto|low>` | Image moderation setting; default `low` |
+| `--max-attempts <1..10>` | Safety-retry budget; default `7` |
+| `-n, --count <1..8>` | Number of generated images |
+| `--ref <file>` | Reference image; repeatable up to 5 |
+
+`ima2 edit` supports `--moderation` and `--max-attempts` as well.
+Both `gen` and `edit` attach a stable `requestId`; if the HTTP request times out but the server later finishes, the CLI polls the generation log, downloads the completed image, and saves it locally instead of losing the output.
+
 ### Exit codes
-`0` ok · `2` bad args · `3` server unreachable · `4` APIKEY_DISABLED · `5` 4xx · `6` 5xx · `7` safety refusal · `8` timeout.
+`0` ok · `2` bad args · `3` server unreachable · `4` APIKEY_DISABLED · `5` 4xx · `6` 5xx · `7` safety refusal · `8` timeout. Timeout exits happen only after CLI output recovery also fails.
 
 ---
 
@@ -121,6 +140,7 @@ Public roadmap — subject to change. Version numbers reflect the actual ship cy
 - **0.08** Inflight tracking — refresh-safe pending state, phase tracking
 - **0.09** Node mode — graph-based canvas for branching generations (productized in Phase 4.2: SSE partial streaming, batch selection, node-local refs, subtree duplicate)
 - **0.09.1** CLI integration — `gen / edit / ls / show / ps / ping` + `/api/health` + port advertisement
+- **2026-05 fork updates** — upstream-inspired, directly reimplemented gallery paging, stacked toasts, prompt intent policy, true generation abort, CLI parity options, and CLI timeout output recovery. See [docs/UPSTREAM-REIMPLEMENTATION.md](docs/UPSTREAM-REIMPLEMENTATION.md).
 
 ### 🚧 0.10 — Compare & Reuse (current cycle)
 - **F3 Prompt presets** — save/apply `{prompt, refs, quality, size}` bundles
@@ -208,7 +228,7 @@ git clone https://github.com/lidge-jun/ima2-gen.git
 cd ima2-gen
 npm install
 npm run dev    # server with --watch + Node mode enabled
-npm test       # 51+ tests (health, CLI lib, commands, server)
+npm test       # full Node test suite
 ```
 
 Frontend stack:

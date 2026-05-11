@@ -12,6 +12,25 @@
 > 의존성(`node-mode.md` § 의존성/순서)에 따라 실제 작업 순서는 `1.1 → 1.2 → 1.4 → 2.4 → 4.2 → 1.3/2.1/2.2/2.3 (잔여)`.
 > Phase 1.4 / 2.4 는 노드 모드 선행 필수이므로 server-side 만 먼저 닫고, 동반 UI 변경은 4.2 PR 묶음에 포함.
 
+
+## 2026-05-11 반영 완료: upstream v1.1.10+ 아이디어 재구현
+
+원본 코드를 복사하거나 cherry-pick하지 않고, upstream 변경의 동작만 확인한 뒤 우리 fork 구조에 맞춰 직접 구현했다.
+
+| 항목 | 상태 | 참고 upstream | 우리 커밋 | 노트 |
+|------|------|---------------|-----------|------|
+| 갤러리 오래된 기록 paging | done | `0557128`, `c0af0c3`, `b238f42` | `2cf2c56` | 초기 500개 이후 cursor 기반 추가 로드, 중복 제거, PageUp/PageDown 탐색 |
+| 토스트 스택 | done | `78cb6d4` | `3afcd24` | 우측 하단 stack, 개별 dismiss, 자동 만료 |
+| 프롬프트 safety intent policy | done | `5b8045a` | `5c91b50` | 외형 단서만으로 의도를 추정하지 않도록 기본 system prompt 보강 |
+| 실제 in-flight abort | done | `c0af0c3` | `d7fe5b2` | `DELETE /api/inflight/:requestId`가 queue/rewrite/upstream request까지 취소 |
+| CLI 생성 옵션 parity | done | `fcf45a9` | `eb1322e` | `--format`, `--moderation`, `--max-attempts`, requestId 흐름 추가 |
+| CLI timeout output recovery | done | `4e67a36`, `087a4f3` | `0ffef43` | timeout 이후 generation log에서 같은 requestId 완료 결과를 찾아 다운로드/저장 |
+| multimode incremental sequence outputs | pending | `343292c` | - | 다음 후보. node/multimode stream 경로 영향이 커서 별도 테스트/구현 필요 |
+| settings row readability | pending-small | `70cd4d5` | - | 모바일 CSS 소규모 개선 후보 |
+| Windows gallery folder path | skip-low | `fb31dbb` | - | 현재 운영 웹앱 가치 낮음, 로컬 데스크톱 편의 기능 |
+
+검증 완료: `npm test` 384 passed, `npm run build` 성공, `ima2-gen.service` restart 후 `https://images.samlab.click/` 및 `/api/health` 모두 HTTP 200.
+
 ---
 
 ## 진행 상황 (단일 진실 출처)

@@ -63,12 +63,17 @@ ima2 serve
 - 캔버스에서 바로 **Download** · **Copy to clipboard** · **Copy prompt**
 - 하단 **고정 갤러리 스트립** — 절대 스크롤되지 않는 위치 고정
 - **갤러리 모달 (+)** — 히스토리 전체를 그리드로 보기
+- **페이지 단위 히스토리 로딩** — 첫 화면은 빠르게 열고, 오래된 기록은 cursor 기반으로 추가 로드
+- **토스트 스택** — 여러 오류/알림이 우측 하단에 쌓이고 개별 닫기/자동 만료 처리
+- **실제 생성 취소** — 진행 중인 생성 취소 시 대기열, rewrite, upstream 이미지 요청까지 abort
 - **세션 영속성** — 생성 중 새로고침해도 pending 작업이 자동 복구
+- **프롬프트 의도 정책** — 옷차림/체형/카메라 앵글만으로 위험 의도를 추정하지 않고 명시적 요청과 컨텍스트를 기준으로 판단
 
 ### CLI (헤드리스 자동화)
 ```bash
-ima2 gen "a shiba in space" -q high -o shiba.png
-ima2 gen "merge these" --ref a.png --ref b.png -n 4 -d out/
+ima2 gen "a shiba in space" -q high --format webp -o shiba.webp
+ima2 gen "merge these" --ref a.png --ref b.png -n 4 --moderation low --max-attempts 7 -d out/
+ima2 edit input.png --prompt "make it editorial" --moderation low -o edited.png
 ima2 ls -n 10
 ima2 ps
 ima2 ping
@@ -104,8 +109,22 @@ ima2 ping
 
 실행 중인 서버는 `~/.ima2/server.json`에 자신을 광고합니다. 클라이언트는 자동 발견; `--server <url>` 또는 `IMA2_SERVER=...`로 재정의.
 
+### CLI 생성 옵션
+`ima2 gen`은 웹 UI의 생성 옵션을 CLI에서도 맞춰 보냅니다.
+
+| 옵션 | 설명 |
+|------|------|
+| `--format <png|jpeg|webp>` | 서버에 요청할 출력 포맷, 기본값 `png` |
+| `--moderation <auto|low>` | 이미지 moderation 설정, 기본값 `low` |
+| `--max-attempts <1..10>` | safety retry 예산, 기본값 `7` |
+| `-n, --count <1..8>` | 생성 이미지 개수 |
+| `--ref <file>` | 레퍼런스 이미지, 최대 5개까지 반복 지정 |
+
+`ima2 edit`도 `--moderation`, `--max-attempts`를 지원합니다.
+`gen`/`edit`은 안정적인 `requestId`를 붙이고, HTTP timeout 이후에도 서버가 완료한 결과가 있으면 generation log에서 찾아 이미지를 다시 내려받아 저장합니다.
+
 ### 종료 코드
-`0` 성공 · `2` 잘못된 인자 · `3` 서버 도달 불가 · `4` APIKEY_DISABLED · `5` 4xx · `6` 5xx · `7` 안전 거부 · `8` 타임아웃.
+`0` 성공 · `2` 잘못된 인자 · `3` 서버 도달 불가 · `4` APIKEY_DISABLED · `5` 4xx · `6` 5xx · `7` 안전 거부 · `8` 타임아웃. 타임아웃 종료는 CLI 결과 복구까지 실패한 뒤 발생합니다.
 
 ---
 
@@ -119,6 +138,7 @@ ima2 ping
 - **0.08** Inflight 추적 — 새로고침 안전 pending 상태, 단계 추적
 - **0.09** 노드 모드 (개발 전용) — 분기 생성용 그래프 기반 캔버스
 - **0.09.1** CLI 통합 — `gen / edit / ls / show / ps / ping` + `/api/health` + 포트 광고
+- **2026-05 fork 업데이트** — upstream 아이디어를 코드 복사 없이 직접 재구현: 갤러리 paging, 토스트 스택, 프롬프트 의도 정책, 실제 생성 abort, CLI parity 옵션, CLI timeout 결과 복구. 자세한 내용은 [UPSTREAM-REIMPLEMENTATION.md](UPSTREAM-REIMPLEMENTATION.md).
 
 ### 🚧 0.10 — Compare & Reuse (현재 사이클)
 - **F3 프롬프트 프리셋** — `{prompt, refs, quality, size}` 번들 저장/적용
@@ -198,7 +218,7 @@ git clone https://github.com/lidge-jun/ima2-gen.git
 cd ima2-gen
 npm install
 npm run dev    # --watch + 노드 모드 활성화
-npm test       # 51+ 테스트
+npm test       # 전체 Node 테스트 스위트
 ```
 
 ---

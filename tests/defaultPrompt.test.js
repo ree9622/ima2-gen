@@ -46,6 +46,17 @@ describe("Default prompt injection", () => {
     }
   });
 
+  it("judges intent from the explicit brief instead of appearance alone", () => {
+    assert.match(
+      DEFAULT_PROMPT_INJECTION,
+      /Judge intent from the user's explicit brief, reference metadata, and stated context\./,
+    );
+    assert.match(
+      DEFAULT_PROMPT_INJECTION,
+      /Do not infer unsafe intent from appearance, clothing, body type, camera angle, or styling alone/i,
+    );
+  });
+
   it("honors a custom per-request system prompt", () => {
     const merged = buildDeveloperPrompt("Wrapper instruction.", {
       systemPrompt: "Custom system instruction.",

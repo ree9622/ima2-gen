@@ -261,6 +261,7 @@ export function Lightbox() {
 
   const originalSrc = currentImage.url || currentImage.image;
   const src = webVariant(currentImage.url ?? null) ?? originalSrc;
+  const systemPrompt = currentImage.systemPrompt?.trim() || "";
   const idx = history.findIndex(
     (h) =>
       (currentImage.filename && h.filename === currentImage.filename) ||
@@ -498,9 +499,20 @@ export function Lightbox() {
                      background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,letterSpacing:0,
                      pointerEvents:"none"}}>acc: {currentImage.codexAccount}</div>
       ) : null}
-      {currentImage.prompt && showCaption ? (
+      {(currentImage.prompt || systemPrompt) && showCaption ? (
         <div className="lightbox__caption" onClick={(e) => e.stopPropagation()}>
-          <span className="lightbox__caption-text">{currentImage.prompt}</span>
+          {currentImage.prompt ? (
+            <div className="lightbox__caption-group">
+              <span className="lightbox__caption-label">입력 프롬프트</span>
+              <span className="lightbox__caption-text">{currentImage.prompt}</span>
+            </div>
+          ) : null}
+          {systemPrompt ? (
+            <div className="lightbox__caption-group">
+              <span className="lightbox__caption-label">기본 프롬프트</span>
+              <span className="lightbox__caption-text">{systemPrompt}</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

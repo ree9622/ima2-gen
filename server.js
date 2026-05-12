@@ -81,7 +81,7 @@ import {
 import { boostRefPrompt } from "./lib/refPrompt.js";
 import { resolveRefLineage } from "./lib/refLineage.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
-import { withDefaultPrompt, buildDeveloperPrompt } from "./lib/defaultPrompt.js";
+import { withDefaultPrompt, buildDeveloperPrompt, resolveSystemPrompt } from "./lib/defaultPrompt.js";
 import {
   validatePrompt,
   validateQuality,
@@ -426,6 +426,14 @@ function readSystemPromptOpts(body) {
     out.includeSystemPrompt = false;
   }
   return out;
+}
+
+function buildSystemPromptMetadata(systemPromptOpts = {}) {
+  const systemPrompt = resolveSystemPrompt(systemPromptOpts);
+  if (!systemPrompt) {
+    return { systemPrompt: null, systemPromptEnabled: false };
+  }
+  return { systemPrompt, systemPromptEnabled: true };
 }
 
 // upstream 2b2b9d4 흡수 (4K 진단): 빈 응답 에러에 진단 사유를 붙여
@@ -1101,7 +1109,7 @@ function clampMaxAttempts(v, fallback = 2) {
 // Persist a failed generation attempt for the log UI + retry button.
 // Refs are NOT saved (see retry flow): refs live in the browser and are
 // re-attached when the user invokes retry from a history item that had them.
-async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null, batchId = null, batchIndex = null }) {
+async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null, batchId = null, batchIndex = null, systemPrompt = null, systemPromptEnabled = false }) {
   try {
     const dir = join(__dirname, "generated", ".failed");
     await mkdir(dir, { recursive: true });
@@ -1112,6 +1120,8 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       endpoint,
       prompt,
       ...(originalPrompt ? { originalPrompt } : {}),
+      systemPrompt: systemPromptEnabled && typeof systemPrompt === "string" ? systemPrompt : null,
+      systemPromptEnabled: systemPromptEnabled === true,
       quality,
       size,
       format: format || null,
@@ -1717,6 +1727,8 @@ async function loadHistoryRows(baseDir) {
         createdAt: meta?.createdAt || st?.mtimeMs || 0,
         prompt: meta?.prompt || null,
         originalPrompt: typeof meta?.originalPrompt === "string" ? meta.originalPrompt : null,
+        systemPrompt: typeof meta?.systemPrompt === "string" && meta.systemPrompt.length > 0 ? meta.systemPrompt : null,
+        systemPromptEnabled: meta?.systemPromptEnabled === true && typeof meta?.systemPrompt === "string" && meta.systemPrompt.length > 0,
         quality: meta?.quality || null,
         size: meta?.size || null,
         format: meta?.format || name.split(".").pop(),
@@ -2339,6 +2351,7 @@ app.post("/api/generate", async (req, res) => {
     }
 
     const systemPromptOpts = readSystemPromptOpts(req.body);
+    const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
     const generateOne = () =>
       runPromptAttempts(
         prompt,
@@ -2390,6 +2403,7 @@ app.post("/api/generate", async (req, res) => {
           promptUsed: r.value.promptUsed || prompt,
           promptRewrittenForSafety: r.value.promptRewrittenForSafety === true,
           ...(originalPrompt ? { originalPrompt } : {}),
+          ...systemPromptMeta,
           quality,
           size,
           format,
@@ -2446,6 +2460,7 @@ app.post("/api/generate", async (req, res) => {
         outfitModule,
         batchId,
         batchIndex,
+        ...systemPromptMeta,
       });
       if (batchId) {
         await appendBatchEntry({
@@ -2514,6 +2529,7 @@ app.post("/api/generate", async (req, res) => {
       quality,
       size,
       moderation,
+      ...systemPromptMeta,
       safetyRetryAvailable: hasCompliantRetry(prompt),
       promptRewrittenForSafety,
     };
@@ -2647,6 +2663,7 @@ app.post("/api/edit", async (req, res) => {
     generationAbort = registerActiveGeneration(requestId);
 
     const systemPromptOpts = readSystemPromptOpts(req.body);
+    const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
     let editResult;
     try {
       editResult = await runPromptAttempts(
@@ -2680,6 +2697,7 @@ app.post("/api/edit", async (req, res) => {
         referenceCount: 0,
         owner: req.authUser,
         requestId,
+        ...systemPromptMeta,
       });
       throw e;
     }
@@ -2707,6 +2725,7 @@ app.post("/api/edit", async (req, res) => {
       promptUsed: promptUsed || prompt,
       promptRewrittenForSafety: promptRewrittenForSafety === true,
       ...(originalPrompt ? { originalPrompt } : {}),
+      ...systemPromptMeta,
       quality,
       size,
       moderation,
@@ -2731,6 +2750,7 @@ app.post("/api/edit", async (req, res) => {
       usage,
       provider: "oauth",
       moderation,
+      ...systemPromptMeta,
       safetyRetryAvailable: hasCompliantRetry(prompt),
       promptRewrittenForSafety: promptRewrittenForSafety === true,
     });
@@ -2866,6 +2886,7 @@ app.post("/api/node/generate", async (req, res) => {
     }
 
     const systemPromptOpts = readSystemPromptOpts(body);
+    const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
     let nodeResult;
     try {
       nodeResult = await runPromptAttempts(
@@ -2924,6 +2945,7 @@ app.post("/api/node/generate", async (req, res) => {
         referenceCount: refB64s.length,
         owner: req.authUser,
         requestId,
+        ...systemPromptMeta,
       });
       return writeNodeError(res, err.status || 422, err.code || (err?.cause?.code === "EMPTY_RESPONSE" ? "EMPTY_RESPONSE" : "SAFETY_REFUSAL"), err.message, parentNodeId);
     }
@@ -2943,6 +2965,7 @@ app.post("/api/node/generate", async (req, res) => {
       promptUsed: nodeResult.promptUsed || prompt,
       promptRewrittenForSafety: nodeResult.promptRewrittenForSafety === true,
       ...(originalPrompt ? { originalPrompt } : {}),
+      ...systemPromptMeta,
       options: { quality, size, format, moderation },
       createdAt: Date.now(),
       createdAtIso: new Date().toISOString(),
@@ -2976,6 +2999,7 @@ app.post("/api/node/generate", async (req, res) => {
       webSearchCalls,
       provider: "oauth",
       moderation,
+      ...systemPromptMeta,
       // Echo the resolved size so the UI can derive the node preview aspect
       // ratio (custom sizes can be 3:1, 16:9 etc — square fallback distorts).
       size,
@@ -3054,6 +3078,9 @@ app.post("/api/node/import-history", async (req, res) => {
     const sourceQuality = typeof sourceMeta?.quality === "string" ? sourceMeta.quality : null;
     const sourceFormat = typeof sourceMeta?.format === "string" ? sourceMeta.format : null;
     const sourceModeration = typeof sourceMeta?.moderation === "string" ? sourceMeta.moderation : null;
+    const sourceSystemPrompt = typeof sourceMeta?.systemPrompt === "string" && sourceMeta.systemPrompt.length > 0
+      ? sourceMeta.systemPrompt
+      : null;
 
     const meta = {
       nodeId,
@@ -3062,6 +3089,9 @@ app.post("/api/node/import-history", async (req, res) => {
       clientNodeId,
       prompt: sourcePrompt,
       promptUsed: sourcePrompt,
+      ...(sourceSystemPrompt
+        ? { systemPrompt: sourceSystemPrompt, systemPromptEnabled: sourceMeta?.systemPromptEnabled === true }
+        : {}),
       options: {
         ...(sourceQuality ? { quality: sourceQuality } : {}),
         ...(sourceSize ? { size: sourceSize } : {}),

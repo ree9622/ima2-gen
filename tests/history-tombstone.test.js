@@ -16,6 +16,7 @@ const PORT = String(3900 + Math.floor(Math.random() * 100));
 const FAKE_HOME = mkdtempSync(join(tmpdir(), "ima2-b9-home-"));
 const GEN_DIR = join(process.cwd(), "generated");
 const TEST_PREFIX = `b9test_${Date.now()}_`;
+const SYSTEM_PROMPT_SENTINEL = `history system prompt ${TEST_PREFIX}`;
 
 async function waitForHealth(base, timeoutMs = 10000) {
   const deadline = Date.now() + timeoutMs;
@@ -44,6 +45,17 @@ describe("History: delete tombstone + pagination", () => {
       const ts = Date.now() + i;
       const fn = `${TEST_PREFIX}${ts}_${i}.png`;
       writeFileSync(join(GEN_DIR, fn), pngStub);
+      if (i === 1) {
+        writeFileSync(
+          join(GEN_DIR, fn + ".json"),
+          JSON.stringify({
+            prompt: "user prompt sentinel",
+            systemPrompt: SYSTEM_PROMPT_SENTINEL,
+            systemPromptEnabled: true,
+            createdAt: ts,
+          }),
+        );
+      }
       createdFiles.push(fn);
     }
 
@@ -69,6 +81,7 @@ describe("History: delete tombstone + pagination", () => {
     rmSync(FAKE_HOME, { recursive: true, force: true });
     for (const fn of createdFiles) {
       try { rmSync(join(GEN_DIR, fn), { force: true }); } catch {}
+      try { rmSync(join(GEN_DIR, fn + ".json"), { force: true }); } catch {}
     }
     const trash = join(GEN_DIR, ".trash");
     if (existsSync(trash)) {
@@ -136,5 +149,17 @@ describe("History: delete tombstone + pagination", () => {
     const body = await res.json();
     assert.ok(Array.isArray(body.sessions), "sessions array");
     assert.ok(Array.isArray(body.loose), "loose array");
+  });
+
+  it("history exposes saved system prompt separately from user prompt", async () => {
+    const res = await fetch(`${base}/api/history?limit=100`);
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    const item = body.items.find((it) => it.filename === createdFiles[1]);
+
+    assert.ok(item, "seed history item present");
+    assert.strictEqual(item.prompt, "user prompt sentinel");
+    assert.strictEqual(item.systemPrompt, SYSTEM_PROMPT_SENTINEL);
+    assert.strictEqual(item.systemPromptEnabled, true);
   });
 });

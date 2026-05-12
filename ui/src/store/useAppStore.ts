@@ -460,6 +460,8 @@ function historyItemToGenerateItem(it: HistoryItem): GenerateItem {
     web: it.web ?? undefined,
     prompt: it.prompt ?? undefined,
     originalPrompt: it.originalPrompt ?? undefined,
+    systemPrompt: it.systemPrompt ?? undefined,
+    systemPromptEnabled: it.systemPromptEnabled === true,
     size: it.size ?? undefined,
     quality: it.quality ?? undefined,
     provider: it.provider,
@@ -3863,6 +3865,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             ...(s.originalPrompt && s.originalPrompt !== prompt
               ? { originalPrompt: s.originalPrompt }
               : {}),
+            systemPrompt: res.systemPrompt ?? undefined,
+            systemPromptEnabled: res.systemPromptEnabled === true,
             elapsed: res.elapsed,
             provider: res.provider,
             usage: res.usage,

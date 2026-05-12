@@ -41,6 +41,8 @@ export type GenerateItem = {
   filename?: string;
   prompt?: string;
   originalPrompt?: string;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
   elapsed?: number;
   provider?: string;
   codexAccount?: string | null;
@@ -80,6 +82,8 @@ export type GenerateSingleResponse = {
   quality?: string;
   size?: string;
   moderation?: string;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
 };
 
 export type GenerateMultiResponse = {
@@ -91,6 +95,8 @@ export type GenerateMultiResponse = {
   quality?: string;
   size?: string;
   moderation?: string;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
 };
 
 export type GenerateResponse = GenerateSingleResponse | GenerateMultiResponse;
@@ -162,6 +168,8 @@ export type GenerationLogItem = {
   endpoint: "generate" | "edit" | "node";
   prompt: string | null;
   originalPrompt?: string | null;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
   quality: string | null;
   size: string | null;
   format: string | null;

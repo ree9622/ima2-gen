@@ -22,6 +22,7 @@ export function Canvas() {
   const visiblePrompt = showingOriginal
     ? currentImage?.originalPrompt
     : currentImage?.prompt;
+  const visibleSystemPrompt = currentImage?.systemPrompt?.trim() || "";
 
   const copyVisible = () => {
     if (!visiblePrompt) return;
@@ -31,6 +32,11 @@ export function Canvas() {
         ? "원본 프롬프트를 복사했습니다"
         : "프롬프트를 복사했습니다",
     );
+  };
+  const copySystemPrompt = () => {
+    if (!visibleSystemPrompt) return;
+    void navigator.clipboard.writeText(visibleSystemPrompt);
+    showToast("기본 프롬프트를 복사했습니다");
   };
 
   const displayQuality = currentImage?.quality ?? quality;
@@ -162,7 +168,20 @@ export function Canvas() {
                   </button>
                 </div>
               ) : null}
+              <div className="result-prompt__label">
+                {showingOriginal ? "원본 입력 프롬프트" : "입력 프롬프트"}
+              </div>
               <div className="result-prompt__text">{visiblePrompt}</div>
+            </div>
+          ) : null}
+          {visibleSystemPrompt ? (
+            <div
+              className="result-system-prompt"
+              onClick={copySystemPrompt}
+              title="클릭하여 기본 프롬프트 복사"
+            >
+              <div className="result-system-prompt__label">기본 프롬프트</div>
+              <div className="result-system-prompt__text">{visibleSystemPrompt}</div>
             </div>
           ) : null}
           <div className="result-meta">

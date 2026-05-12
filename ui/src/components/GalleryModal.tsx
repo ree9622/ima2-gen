@@ -121,6 +121,8 @@ export function GalleryModal() {
           thumb: h.thumb,
           web: h.web,
           prompt: h.prompt ?? undefined,
+          systemPrompt: h.systemPrompt ?? undefined,
+          systemPromptEnabled: h.systemPromptEnabled === true,
           size: h.size ?? undefined,
           quality: h.quality ?? undefined,
           provider: h.provider,
@@ -154,6 +156,7 @@ export function GalleryModal() {
     const textPred = q
       ? (h: GenerateItem) =>
           (h.prompt ?? "").toLowerCase().normalize("NFC").includes(q) ||
+          (h.systemPrompt ?? "").toLowerCase().normalize("NFC").includes(q) ||
           (h.filename ?? "").toLowerCase().normalize("NFC").includes(q)
       : () => true;
     if (!favOnly) return textPred;
@@ -339,7 +342,7 @@ export function GalleryModal() {
             close();
             openLightbox(item.filename ?? null);
           }}
-          title={`${item.prompt ?? ""}${item.prompt ? "\n" : ""}더블클릭: 전체 보기`}
+          title={`${item.prompt ?? ""}${item.prompt ? "\n" : ""}${item.systemPrompt ? `기본 프롬프트:\n${item.systemPrompt}\n` : ""}더블클릭: 전체 보기`}
         >
           <img
             src={item.thumb || item.image}

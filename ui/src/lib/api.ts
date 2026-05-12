@@ -160,6 +160,8 @@ export type HistoryItem = {
   createdAt: number;
   prompt: string | null;
   originalPrompt?: string | null;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
   quality: string | null;
   size: string | null;
   moderation?: string | null;
@@ -300,6 +302,8 @@ export type NodeGenerateResponse = {
   // Echoed by /api/node/generate so the UI can preserve the preview aspect
   // ratio without re-deriving from the node sidecar.
   size?: string | null;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
 };
 
 export type NodeErrorResponse = {

@@ -223,7 +223,20 @@
   },
   "history": {
     "openGalleryAria": "Open gallery",
-    "openGalleryTitle": "Open full gallery"
+    "openGalleryTitle": "Open full gallery",
+    "openGalleryShort": "All",
+    "galleryCard": "Open gallery",
+    "recentTitle": "Recent Generations",
+    "collapseRecent": "Collapse recent generations",
+    "expandRecent": "Expand recent generations",
+    "collapseRecentShort": "Hide",
+    "expandRecentShort": "Show",
+    "emptyRecent": "Generated images will appear here.",
+    "selectRecent": "Select generated image",
+    "deleteImageAria": "Delete image from history",
+    "deleteSequenceAria": "Delete {count}-image sequence",
+    "deleteSequenceConfirm": "Delete all {count} images in this multimode sequence?",
+    "sequenceDeleted": "Deleted {count} sequence images from history"
   },
   "panel": {
     "closeSettings": "Close settings",

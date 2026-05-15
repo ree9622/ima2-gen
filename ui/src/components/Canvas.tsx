@@ -12,10 +12,16 @@ import { useAppStore } from "../store/useAppStore";
 import { useCreateBlankCanvas } from "../hooks/useCreateBlankCanvas";
 import { ResultActions } from "./ResultActions";
 import { MultimodeSequencePreview } from "./MultimodeSequencePreview";
+import { ViewerControls } from "./viewer/ViewerControls";
 import { useI18n } from "../i18n";
 import { isEditableTarget } from "../lib/domEvents";
 import { getImageModelShortLabel } from "../lib/imageModels";
 import type { GenerateItem } from "../types";
+import {
+  useViewerTransform,
+  VIEWER_MAX_ZOOM,
+  VIEWER_MIN_ZOOM,
+} from "../hooks/useViewerTransform";
 
 const LazyCanvasModeWorkspace = lazy(() =>
   import("./canvas-mode").then((module) => ({
@@ -151,6 +157,10 @@ export function Canvas() {
   const displaySize = formatSizeAlias(currentImage?.size ?? getResolvedSize());
   const displayModel = getImageModelShortLabel(currentImage?.model);
   const imageSrc = currentImage ? getClassicImageSrc(currentImage) : null;
+  const imageKey = currentImage
+    ? `${currentImage.filename ?? currentImage.url ?? currentImage.image}:${currentImage.canvasMergedAt ?? ""}`
+    : null;
+  const viewer = useViewerTransform(imageKey);
 
   return (
     <main
@@ -176,15 +186,40 @@ export function Canvas() {
           onKeyDown={handleViewerKeyDown}
           aria-label={t("canvas.imageViewerAria")}
         >
-          <div className="canvas-annotation-frame">
+          <div
+            className={`canvas-annotation-frame${viewer.zoom > VIEWER_MIN_ZOOM ? " canvas-annotation-frame--zoomed" : ""}`}
+            onWheel={viewer.handleWheel}
+            onDoubleClick={viewer.handleDoubleClick}
+            onPointerDown={viewer.handlePointerDown}
+            onPointerMove={viewer.handlePointerMove}
+            onPointerUp={viewer.handlePointerUp}
+            onPointerCancel={viewer.handlePointerUp}
+          >
             <img
               className="result-img"
-              key={`${currentImage.filename ?? currentImage.url ?? currentImage.image}:${currentImage.canvasMergedAt ?? ""}`}
+              key={imageKey ?? undefined}
               src={imageSrc}
               alt={t("canvas.resultAlt")}
+              style={{
+                transform: `translate(${viewer.pan.x}px, ${viewer.pan.y}px) scale(${viewer.zoom})`,
+              }}
               onDoubleClick={(event) => {
                 event.stopPropagation();
                 openCanvas();
+              }}
+            />
+            <ViewerControls
+              zoom={viewer.zoom}
+              minZoom={VIEWER_MIN_ZOOM}
+              maxZoom={VIEWER_MAX_ZOOM}
+              onZoomIn={viewer.zoomIn}
+              onZoomOut={viewer.zoomOut}
+              onReset={viewer.reset}
+              labels={{
+                controls: t("viewer.controls"),
+                zoomIn: t("viewer.zoomIn"),
+                zoomOut: t("viewer.zoomOut"),
+                reset: t("viewer.reset"),
               }}
             />
           </div>

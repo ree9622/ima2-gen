@@ -6,19 +6,30 @@ import { SessionPicker } from "./SessionPicker";
 import { SettingsButton } from "./SettingsButton";
 import { ImageModelSelect } from "./ImageModelSelect";
 import { CardNewsComposer } from "./card-news/CardNewsComposer";
+import { SidebarHistory } from "./history/SidebarHistory";
 import { useAppStore } from "../store/useAppStore";
 import { ENABLE_CARD_NEWS_MODE, ENABLE_NODE_MODE } from "../lib/devMode";
 import { useI18n } from "../i18n";
+import { resolveWorkspaceSettings } from "../lib/workspaceProfile";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 export function SidebarStack() {
   const { t } = useI18n();
   const uiModeRaw = useAppStore((s) => s.uiMode);
+  const workspaceProfile = useAppStore((s) => s.workspaceProfile);
   const referenceImages = useAppStore((s) => s.referenceImages);
   const clearReferences = useAppStore((s) => s.clearReferences);
+  const isMobile = useIsMobile();
   const uiMode =
     uiModeRaw === "card-news" && ENABLE_CARD_NEWS_MODE ? "card-news" :
       uiModeRaw === "node" && ENABLE_NODE_MODE ? "node" :
         "classic";
+  const workspaceSettings = resolveWorkspaceSettings(workspaceProfile);
+  const promptStudioDesktop =
+    !isMobile &&
+    uiMode === "classic" &&
+    workspaceSettings.composerPlacement === "bottom" &&
+    workspaceSettings.multimodeHistoryGrouping === "sequence";
 
   return (
     <>
@@ -36,11 +47,18 @@ export function SidebarStack() {
       </div>
       <UIModeSwitch />
       {uiMode === "classic" ? (
-        <>
-          <PromptComposer />
-          <GenerateButton />
-          <InFlightList />
-        </>
+        promptStudioDesktop ? (
+          <>
+            <SidebarHistory />
+            <InFlightList />
+          </>
+        ) : (
+          <>
+            <PromptComposer />
+            <GenerateButton />
+            <InFlightList />
+          </>
+        )
       ) : uiMode === "card-news" ? (
         <>
           <CardNewsComposer />

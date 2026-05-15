@@ -6,7 +6,11 @@ import { WebSearchToggle } from "./WebSearchToggle";
 
 const MAX_REFS = 5;
 
-export function PromptComposer() {
+type PromptComposerProps = {
+  variant?: "sidebar" | "bottom";
+};
+
+export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
   const insertedPrompts = useAppStore((s) => s.insertedPrompts);
@@ -167,7 +171,7 @@ export function PromptComposer() {
 
   return (
     <div
-      className={`composer${dragOver ? " composer--drag" : ""}${isDirectMode && !multimode ? " composer--direct" : ""}${multimode ? " composer--multimode" : ""}`}
+      className={`composer composer--${variant}${dragOver ? " composer--drag" : ""}${isDirectMode && !multimode ? " composer--direct" : ""}${multimode ? " composer--multimode" : ""}`}
       role="group"
       aria-label={
         multimode

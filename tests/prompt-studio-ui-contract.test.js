@@ -74,6 +74,7 @@ describe("prompt studio UI contract", () => {
     const multimodeRoute = readSource("routes/multimode.ts");
     const historyList = readSource("lib/historyList.ts");
     const snapshot = readSource("lib/composerSnapshot.ts");
+    const snapshotRuntime = readSource("lib/composerSnapshot.js");
 
     assert.match(types, /export type ComposerInsertedPromptSnapshot/);
     assert.match(types, /composerPrompt\?: string \| null/);
@@ -81,6 +82,7 @@ describe("prompt studio UI contract", () => {
     assert.match(api, /composerPrompt\?: string \| null/);
     assert.match(api, /composerInsertedPrompts\?: import\("\.\.\/types"\)\.ComposerInsertedPromptSnapshot\[\] \| null/);
     assert.match(snapshot, /normalizeComposerInsertedPrompts/);
+    assert.match(snapshotRuntime, /export function normalizeComposerInsertedPrompts/);
     assert.match(store, /const composerPrompt = s\.prompt/);
     assert.match(store, /const composerInsertedPrompts = cloneInsertedPrompts\(s\.insertedPrompts\)/);
     assert.match(store, /composerPrompt,/);
@@ -94,5 +96,86 @@ describe("prompt studio UI contract", () => {
     assert.match(multimodeRoute, /composerInsertedPrompts,/);
     assert.match(historyList, /composerPrompt: meta\?\.composerPrompt/);
     assert.match(historyList, /composerInsertedPrompts: meta\?\.composerInsertedPrompts/);
+  });
+
+  it("adds grouped sidebar history without replacing the legacy history strip", () => {
+    const main = readSource("ui/src/main.tsx");
+    const sidebar = readSource("ui/src/components/Sidebar.tsx");
+    const sidebarHistory = readSource("ui/src/components/history/SidebarHistory.tsx");
+    const historyLib = readSource("ui/src/lib/history/sidebarHistory.ts");
+    const store = readSource("ui/src/store/useAppStore.ts");
+    const css = readSource("ui/src/styles/sidebar-history.css");
+    const en = JSON.parse(readSource("ui/src/i18n/en.json"));
+    const ko = JSON.parse(readSource("ui/src/i18n/ko.json"));
+
+    assert.match(main, /styles\/sidebar-history\.css/);
+    assert.match(sidebar, /SidebarHistory/);
+    assert.match(sidebar, /workspaceSettings\.multimodeHistoryGrouping === "sequence"/);
+    assert.match(sidebarHistory, /groupSidebarHistoryEntries/);
+    assert.match(sidebarHistory, /showHistorySequence/);
+    assert.match(sidebarHistory, /trashHistorySequence/);
+    assert.match(historyLib, /export function groupSidebarHistoryEntries/);
+    assert.match(historyLib, /sequence:/);
+    assert.match(store, /showHistorySequence: \(sequenceId: string\) => void/);
+    assert.match(store, /trashHistorySequence: \(sequenceId: string\) => Promise<void>/);
+    assert.match(store, /const previewId = `history:\$\{sequenceId\}`/);
+    assert.match(store, /removeImageFromMultimodeSequences/);
+    assert.match(css, /\.sidebar-history__sequence-grid/);
+    assert.equal(typeof en.history.recentTitle, "string");
+    assert.equal(typeof en.history.deleteSequenceConfirm, "string");
+    assert.equal(typeof ko.history.recentTitle, "string");
+    assert.equal(typeof ko.history.deleteSequenceConfirm, "string");
+    assert.ok(lineCount("ui/src/components/history/SidebarHistory.tsx") < 500);
+    assert.ok(lineCount("ui/src/styles/sidebar-history.css") < 500);
+  });
+
+  it("routes prompt studio classic desktop to bottom composer layout", () => {
+    const app = readSource("ui/src/App.tsx");
+    const sidebar = readSource("ui/src/components/Sidebar.tsx");
+    const workspaceProfile = readSource("ui/src/lib/workspaceProfile.ts");
+    const classicWorkspace = readSource("ui/src/components/classic/ClassicWorkspace.tsx");
+    const promptComposer = readSource("ui/src/components/PromptComposer.tsx");
+    const css = readSource("ui/src/styles/classic-workspace.css");
+
+    assert.match(workspaceProfile, /composerPlacement: "bottom"/);
+    assert.match(app, /app--prompt-studio/);
+    assert.match(app, /const showHistoryStrip = !promptStudioClassic/);
+    assert.match(app, /promptStudioClassic \? <ClassicWorkspace \/> : <Canvas \/>/);
+    assert.match(sidebar, /promptStudioDesktop \?/);
+    assert.match(sidebar, /<SidebarHistory \/>/);
+    assert.match(classicWorkspace, /<PromptComposer variant="bottom" \/>/);
+    assert.match(classicWorkspace, /<GenerateButton \/>/);
+    assert.match(promptComposer, /variant\?: "sidebar" \| "bottom"/);
+    assert.match(promptComposer, /composer--\$\{variant\}/);
+    assert.match(css, /\.classic-workspace\s*\{/);
+    assert.match(css, /\.composer--bottom/);
+    assert.ok(lineCount("ui/src/components/classic/ClassicWorkspace.tsx") < 500);
+    assert.ok(lineCount("ui/src/styles/classic-workspace.css") < 500);
+  });
+
+  it("extracts classic viewer zoom and pan controls into hook, component, and CSS", () => {
+    const main = readSource("ui/src/main.tsx");
+    const canvas = readSource("ui/src/components/Canvas.tsx");
+    const hook = readSource("ui/src/hooks/useViewerTransform.ts");
+    const controls = readSource("ui/src/components/viewer/ViewerControls.tsx");
+    const css = readSource("ui/src/styles/viewer-workflow.css");
+    const en = JSON.parse(readSource("ui/src/i18n/en.json"));
+    const ko = JSON.parse(readSource("ui/src/i18n/ko.json"));
+
+    assert.match(main, /styles\/viewer-workflow\.css/);
+    assert.match(canvas, /useViewerTransform\(imageKey\)/);
+    assert.match(canvas, /ViewerControls/);
+    assert.match(canvas, /canvas-annotation-frame--zoomed/);
+    assert.match(hook, /export const VIEWER_MAX_ZOOM = 5/);
+    assert.match(hook, /handlePointerDown/);
+    assert.match(hook, /handleWheel/);
+    assert.match(controls, /viewer-control-btn--label/);
+    assert.match(css, /--canvas-empty-dot-rgb/);
+    assert.match(css, /\.viewer-controls/);
+    assert.equal(typeof en.viewer.controls, "string");
+    assert.equal(typeof ko.viewer.controls, "string");
+    assert.ok(lineCount("ui/src/hooks/useViewerTransform.ts") < 500);
+    assert.ok(lineCount("ui/src/components/viewer/ViewerControls.tsx") < 500);
+    assert.ok(lineCount("ui/src/styles/viewer-workflow.css") < 500);
   });
 });

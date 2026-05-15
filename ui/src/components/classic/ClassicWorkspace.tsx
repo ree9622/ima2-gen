@@ -4,7 +4,7 @@ import { PromptComposer } from "../PromptComposer";
 
 export function ClassicWorkspace() {
   return (
-    <main className="classic-workspace">
+    <div className="classic-workspace">
       <div className="classic-workspace__stage">
         <Canvas />
       </div>
@@ -12,6 +12,6 @@ export function ClassicWorkspace() {
         <PromptComposer variant="bottom" />
         <GenerateButton />
       </div>
-    </main>
+    </div>
   );
 }

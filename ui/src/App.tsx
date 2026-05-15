@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Canvas } from "./components/Canvas";
+import { ClassicWorkspace } from "./components/classic/ClassicWorkspace";
 import { RightPanel } from "./components/RightPanel";
 import { HistoryStrip } from "./components/HistoryStrip";
 import { Toast } from "./components/Toast";
@@ -19,6 +20,7 @@ import { useGalleryViewerNavigation } from "./hooks/useGalleryViewerNavigation";
 import { useBrowserAttentionBadge } from "./hooks/useBrowserAttentionBadge";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { useVisualViewportInset } from "./hooks/useVisualViewportInset";
+import { resolveWorkspaceSettings } from "./lib/workspaceProfile";
 
 const LazyNodeCanvas = lazy(() =>
   import("./components/NodeCanvas").then((module) => ({ default: module.NodeCanvas })),
@@ -51,6 +53,7 @@ export default function App() {
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const unseenGeneratedCount = useAppStore((s) => s.unseenGeneratedCount);
   const historyStripLayout = useAppStore((s) => s.historyStripLayout);
+  const workspaceProfile = useAppStore((s) => s.workspaceProfile);
   const syncThemeFromStorage = useAppStore((s) => s.syncThemeFromStorage);
   const syncThemeFamilyFromStorage = useAppStore((s) => s.syncThemeFamilyFromStorage);
   const refreshResolvedTheme = useAppStore((s) => s.refreshResolvedTheme);
@@ -60,6 +63,13 @@ export default function App() {
       uiModeRaw === "node" && ENABLE_NODE_MODE ? "node" :
         "classic";
   const isMobile = useIsMobile();
+  const workspaceSettings = resolveWorkspaceSettings(workspaceProfile);
+  const promptStudioClassic =
+    !isMobile &&
+    uiMode === "classic" &&
+    workspaceSettings.composerPlacement === "bottom" &&
+    workspaceSettings.multimodeHistoryGrouping === "sequence";
+  const showHistoryStrip = !promptStudioClassic;
 
   useBrowserAttentionBadge(unseenGeneratedCount);
 
@@ -113,10 +123,10 @@ export default function App() {
   return (
     <>
       <div
-        className={`app${settingsOpen ? " app--settings-open" : ""}${
-          historyStripLayout === "horizontal" ? " app--history-horizontal" : ""
+        className={`app${workspaceProfile === "prompt-studio" ? " app--prompt-studio" : ""}${settingsOpen ? " app--settings-open" : ""}${
+          showHistoryStrip && historyStripLayout === "horizontal" ? " app--history-horizontal" : ""
         }${
-          historyStripLayout === "sidebar" ? " app--history-sidebar" : ""
+          showHistoryStrip && historyStripLayout === "sidebar" ? " app--history-sidebar" : ""
         }`}
         data-theme-mode={resolvedTheme}
         data-theme-family={themeFamily}
@@ -126,12 +136,12 @@ export default function App() {
       >
         <Sidebar />
         <MobileAppBar />
-        <HistoryStrip />
+        {showHistoryStrip ? <HistoryStrip /> : null}
         <Suspense fallback={<WorkspaceFallback />}>
           {settingsOpen ? (
             <LazySettingsWorkspace />
           ) : uiMode === "classic" ? (
-            <Canvas />
+            promptStudioClassic ? <ClassicWorkspace /> : <Canvas />
           ) : uiMode === "node" ? (
             <LazyNodeCanvas />
           ) : uiMode === "card-news" ? (

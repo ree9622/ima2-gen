@@ -131,6 +131,7 @@ import {
   resolveVisibleShortcutCurrent,
   type GalleryShortcutAction,
 } from "../lib/galleryShortcuts";
+import { compareSequenceItems } from "../lib/history/sidebarHistory";
 
 export type GalleryScope = "current-session" | "all";
 
@@ -844,6 +845,33 @@ export type MultimodeSequenceState = {
   error?: string | null;
 };
 
+function removeImageFromMultimodeSequences(
+  sequences: Record<string, MultimodeSequenceState>,
+  filename: string,
+): Record<string, MultimodeSequenceState> {
+  let changed = false;
+  const next: Record<string, MultimodeSequenceState> = {};
+  for (const [id, sequence] of Object.entries(sequences)) {
+    const images = sequence.images.filter((image) => image.filename !== filename);
+    if (images.length === sequence.images.length) {
+      next[id] = sequence;
+      continue;
+    }
+    changed = true;
+    if (images.length === 0) continue;
+    next[id] = {
+      ...sequence,
+      images,
+      returned: images.length,
+      status:
+        sequence.status === "complete" && images.length < sequence.requested
+          ? "partial"
+          : sequence.status,
+    };
+  }
+  return changed ? next : sequences;
+}
+
 type AppState = {
   provider: Provider;
   quality: Quality;
@@ -1029,9 +1057,11 @@ type AppState = {
   moveInsertedPromptInComposer: (id: string, direction: "up" | "down") => void;
   clearInsertedPrompts: () => void;
   selectHistory: (item: GenerateItem) => void;
+  showHistorySequence: (sequenceId: string) => void;
   markGeneratedResultsSeen: () => void;
   selectHistoryShortcutTarget: (action: GalleryShortcutAction) => void;
   trashHistoryItem: (item: GenerateItem) => Promise<void>;
+  trashHistorySequence: (sequenceId: string) => Promise<void>;
   restorePendingTrash: () => Promise<void>;
   clearPendingTrash: () => void;
   permanentlyDeleteHistoryItemByClick: (item: GenerateItem) => Promise<void>;
@@ -3047,8 +3077,47 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       currentImage: target,
       unseenGeneratedCount: 0,
+      multimodePreviewFlightId: null,
       ...composerPatch,
     });
+  },
+
+  showHistorySequence: (sequenceId) => {
+    const items = get().history
+      .filter((item) => item.sequenceId === sequenceId && !item.canvasVersion)
+      .sort(compareSequenceItems);
+    if (items.length === 0) return;
+    const previewId = `history:${sequenceId}`;
+    const requested = Math.max(
+      items.length,
+      ...items.map((item) => item.sequenceTotalRequested ?? 0),
+    );
+    const returned = items.length;
+    const status: MultimodeSequenceStatus =
+      items[0]?.sequenceStatus === "empty"
+        ? "empty"
+        : returned >= requested
+          ? "complete"
+          : "partial";
+    saveSelectedFilename(null);
+    set((state) => ({
+      currentImage: null,
+      unseenGeneratedCount: 0,
+      canvasOpen: false,
+      multimodePreviewFlightId: previewId,
+      multimodeSequences: {
+        ...state.multimodeSequences,
+        [previewId]: {
+          sequenceId,
+          requestId: previewId,
+          requested,
+          returned,
+          images: items,
+          partials: [],
+          status,
+        },
+      },
+    }));
   },
 
   markGeneratedResultsSeen: () => set({ unseenGeneratedCount: 0 }),
@@ -3074,15 +3143,66 @@ export const useAppStore = create<AppState>((set, get) => ({
       : current;
     try {
       await deleteHistoryItem(filename);
-      set((s) => ({
-        history: s.history.filter((h) => h.filename !== filename),
-        currentImage: replacement,
-        trashPending: null,
-      }));
+      set((s) => {
+        const multimodeSequences = removeImageFromMultimodeSequences(s.multimodeSequences, filename);
+        const multimodePreviewFlightId =
+          s.multimodePreviewFlightId && !multimodeSequences[s.multimodePreviewFlightId]
+            ? null
+            : s.multimodePreviewFlightId;
+        return {
+          history: s.history.filter((h) => h.filename !== filename),
+          currentImage: replacement,
+          multimodePreviewFlightId,
+          multimodeSequences,
+          trashPending: null,
+        };
+      });
       if (removingCurrent) saveSelectedFilename(replacement?.filename ?? null);
       get().showToast(t("gallery.movedToSystemTrash", { filename }));
     } catch (err) {
       console.error("[history] trash failed", err);
+      get().showToast(t("gallery.deleteFailed"), true);
+    }
+  },
+
+  trashHistorySequence: async (sequenceId) => {
+    const targets = get().history.filter((item) =>
+      item.sequenceId === sequenceId && !item.canvasVersion && Boolean(item.filename),
+    );
+    if (targets.length === 0) {
+      get().showToast(t("gallery.deleteFailed"), true);
+      return;
+    }
+    const ok = window.confirm(t("history.deleteSequenceConfirm", { count: targets.length }));
+    if (!ok) return;
+    const filenames = new Set(
+      targets.map((item) => item.filename).filter((filename): filename is string => Boolean(filename)),
+    );
+    const current = get().currentImage;
+    const removingCurrent = Boolean(current?.filename && filenames.has(current.filename));
+    const removingPreview =
+      get().multimodePreviewFlightId === `history:${sequenceId}` ||
+      get().multimodePreviewFlightId === sequenceId;
+    try {
+      for (const filename of filenames) {
+        await deleteHistoryItem(filename);
+      }
+      set((state) => {
+        const nextSequences = { ...state.multimodeSequences };
+        delete nextSequences[`history:${sequenceId}`];
+        delete nextSequences[sequenceId];
+        return {
+          history: state.history.filter((item) => !item.filename || !filenames.has(item.filename)),
+          currentImage: removingCurrent ? null : state.currentImage,
+          multimodePreviewFlightId: removingPreview ? null : state.multimodePreviewFlightId,
+          multimodeSequences: nextSequences,
+          trashPending: null,
+        };
+      });
+      if (removingCurrent) saveSelectedFilename(null);
+      get().showToast(t("history.sequenceDeleted", { count: filenames.size }));
+    } catch (err) {
+      console.error("[history] sequence trash failed", err);
       get().showToast(t("gallery.deleteFailed"), true);
     }
   },

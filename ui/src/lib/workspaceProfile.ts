@@ -18,7 +18,7 @@ export const DEFAULT_WORKSPACE_PRESET: WorkspaceOverrides = {
 
 export const PROMPT_STUDIO_WORKSPACE_PRESET: WorkspaceOverrides = {
   promptBuilderSurface: "right-panel",
-  composerPlacement: "sidebar",
+  composerPlacement: "bottom",
   multimodeHistoryGrouping: "sequence",
   restoreComposerFromHistory: true,
   viewerTools: "zoom-pan",

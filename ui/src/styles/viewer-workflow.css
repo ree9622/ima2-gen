@@ -1,0 +1,94 @@
+:root {
+  --canvas-empty-dot-rgb: 245, 247, 250;
+  --canvas-empty-dot-alpha-scale: 1;
+}
+
+:root[data-theme-mode="light"],
+:root[data-theme="light"] {
+  --canvas-empty-dot-rgb: 15, 19, 26;
+  --canvas-empty-dot-alpha-scale: 0.74;
+}
+
+.canvas__blank-sheet {
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(var(--canvas-empty-dot-rgb), calc(0.08 * var(--canvas-empty-dot-alpha-scale))) 1px,
+      transparent 1.4px
+    ),
+    linear-gradient(#ffffff, #f8fafc),
+    #ffffff;
+  background-size: 14px 14px, auto, auto;
+}
+
+.result-container > .canvas-annotation-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.result-container > .canvas-annotation-frame--zoomed {
+  cursor: grab;
+}
+
+.result-container > .canvas-annotation-frame--zoomed:active {
+  cursor: grabbing;
+}
+
+.result-img {
+  transform-origin: center center;
+  transition: transform 120ms ease;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.viewer-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  color: var(--text);
+  box-shadow: 0 12px 30px var(--shadow-strong);
+  backdrop-filter: blur(14px);
+}
+
+.viewer-control-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.viewer-control-btn--label {
+  min-width: 48px;
+  color: var(--text-dim);
+}
+
+.viewer-control-btn:hover:not(:disabled),
+.viewer-control-btn:focus-visible:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.viewer-control-btn:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}

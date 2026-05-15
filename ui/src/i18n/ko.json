@@ -223,7 +223,20 @@
   },
   "history": {
     "openGalleryAria": "갤러리 열기",
-    "openGalleryTitle": "전체 갤러리 열기"
+    "openGalleryTitle": "전체 갤러리 열기",
+    "openGalleryShort": "전체",
+    "galleryCard": "갤러리 열기",
+    "recentTitle": "최근 생성",
+    "collapseRecent": "최근 생성 접기",
+    "expandRecent": "최근 생성 펼치기",
+    "collapseRecentShort": "접기",
+    "expandRecentShort": "펼치기",
+    "emptyRecent": "생성 히스토리가 여기에 표시됩니다.",
+    "selectRecent": "생성 히스토리 선택",
+    "deleteImageAria": "이미지 기록 삭제",
+    "deleteSequenceAria": "{count}장 시퀀스 삭제",
+    "deleteSequenceConfirm": "이 멀티모드 시퀀스의 이미지 {count}장을 삭제할까요?",
+    "sequenceDeleted": "시퀀스 이미지 {count}장을 히스토리에서 삭제했습니다"
   },
   "panel": {
     "closeSettings": "설정 닫기",

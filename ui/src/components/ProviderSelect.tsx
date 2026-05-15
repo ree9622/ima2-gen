@@ -12,7 +12,7 @@ type ProviderAvailability = {
   hint?: string;
 };
 
-function useProviderAvailability(): Record<Provider, ProviderAvailability> {
+export function useProviderAvailability(): Record<Provider, ProviderAvailability> {
   const { t } = useI18n();
   const oauth = useOAuthStatus();
   const { data } = useBilling();

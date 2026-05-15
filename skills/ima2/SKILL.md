@@ -140,6 +140,39 @@ ima2 gen "variation 4" --quality high
 Treat `capabilities.limits.maxParallel` as advisory client-side queue guidance only.
 It is not a guaranteed server-side semaphore.
 
+## Watching Jobs
+
+Use JSON when another agent needs to reason about active work:
+
+```bash
+ima2 inflight ls --json
+ima2 inflight ls --kind multimode --terminal --json
+```
+
+Expect job fields such as `requestId`, `kind`, `phase`, `startedAt`, `prompt`,
+`model`, and `sessionId`. Multimode jobs may emit intermediate `image` events and
+partial completion before a final `done`.
+
+## Prompt Import
+
+Preview a local markdown/text prompt source before committing:
+
+```bash
+ima2 prompt import preview ./prompts.md --json
+```
+
+Import a JSON export body:
+
+```bash
+ima2 prompt import json ./prompts-export.json --folder __root__
+```
+
+Import a raw image into history:
+
+```bash
+ima2 history import ./local-image.png
+```
+
 ## Defaults
 
 Inspect the running server defaults:
@@ -183,6 +216,8 @@ Use `ima2 capabilities --json` as the source of truth for:
 - unsupported model ids that should not be used as defaults;
 - valid reasoning efforts;
 - valid quality values;
+- valid provider, mode, and moderation values;
+- writable config keys and their environment-variable overrides;
 - reference count and image count limits;
 - package/server version.
 
@@ -196,6 +231,12 @@ Do not pick models from:
 
 ```text
 valid.imageModels.unsupported
+```
+
+Discover writable configuration keys:
+
+```bash
+ima2 config keys --json
 ```
 
 ## Safety Notes

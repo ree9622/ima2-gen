@@ -1,11 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REQUIRED_SOURCE_PACK_FILES = [
+  "LICENSE",
   "README.md",
   "docs/RECOVER_OLD_IMAGES.md",
   "server.ts",
@@ -92,6 +93,15 @@ function readPackManifest() {
 }
 
 describe("package smoke", () => {
+  it("keeps publish dry-run from re-entering prepublishOnly smoke tests", () => {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
+    const script = readFileSync(join(process.cwd(), "scripts/publish-dry-run.mjs"), "utf8");
+
+    assert.equal(pkg.scripts["publish:dry-run"], "node scripts/publish-dry-run.mjs");
+    assert.match(script, /"publish", "--dry-run", "--ignore-scripts"/);
+    assert.match(script, /previously published versions/);
+  });
+
   it("includes release-critical source files in npm pack output", () => {
     const manifest = readPackManifest();
     const packedFiles = new Set(manifest.files.map((file) => file.path));

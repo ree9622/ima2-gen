@@ -10,7 +10,7 @@ import {
 } from "../lib/api";
 import { cardNewsManifestDownloadUrl } from "../lib/cardNewsApi";
 import { dateBucket } from "../lib/galleryUtils";
-import { getGalleryItemKey } from "../lib/galleryNavigation";
+import { getGalleryItemKey, isGalleryVisibleItem, uniqueGalleryItems } from "../lib/galleryNavigation";
 import { useI18n } from "../i18n";
 import { CardNewsGalleryTile } from "./CardNewsGalleryTile";
 import { GalleryImageTile } from "./GalleryImageTile";
@@ -20,10 +20,6 @@ import { GallerySessionGroups, type GallerySessionGroup } from "./gallery/Galler
 import { GalleryStorageBar } from "./gallery/GalleryStorageBar";
 
 const STORAGE_NOTICE_DISMISSED_KEY = "ima2.storageNoticeDismissed.0.09.23";
-
-function isGalleryVisibleItem(item: Pick<GenerateItem, "canvasVersion">): boolean {
-  return !item.canvasVersion;
-}
 
 export function GalleryModal() {
   const { t } = useI18n();
@@ -62,7 +58,7 @@ export function GalleryModal() {
   const scrollRef = useRef<HTMLDivElement | null>(null), itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
-  const galleryHistory = useMemo(() => history.filter(isGalleryVisibleItem), [history]);
+  const galleryHistory = useMemo(() => uniqueGalleryItems(history.filter(isGalleryVisibleItem)), [history]);
   const setScrollNode = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
     setScrollElement(node);
@@ -78,9 +74,7 @@ export function GalleryModal() {
   }, [open, close]);
 
   useEffect(() => {
-    if (!open) {
-      setQuery("");
-    }
+    if (!open) setQuery("");
   }, [open]);
 
   useEffect(() => {
@@ -156,10 +150,10 @@ export function GalleryModal() {
             title: s.title ?? null,
             label: s.label ?? null,
             displayLabel: s.title || s.label || s.sessionId.slice(0, 8),
-            items: s.items.filter(isGalleryVisibleItem).map(toItem),
+            items: uniqueGalleryItems(s.items.filter(isGalleryVisibleItem).map(toItem)),
           })).filter((group) => group.items.length > 0),
         );
-        setLoose(page.loose.filter(isGalleryVisibleItem).map(toItem));
+        setLoose(uniqueGalleryItems(page.loose.filter(isGalleryVisibleItem).map(toItem)));
       } catch {
         // Fallback: use current history only.
       }
@@ -227,7 +221,10 @@ export function GalleryModal() {
 
   async function handleDelete(item: GenerateItem, e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
+    const deletedKey = getGalleryItemKey(item);
     await trashHistoryItem(item);
+    delete itemRefs.current[deletedKey];
+    window.requestAnimationFrame(() => scrollRef.current?.focus());
   }
 
   async function handleOpenGeneratedDir() {
@@ -284,16 +281,17 @@ export function GalleryModal() {
     return key;
   };
 
-  const renderTile = (item: GenerateItem, keyPrefix: string, idx: number) => {
+  const renderTile = (item: GenerateItem, keyPrefix: string, _idx: number) => {
     const active = currentImage?.image === item.image;
+    const itemKey = getGalleryItemKey(item);
     const setItemRef = (node: HTMLElement | null) => {
-      itemRefs.current[getGalleryItemKey(item)] = node;
+      itemRefs.current[itemKey] = node;
     };
     if (item.kind === "card-news-set") {
       return (
         <div
           ref={setItemRef}
-          key={`${keyPrefix}-${idx}-${item.filename ?? idx}`}
+          key={`${keyPrefix}-${itemKey}`}
           className="gallery__tile-wrap gallery-card-news-set"
         >
           <CardNewsGalleryTile
@@ -307,7 +305,7 @@ export function GalleryModal() {
     }
     return (
       <GalleryImageTile
-        key={`${keyPrefix}-${idx}-${item.filename ?? idx}`}
+        key={`${keyPrefix}-${itemKey}`}
         item={item}
         active={active}
         itemRef={setItemRef}
@@ -433,6 +431,7 @@ export function GalleryModal() {
         <div
           className="gallery__scroll"
           ref={setScrollNode}
+          tabIndex={-1}
           onScroll={() => {
             lastScrollTopRef.current = scrollRef.current?.scrollTop ?? 0;
           }}

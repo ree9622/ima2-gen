@@ -49,3 +49,6 @@ jobs:
       - name: Package install smoke
         if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
         run: npm run test:package-install
+      - name: Publish dry-run
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
+        run: npm run publish:dry-run

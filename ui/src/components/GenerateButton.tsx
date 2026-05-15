@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 export function GenerateButton() {
   const activeGenerations = useAppStore((s) => s.activeGenerations);
   const generate = useAppStore((s) => s.generate);
+  const openReadinessPopup = useAppStore((s) => s.openReadinessPopup);
   const { t } = useI18n();
 
   const loading = activeGenerations > 0;
@@ -12,12 +13,23 @@ export function GenerateButton() {
     : t("generate.button");
 
   return (
-    <button
-      type="button"
-      className={`generate-btn${loading ? " loading" : ""}`}
-      onClick={() => void generate()}
-    >
-      {label}
-    </button>
+    <div className="generate-row">
+      <button
+        type="button"
+        className={`generate-btn${loading ? " loading" : ""}`}
+        onClick={() => void generate()}
+      >
+        {label}
+      </button>
+      <button
+        type="button"
+        className="generate-row__readiness"
+        onClick={openReadinessPopup}
+        title={t("readiness.openTitle")}
+        aria-label={t("readiness.openTitle")}
+      >
+        ?
+      </button>
+    </div>
   );
 }

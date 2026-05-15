@@ -15,6 +15,15 @@ echo "========================="
 
 cd "$(dirname "$0")/.."
 
+if ! git diff --cached --quiet; then
+  echo "❌ Refusing release: staged changes exist"
+  exit 1
+fi
+if ! git diff --quiet; then
+  echo "❌ Refusing release: worktree has uncommitted changes"
+  exit 1
+fi
+
 # ─── Version detection ─────────────────────────────────
 NPM_LATEST=$(npm view "$PKG_NAME" dist-tags.latest 2>/dev/null || echo "0.0.0")
 PKG_VERSION=$(node -p "require('./package.json').version")

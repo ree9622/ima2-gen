@@ -97,7 +97,7 @@ describe("ima2 CLI", () => {
     writeFileSync(TEST_CONFIG, JSON.stringify({ provider: "api", apiKey: "test" }));
     assert.ok(existsSync(TEST_CONFIG));
 
-    const child = spawn("node", ["--import", "tsx", "bin/ima2.ts", "reset"], {
+    const child = spawn("node", ["--import", "tsx", "bin/ima2.ts", "reset", "--yes"], {
       cwd: process.cwd(),
       env: {
         ...process.env,

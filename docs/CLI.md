@@ -131,6 +131,8 @@ Multimode-specific flags include `--max-images <1..8>`, `--ref <file>` (repeatab
 | `ima2 prompt import curated --source <id> --q <query>` | Curated import (commits prompts) |
 | `ima2 prompt import discovery --q <query> --seeds <a,b,c>` | Discovery import (curator-only on some servers) |
 | `ima2 prompt import folder <localpath>` | Import a local folder of prompts |
+| `ima2 prompt import json <file\|@file\|-> [--folder <id>]` | Import a JSON export body through `/api/prompts/import` |
+| `ima2 prompt import preview <file\|@file\|-> [--filename <name>]` | Preview local markdown/text candidates without committing |
 
 ## Card News (gated)
 
@@ -173,7 +175,8 @@ Card News requires the server to be started with `IMA2_CARD_NEWS=1` (or `feature
 | `ima2 config ls [--effective]` | Print the file layer (default), or merged effective config with `--effective` |
 | `ima2 config get <key>` | Read a dotted key from the effective config; secrets matching `/token\|secret\|apikey\|password/i` are redacted |
 | `ima2 config set <key> <value>` | Write to the file layer; rejects unknown keys, refuses auth keys (`provider`, `apiKey`), warns when an env var is overriding the same key, prints a restart-required note |
-| `ima2 config rm <key>` | Remove a key from the file layer |
+| `ima2 config rm <key> [--yes]` | Remove a key from the file layer; non-TTY agents must pass `--yes` |
+| `ima2 config keys [--json]` | List writable keys and the env vars that override them |
 
 `defaults` is the agent-friendly wrapper for persistent image model and reasoning policy. It writes both OAuth and API-provider default keys so the user-facing "default model" stays one concept across provider paths.
 
@@ -230,6 +233,8 @@ ima2 history import ./local.png
 # Prompts
 ima2 prompt ls -q sunset
 ima2 prompt import refresh --source curated
+ima2 prompt import preview ./prompts.md --json
+ima2 prompt import json ./prompts-export.json --folder __root__
 
 # Observability
 ima2 inflight ls --terminal
@@ -242,5 +247,6 @@ ima2 defaults set model gpt-5.5
 ima2 defaults set reasoning high
 ima2 config set imageModels.reasoningEffort high
 ima2 config get log.level
+ima2 config keys --json
 ima2 config ls --effective --json
 ```

@@ -5,6 +5,8 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import { spawn, execSync } from "child_process";
+import { confirmDestructiveAction } from "./lib/destructive-confirm.js";
+import { buildHardeningDoctorLines } from "./lib/doctor-checks.js";
 import { openUrl, resolveBin } from "./lib/platform.js";
 import { maybePromptGithubStar } from "./lib/star-prompt.js";
 import { buildStorageDoctorLines } from "./lib/storage-doctor.js";
@@ -192,6 +194,8 @@ async function showStatus() {
   console.log(`\n  ${pkg.name} v${pkg.version}\n`);
   console.log(`  Config file: ${CONFIG_FILE}`);
   console.log(`  Exists: ${existsSync(CONFIG_FILE) ? "yes" : "no"}\n`);
+  console.log(`  Generated dir: ${runtimeConfig.storage.generatedDir}`);
+  console.log(`  Advertised server: ${advertisedServerUrl() || "none"}\n`);
 
   if (config.provider) {
     console.log(`  Provider: ${config.provider}`);
@@ -288,6 +292,22 @@ async function doctor() {
     }
   }
 
+  const hardeningLines = await buildHardeningDoctorLines({
+    root: ROOT,
+    configFile: CONFIG_FILE,
+    fileConfig: config,
+  });
+  for (const line of hardeningLines) {
+    const prefix =
+      line.kind === "pass" ? "✓"
+      : line.kind === "fail" ? "✗"
+      : line.kind === "warn" ? "⚠"
+      : "ℹ";
+    console.log(`  ${prefix} ${line.text}`);
+    if (line.kind === "pass") ok++;
+    if (line.kind === "fail") fail++;
+  }
+
   const storageLines = await buildStorageDoctorLines({
     rootDir: ROOT,
     config: runtimeConfig,
@@ -355,6 +375,15 @@ function showHelp() {
     -v, --version  Show version
     -h, --help     Show help
 
+  Server-aware subcommands accept:
+    --server <url>       Override discovered server URL
+    IMA2_SERVER          Same as --server for client commands
+    ~/.ima2/server.json  Auto-discovery file written by 'ima2 serve'
+    IMA2_CONFIG_DIR      Override config directory
+    IMA2_GENERATED_DIR   Override generated images directory
+    IMA2_CARD_NEWS=1     Enable Card News routes
+    IMA2_LOG_LEVEL       debug|info|warn|error
+
   Examples:
     ima2 serve                       Start server
     ima2 serve --dev                 Start with verbose server diagnostics
@@ -402,6 +431,17 @@ switch (command) {
     break;
   case "reset":
     if (existsSync(CONFIG_FILE)) {
+      try {
+        const yes = args.includes("--yes") || args.includes("-y");
+        const confirmed = await confirmDestructiveAction("Reset all ima2 config?", yes);
+        if (!confirmed) {
+          console.log("  Aborted.");
+          break;
+        }
+      } catch (err) {
+        console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(2);
+      }
       writeFileSync(CONFIG_FILE, "{}");
       console.log("  Config reset. Run 'ima2 serve' to reconfigure.");
     } else {

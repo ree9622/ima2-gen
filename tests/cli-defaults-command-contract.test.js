@@ -19,13 +19,15 @@ describe("CLI defaults command contract", () => {
   });
 
   it("shared config-store owns writable keys and env override warnings", () => {
+    const keys = readSource("lib/configKeys.ts");
     const store = readSource("bin/lib/config-store.ts");
     const configCmd = readSource("bin/commands/config.ts");
 
-    assert.match(store, /"apiProvider\.defaultImageModel"/);
-    assert.match(store, /"apiProvider\.defaultReasoningEffort"/);
-    assert.match(store, /"apiProvider\.defaultImageModel": "IMA2_API_IMAGE_MODEL_DEFAULT"/);
-    assert.match(store, /"apiProvider\.defaultReasoningEffort": "IMA2_API_REASONING_EFFORT"/);
+    assert.match(keys, /"apiProvider\.defaultImageModel"/);
+    assert.match(keys, /"apiProvider\.defaultReasoningEffort"/);
+    assert.match(keys, /"apiProvider\.defaultImageModel": "IMA2_API_IMAGE_MODEL_DEFAULT"/);
+    assert.match(keys, /"apiProvider\.defaultReasoningEffort": "IMA2_API_REASONING_EFFORT"/);
+    assert.match(store, /from "\.\.\/\.\.\/lib\/configKeys\.js"/);
     assert.match(configCmd, /from "\.\.\/lib\/config-store\.js"/);
     assert.match(configCmd, /isWritableConfigKey\(key\)/);
   });

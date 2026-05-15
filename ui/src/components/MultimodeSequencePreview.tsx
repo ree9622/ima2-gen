@@ -8,7 +8,10 @@ export function MultimodeSequencePreview() {
     return id ? s.multimodeSequences[id] ?? null : null;
   });
   const cancelMultimode = useAppStore((s) => s.cancelMultimode);
-  const activeGenerations = useAppStore((s) => s.activeGenerations);
+  const canCancelSequence = useAppStore((s) => {
+    const id = s.multimodePreviewFlightId;
+    return Boolean(id && (s.multimodeAbortControllers[id] || s.inFlight.some((job) => job.id === id)));
+  });
   const selectHistory = useAppStore((s) => s.selectHistory);
   const currentImage = useAppStore((s) => s.currentImage);
   const openCanvas = useAppStore((s) => s.openCanvas);
@@ -25,9 +28,14 @@ export function MultimodeSequencePreview() {
 
   if (!sequence) return null;
 
+  const indexedPartials = new Map<number, { image: string; index?: number | null }>();
+  const loosePartials = sequence.partials.filter((item) => item.index == null);
+  for (const partial of sequence.partials) {
+    if (partial.index != null) indexedPartials.set(partial.index, partial);
+  }
   const slots = Array.from({ length: sequence.requested }, (_, index) => {
     const image = sequence.images[index];
-    const partial = sequence.partials.find((item) => item.index === index || item.index == null);
+    const partial = indexedPartials.get(index) ?? (!image ? loosePartials.shift() : undefined);
     return { index, image, partial };
   });
 
@@ -43,7 +51,7 @@ export function MultimodeSequencePreview() {
             })}
           </div>
         </div>
-        {activeGenerations > 0 ? (
+        {canCancelSequence ? (
           <button type="button" className="secondary-btn" onClick={cancelMultimode}>
             {t("multimode.cancel")}
           </button>
@@ -87,7 +95,9 @@ export function MultimodeSequencePreview() {
                       ? t("multimode.empty")
                       : sequence.status === "canceled"
                         ? t("multimode.canceled")
-                        : t("multimode.generating")}
+                        : sequence.status === "partial"
+                          ? t("multimode.notReturned")
+                          : t("multimode.generating")}
                 </div>
               )}
             </article>

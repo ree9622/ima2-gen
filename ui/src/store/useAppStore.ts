@@ -850,10 +850,13 @@ type AppState = {
 
   settingsOpen: boolean;
   activeSettingsSection: SettingsSection;
+  readinessPopupOpen: boolean;
   openSettings: (section?: SettingsSection) => void;
   closeSettings: () => void;
   toggleSettings: () => void;
   setActiveSettingsSection: (section: SettingsSection) => void;
+  openReadinessPopup: () => void;
+  closeReadinessPopup: () => void;
 
   uiMode: UIMode;
   setUIMode: (m: UIMode) => void;
@@ -886,6 +889,7 @@ type AppState = {
   runNodeBatch: (mode: NodeBatchMode) => Promise<void>;
   cancelNodeBatch: () => void;
   addRootNode: () => ClientNodeId;
+  createRootNodeFromHistoryItem: (item: GenerateItem) => ClientNodeId;
   addChildNode: (parentClientId: ClientNodeId) => ClientNodeId;
   addSiblingNode: (sourceClientId: ClientNodeId) => ClientNodeId;
   duplicateBranchRoot: (sourceClientId: ClientNodeId) => ClientNodeId;
@@ -1768,6 +1772,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   settingsOpen: false,
   activeSettingsSection: "account",
+  readinessPopupOpen: false,
   openSettings: (section = "account") =>
     set({ settingsOpen: true, activeSettingsSection: section }),
   closeSettings: () => set({ settingsOpen: false }),
@@ -1777,6 +1782,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeSettingsSection: s.settingsOpen ? s.activeSettingsSection : "account",
     })),
   setActiveSettingsSection: (section) => set({ activeSettingsSection: section }),
+  openReadinessPopup: () => set({ readinessPopupOpen: true }),
+  closeReadinessPopup: () => set({ readinessPopupOpen: false }),
 
   uiMode: loadUIMode(),
   setUIMode: (m) => {
@@ -2087,6 +2094,33 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       };
     set({ graphNodes: [...get().graphNodes, node] });
+    get().scheduleGraphSave();
+    return clientId;
+  },
+
+  createRootNodeFromHistoryItem: (item) => {
+    const clientId = newClientNodeId();
+    const node: GraphNode = {
+      id: clientId,
+      type: "imageNode",
+      position: getNextRootPosition(get().graphNodes),
+      data: {
+        clientId,
+        serverNodeId: item.nodeId ?? null,
+        parentServerNodeId: null,
+        prompt: item.prompt ?? "",
+        imageUrl: item.image,
+        status: "ready",
+        pendingRequestId: null,
+        pendingPhase: null,
+        model: item.model ?? null,
+        size: item.size ?? null,
+      },
+    };
+    set({
+      uiMode: "node",
+      graphNodes: [...get().graphNodes, node],
+    });
     get().scheduleGraphSave();
     return clientId;
   },

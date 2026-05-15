@@ -29,6 +29,7 @@ export function ResultActions({
   const setPrompt = useAppStore((s) => s.setPrompt);
   const insertPromptToComposer = useAppStore((s) => s.insertPromptToComposer);
   const useImageAsReference = useAppStore((s) => s.useImageAsReference);
+  const createRootNodeFromHistoryItem = useAppStore((s) => s.createRootNodeFromHistoryItem);
   const trashHistoryItem = useAppStore((s) => s.trashHistoryItem);
   const permanentlyDeleteHistoryItemByClick = useAppStore(
     (s) => s.permanentlyDeleteHistoryItemByClick,
@@ -112,6 +113,11 @@ export function ResultActions({
     }
   };
 
+  const generateAsFirstNode = () => {
+    createRootNodeFromHistoryItem(actionImage);
+    showToast(t("toast.nodeRootCreated"));
+  };
+
   const deleteToTrash = async () => {
     try {
       await trashHistoryItem(actionImage);
@@ -146,6 +152,14 @@ export function ResultActions({
         title={t("result.continueHereTitle")}
       >
         {t("result.continueHere")}
+      </button>
+      <button
+        type="button"
+        className="action-btn"
+        onClick={generateAsFirstNode}
+        title={t("result.firstNodeTitle")}
+      >
+        {t("result.firstNode")}
       </button>
       {!canvasOpen && (
         <button

@@ -1,8 +1,11 @@
 import { createInterface } from "readline/promises";
 import { parseArgs } from "../lib/args.js";
+import { confirmDestructiveAction } from "../lib/destructive-confirm.js";
 import { out, die, color, json } from "../lib/output.js";
 import {
   CONFIG_FILE,
+  KEY_TO_ENV,
+  WRITABLE_CONFIG_KEYS,
   buildEffectiveConfig,
   deleteNestedKey,
   displayPath,
@@ -27,7 +30,8 @@ const HELP = `
     ls [--effective] [--json]     List file layer (or merged effective config with --effective)
     get <key> [--json]            Get a dotted key from effective config (redacts secrets)
     set <key> <value> [-y]        Write a key to the file layer
-    rm <key>                      Remove a key from the file layer
+    rm <key> [-y]                 Remove a key from the file layer
+    keys [--json]                 List writable keys and environment overrides
 
   Keys use dot notation, e.g.: imageModels.default, log.level, features.cardNews
 
@@ -73,6 +77,21 @@ async function getSub(argv: string[]) {
     out(color.dim(`(key not found: ${key})`));
   } else {
     out(typeof value === "object" ? JSON.stringify(value, null, 2) : String(value));
+  }
+}
+
+async function keysSub(argv: string[]) {
+  const args = parseArgs(argv, { flags: FLAGS });
+  const keys = [...WRITABLE_CONFIG_KEYS].sort().map((key) => ({
+    key,
+    env: KEY_TO_ENV[key] ?? null,
+  }));
+  if (args.json) {
+    json({ keys });
+    return;
+  }
+  for (const item of keys) {
+    out(item.env ? `${item.key}  (${item.env})` : item.key);
   }
 }
 
@@ -123,6 +142,21 @@ async function rmSub(argv: string[]) {
   }
 
   const fileCfg = loadFileCfg();
+  if (getNestedKey(fileCfg, key) === undefined) {
+    out(color.dim(`(key not found in file layer: ${key})`));
+    return;
+  }
+
+  try {
+    const confirmed = await confirmDestructiveAction(`Remove config key "${key}"?`, Boolean(args.yes));
+    if (!confirmed) {
+      out("Aborted.");
+      return;
+    }
+  } catch (err) {
+    die(2, err instanceof Error ? err.message : String(err));
+  }
+
   const removed = deleteNestedKey(fileCfg, key);
   if (!removed) {
     out(color.dim(`(key not found in file layer: ${key})`));
@@ -140,6 +174,7 @@ const SUB: Record<string, Sub> = {
   get:  getSub,
   set:  setSub,
   rm:   rmSub,
+  keys: keysSub,
 };
 
 export default async function configCmd(argv: string[]) {

@@ -24,6 +24,10 @@ describe("CLI capabilities contract", () => {
     assert.match(src, /unsupported:\s*toArray\(appConfig\.imageModels\.unsupported\)/);
     assert.match(src, /reasoningEfforts:\s*toArray\(appConfig\.imageModels\.validReasoningEfforts\)/);
     assert.match(src, /quality:\s*toArray\(VALID_IMAGE_QUALITIES\)/);
+    assert.match(src, /moderation:\s*toArray\(appConfig\.oauth\.validModeration\)/);
+    assert.match(src, /modes:\s*\[\.\.\.VALID_MODES\]/);
+    assert.match(src, /providers:\s*\[\.\.\.VALID_PROVIDERS\]/);
+    assert.match(src, /configKeys:/);
     assert.match(src, /enforced:\s*false/);
     assert.match(src, /advisory client-side queue guidance only/);
   });

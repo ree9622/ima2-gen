@@ -49,9 +49,14 @@ test("classic and multimode completion preserve requestId without using it as id
 
 test("history strip dedupes visible tiles and uses the same key for reconciliation", () => {
   const strip = readSource("ui/src/components/HistoryStrip.tsx");
+  const navigation = readSource("ui/src/lib/galleryNavigation.ts");
 
-  assert.match(strip, /const seen = new Set<string>\(\);/);
-  assert.match(strip, /const key = getHistoryItemKey\(item\);/);
-  assert.match(strip, /if \(seen\.has\(key\)\) return false;/);
+  assert.match(navigation, /export function getGalleryItemKey/);
+  assert.match(navigation, /export function uniqueGalleryItems/);
+  assert.match(strip, /getGalleryItemKey/);
+  assert.match(strip, /isGalleryVisibleItem/);
+  assert.match(strip, /uniqueGalleryItems\(history\.filter\(isGalleryVisibleItem\)\)/);
+  assert.match(strip, /const key = getGalleryItemKey\(item\);/);
   assert.match(strip, /key=\{key\}/);
+  assert.doesNotMatch(strip, /function getHistoryItemKey/);
 });

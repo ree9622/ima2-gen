@@ -1,10 +1,13 @@
 import { config as runtimeConfigDefault } from "../config.js";
+import { KEY_TO_ENV, WRITABLE_CONFIG_KEYS } from "./configKeys.js";
 import { DEFAULT_IMAGE_QUALITY, VALID_IMAGE_QUALITIES } from "./oauthNormalize.js";
 import type { AppConfig } from "./runtimeContext.js";
 
 type CapabilitySource = "local" | "server";
 
 const MAX_GENERATED_IMAGES = 8;
+const VALID_MODES = ["auto", "direct"] as const;
+const VALID_PROVIDERS = ["auto", "oauth", "api"] as const;
 const AGENT_COMMANDS = [
   "skill",
   "capabilities",
@@ -61,6 +64,13 @@ export function buildIma2Capabilities({
       },
       reasoningEfforts: toArray(appConfig.imageModels.validReasoningEfforts),
       quality: toArray(VALID_IMAGE_QUALITIES),
+      moderation: toArray(appConfig.oauth.validModeration),
+      modes: [...VALID_MODES],
+      providers: [...VALID_PROVIDERS],
+    },
+    configKeys: {
+      writable: toArray(WRITABLE_CONFIG_KEYS),
+      envOverrides: { ...KEY_TO_ENV },
     },
     defaultsMeta: {
       quality: DEFAULT_IMAGE_QUALITY,

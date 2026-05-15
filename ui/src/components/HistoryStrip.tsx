@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { handleHorizontalWheel } from "../lib/horizontalWheel";
-import type { GenerateItem } from "../types";
-
-function getHistoryItemKey(item: GenerateItem): string {
-  return item.filename ?? item.url ?? item.image;
-}
+import {
+  getGalleryItemKey,
+  isGalleryVisibleItem,
+  uniqueGalleryItems,
+} from "../lib/galleryNavigation";
 
 export function HistoryStrip() {
   const history = useAppStore((s) => s.history);
@@ -16,16 +16,9 @@ export function HistoryStrip() {
   const openGallery = useAppStore((s) => s.openGallery);
   const thumbRefs = useRef<Record<string, HTMLImageElement | null>>({});
   const { t } = useI18n();
-  const activeKey = currentImage ? getHistoryItemKey(currentImage) : null;
+  const activeKey = currentImage ? getGalleryItemKey(currentImage) : null;
   const visibleHistory = useMemo(() => {
-    const seen = new Set<string>();
-    return history.filter((item) => {
-      if (item.canvasVersion) return false;
-      const key = getHistoryItemKey(item);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return uniqueGalleryItems(history.filter(isGalleryVisibleItem));
   }, [history]);
 
   useEffect(() => {
@@ -57,7 +50,7 @@ export function HistoryStrip() {
         </svg>
       </button>
       {visibleHistory.map((item) => {
-        const key = getHistoryItemKey(item);
+        const key = getGalleryItemKey(item);
         const active = activeKey === key;
         return (
           <img

@@ -8,6 +8,15 @@ PKG_NAME="ima2-gen"
 
 cd "$(dirname "$0")/.."
 
+if ! git diff --cached --quiet; then
+  echo "❌ Refusing preview release: staged changes exist"
+  exit 1
+fi
+if ! git diff --quiet; then
+  echo "❌ Refusing preview release: worktree has uncommitted changes"
+  exit 1
+fi
+
 # ─── Version detection ─────────────────────────────────
 NPM_LATEST=$(npm view "$PKG_NAME" dist-tags.latest 2>/dev/null || echo "")
 PKG_VERSION=$(node -p "require('./package.json').version")

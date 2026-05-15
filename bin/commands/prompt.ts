@@ -28,6 +28,8 @@ const HELP = `
     import curated --source <id> [-q <q>] [--limit <n>] [--folder <id>] [--dry-run]
     import discovery -q <q> --seed <repo>... [--limit <n>] [--folder <id>] [--dry-run]
     import folder <path> [--folder <id>] [--dry-run]
+    import json <file|@file|-> [--folder <id>] [--dry-run]
+    import preview <file|@file|-> [--filename <name>] [--json]
 
   Common options:
         --server <url>                       Override server URL
@@ -43,6 +45,7 @@ const COMMON_FLAGS = {
   text: { type: "string" },
   name: { type: "string" },
   folder: { type: "string" },
+  filename: { type: "string" },
   tag: { type: "string", repeatable: true },
   mode: { type: "string" },
   search: { type: "string" },
@@ -91,6 +94,13 @@ async function resolveText(value: unknown): Promise<string | null> {
   if (value === "-") return await readStdin();
   if (value.startsWith("@")) return await readFile(value.slice(1), "utf-8");
   return value;
+}
+
+async function readSourceArg(value: unknown, fallbackFilename: string) {
+  if (!value || typeof value !== "string") die(2, "source file required");
+  if (value === "-") return { text: await readStdin(), filename: fallbackFilename };
+  const path = value.startsWith("@") ? value.slice(1) : value;
+  return { text: await readFile(path, "utf-8"), filename: path.split(/[\\/]/).pop() || fallbackFilename };
 }
 
 // ---------- core ----------
@@ -284,7 +294,9 @@ async function importSub(argv: string[]) {
   if (action === "curated") return importCurated(rest);
   if (action === "discovery") return importDiscovery(rest);
   if (action === "folder") return importFolder(rest);
-  die(2, "usage: prompt import <sources|refresh|curated|discovery|folder> ...");
+  if (action === "json") return importJson(rest);
+  if (action === "preview") return importPreview(rest);
+  die(2, "usage: prompt import <sources|refresh|curated|discovery|folder|json|preview> ...");
 }
 
 async function importSources(argv: string[]) {
@@ -400,6 +412,53 @@ async function importFolder(argv: string[]) {
   }).catch(handle);
   if (args.json) { json(commit); return; }
   out(color.green(`✓ imported ${commit.imported || candidates.length}`));
+}
+
+async function importJson(argv: string[]) {
+  const args = parseArgs(argv, { flags: COMMON_FLAGS });
+  const { text } = await readSourceArg(args.positional[0], "prompts.json");
+  const parsed = JSON.parse(text) as { folders?: unknown; prompts?: unknown } | unknown[];
+  const body = Array.isArray(parsed) ? { prompts: parsed } : { ...parsed };
+  if (args.folder && Array.isArray(body.prompts)) {
+    body.prompts = body.prompts.map((prompt) => (
+      prompt && typeof prompt === "object"
+        ? { ...(prompt as Record<string, unknown>), folderId: args.folder }
+        : prompt
+    ));
+  }
+  if (args["dry-run"]) {
+    json({
+      folders: Array.isArray(body.folders) ? body.folders.length : 0,
+      prompts: Array.isArray(body.prompts) ? body.prompts.length : 0,
+    });
+    return;
+  }
+  const server = await getServer(args);
+  const resp = await request(server.base, "/api/prompts/import", {
+    method: "POST",
+    body,
+  }).catch(handle);
+  if (args.json) { json(resp); return; }
+  out(color.green("✓ imported prompt JSON"));
+  out(JSON.stringify(resp, null, 2));
+}
+
+async function importPreview(argv: string[]) {
+  const args = parseArgs(argv, { flags: COMMON_FLAGS });
+  const { text, filename } = await readSourceArg(args.positional[0], "prompt-source.md");
+  const server = await getServer(args);
+  const resp = await request(server.base, "/api/prompts/import/preview", {
+    method: "POST",
+    body: {
+      source: {
+        kind: "local",
+        filename: args.filename || filename,
+        text,
+      },
+    },
+  }).catch(handle);
+  if (args.json) { json(resp); return; }
+  out(JSON.stringify(resp, null, 2));
 }
 
 const SUB: Record<string, (argv: any[]) => Promise<void>> = {

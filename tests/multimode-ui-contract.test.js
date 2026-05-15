@@ -78,6 +78,12 @@ describe("multimode frontend UX contract", () => {
     assert.doesNotMatch(store, /hasMultimode && state\.uiMode !== "node"/);
     assert.match(store, /status: "canceled"/);
     assert.doesNotMatch(store, /status: current\.images\.length > 0 \? "partial" : "empty"/);
+    assert.match(preview, /canCancelSequence/);
+    assert.match(preview, /multimodeAbortControllers\[id\]/);
+    assert.match(preview, /s\.inFlight\.some\(\(job\) => job\.id === id\)/);
+    assert.doesNotMatch(preview, /activeGenerations > 0/);
+    assert.match(preview, /loosePartials\.shift\(\)/);
+    assert.match(preview, /multimode\.notReturned/);
     assert.match(preview, /sequence\.status === "canceled"/);
     assert.match(preview, /multimode\.canceled/);
   });

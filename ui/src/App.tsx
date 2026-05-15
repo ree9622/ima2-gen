@@ -8,6 +8,7 @@ import { ErrorCard } from "./components/ErrorCard";
 import { GalleryModal } from "./components/GalleryModal";
 import { CustomSizeConfirmModal } from "./components/CustomSizeConfirmModal";
 import { MetadataRestoreDialog } from "./components/MetadataRestoreDialog";
+import { ProviderReadinessPopup } from "./components/ProviderReadinessPopup";
 import { TrashUndoToast } from "./components/TrashUndoToast";
 import { MobileSettingsToggle } from "./components/MobileSettingsToggle";
 import { MobileAppBar } from "./components/MobileAppBar";
@@ -147,6 +148,7 @@ export default function App() {
       <ErrorCard />
       <GalleryModal />
       <MetadataRestoreDialog />
+      <ProviderReadinessPopup />
       <MobileComposeSheet />
       <MobileSettingsToggle />
       {uiMode === "card-news" ? (

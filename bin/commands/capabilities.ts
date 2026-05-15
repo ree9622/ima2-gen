@@ -71,6 +71,12 @@ function printText(capabilities: any): void {
   out(`  models: ${capabilities.valid?.imageModels?.supported?.join(", ")}`);
   out(`  reasoning: ${capabilities.valid?.reasoningEfforts?.join(", ")}`);
   out(`  quality: ${capabilities.valid?.quality?.join(", ")}`);
+  out(`  modes: ${capabilities.valid?.modes?.join(", ")}`);
+  out(`  moderation: ${capabilities.valid?.moderation?.join(", ")}`);
+  out(`  providers: ${capabilities.valid?.providers?.join(", ")}`);
+  out("");
+  out(`config keys: ${capabilities.configKeys?.writable?.length ?? 0} writable`);
+  out(color.dim("run: ima2 config keys --json"));
   out("");
   out(`limits: refs=${capabilities.limits?.maxRefCount}, images=${capabilities.limits?.maxGeneratedImages}`);
   out(color.dim(`maxParallel: ${capabilities.limits?.maxParallel?.value} (${capabilities.limits?.maxParallel?.note})`));

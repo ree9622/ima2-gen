@@ -54,6 +54,7 @@ export function SettingsWorkspace() {
   const active = useAppStore((s) => s.activeSettingsSection);
   const setActive = useAppStore((s) => s.setActiveSettingsSection);
   const closeSettings = useAppStore((s) => s.closeSettings);
+  const openReadinessPopup = useAppStore((s) => s.openReadinessPopup);
   const galleryDefaultScope = useAppStore((s) => s.galleryDefaultScope);
   const setGalleryDefaultScope = useAppStore((s) => s.setGalleryDefaultScope);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -185,6 +186,17 @@ export function SettingsWorkspace() {
           <section className="settings-content" aria-label={t("settings.contentAria")}>
             <SettingsSectionBlock id="account" setRef={setSectionRef}>
               <AccountSettings />
+              <article className="settings-row">
+                <div className="settings-row__copy">
+                  <h4>{t("readiness.settingsTitle")}</h4>
+                  <p>{t("readiness.settingsBody")}</p>
+                </div>
+                <div className="settings-row__control">
+                  <button type="button" className="settings-action-btn" onClick={openReadinessPopup}>
+                    {t("readiness.open")}
+                  </button>
+                </div>
+              </article>
             </SettingsSectionBlock>
 
             <SettingsSectionBlock id="generation" setRef={setSectionRef}>

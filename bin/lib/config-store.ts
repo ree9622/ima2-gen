@@ -1,64 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { config as runtimeConfig } from "../../config.js";
+import {
+  AUTH_CONFIG_KEYS,
+  KEY_TO_ENV,
+  WRITABLE_CONFIG_KEYS,
+  isSensitiveConfigKey as isSensitiveConfigKeyShared,
+} from "../../lib/configKeys.js";
+
+export { KEY_TO_ENV, WRITABLE_CONFIG_KEYS };
 
 export const CONFIG_FILE = runtimeConfig.storage.configFile;
 export const CONFIG_DIR = runtimeConfig.storage.configDir;
 
-export const AUTH_KEYS = new Set(["provider", "apiKey"]);
-
-export const WRITABLE_CONFIG_KEYS = new Set([
-  "imageModels.default",
-  "imageModels.reasoningEffort",
-  "apiProvider.defaultImageModel",
-  "apiProvider.defaultReasoningEffort",
-  "log.level",
-  "features.cardNews",
-  "cardNewsPlanner.enabled",
-  "cardNewsPlanner.model",
-  "cardNewsPlanner.timeoutMs",
-  "cardNewsPlanner.deterministicFallback",
-  "comfy.defaultUrl",
-  "comfy.uploadTimeoutMs",
-  "comfy.maxUploadBytes",
-  "storage.generatedDir",
-  "storage.generatedDirName",
-  "server.port",
-  "server.host",
-  "server.bodyLimit",
-  "oauth.proxyPort",
-  "oauth.statusTimeoutMs",
-  "oauth.restartDelayMs",
-  "limits.maxRefCount",
-  "limits.maxParallel",
-  "history.defaultPageSize",
-  "history.maxPageCap",
-]);
-
-const REDACT_PATTERN = /token|secret|apikey|password/i;
-const ALWAYS_REDACT = new Set(["provider", "apiKey", "oauth.token", "oauth.refreshToken"]);
-
-export const KEY_TO_ENV: Record<string, string> = {
-  "imageModels.default": "IMA2_IMAGE_MODEL_DEFAULT",
-  "imageModels.reasoningEffort": "IMA2_REASONING_EFFORT",
-  "apiProvider.defaultImageModel": "IMA2_API_IMAGE_MODEL_DEFAULT",
-  "apiProvider.defaultReasoningEffort": "IMA2_API_REASONING_EFFORT",
-  "log.level": "IMA2_LOG_LEVEL",
-  "features.cardNews": "IMA2_CARD_NEWS",
-  "server.port": "IMA2_PORT",
-  "server.host": "IMA2_HOST",
-  "server.bodyLimit": "IMA2_BODY_LIMIT",
-  "oauth.proxyPort": "IMA2_OAUTH_PROXY_PORT",
-  "storage.generatedDir": "IMA2_GENERATED_DIR",
-  "cardNewsPlanner.enabled": "IMA2_CARD_NEWS_PLANNER",
-  "cardNewsPlanner.model": "IMA2_CARD_NEWS_PLANNER_MODEL",
-  "cardNewsPlanner.timeoutMs": "IMA2_CARD_NEWS_PLANNER_TIMEOUT_MS",
-  "limits.maxParallel": "IMA2_MAX_PARALLEL",
-  "limits.maxRefCount": "IMA2_MAX_REF_COUNT",
-  "history.defaultPageSize": "IMA2_HISTORY_PAGE_SIZE",
-};
+export const AUTH_KEYS = AUTH_CONFIG_KEYS;
 
 export function isAuthConfigKey(key: string): boolean {
-  return AUTH_KEYS.has(key);
+  return AUTH_CONFIG_KEYS.has(key);
 }
 
 export function isWritableConfigKey(key: string): boolean {
@@ -66,7 +23,7 @@ export function isWritableConfigKey(key: string): boolean {
 }
 
 export function isSensitiveConfigKey(key: string): boolean {
-  return ALWAYS_REDACT.has(key) || REDACT_PATTERN.test(key);
+  return isSensitiveConfigKeyShared(key);
 }
 
 export function redactValue(key: string, value: unknown): unknown {

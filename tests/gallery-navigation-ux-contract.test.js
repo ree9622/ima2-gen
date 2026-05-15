@@ -70,18 +70,22 @@ describe("gallery navigation UX contract", () => {
   it("keeps canvas versions internal instead of showing them in gallery surfaces", () => {
     const gallery = readSource("ui/src/components/GalleryModal.tsx");
     const historyStrip = readSource("ui/src/components/HistoryStrip.tsx");
+    const navigation = readSource("ui/src/lib/galleryNavigation.ts");
 
-    assert.match(gallery, /function isGalleryVisibleItem\(item: Pick<GenerateItem, "canvasVersion">\): boolean/);
-    assert.match(gallery, /return !item\.canvasVersion/);
-    assert.match(gallery, /const galleryHistory = useMemo\(\(\) => history\.filter\(isGalleryVisibleItem\), \[history\]\)/);
+    assert.match(navigation, /export function isGalleryVisibleItem/);
+    assert.match(navigation, /return !item\.canvasVersion/);
+    assert.match(navigation, /export function uniqueGalleryItems/);
+    assert.match(gallery, /uniqueGalleryItems\(history\.filter\(isGalleryVisibleItem\)\)/);
     assert.match(gallery, /galleryHistory\.filter/);
-    assert.match(gallery, /s\.items\.filter\(isGalleryVisibleItem\)\.map\(toItem\)/);
-    assert.match(gallery, /page\.loose\.filter\(isGalleryVisibleItem\)\.map\(toItem\)/);
+    assert.match(gallery, /uniqueGalleryItems\(s\.items\.filter\(isGalleryVisibleItem\)\.map\(toItem\)\)/);
+    assert.match(gallery, /uniqueGalleryItems\(page\.loose\.filter\(isGalleryVisibleItem\)\.map\(toItem\)\)/);
     assert.match(gallery, /galleryHistory\.length === 0/);
+    assert.match(historyStrip, /getGalleryItemKey/);
+    assert.match(historyStrip, /isGalleryVisibleItem/);
+    assert.match(historyStrip, /uniqueGalleryItems/);
+    assert.match(historyStrip, /uniqueGalleryItems\(history\.filter\(isGalleryVisibleItem\)\)/);
+    assert.doesNotMatch(historyStrip, /function getHistoryItemKey/);
     assert.match(historyStrip, /const visibleHistory = useMemo\(/);
-    assert.match(historyStrip, /if \(item\.canvasVersion\) return false/);
-    assert.match(historyStrip, /const seen = new Set<string>\(\)/);
-    assert.match(historyStrip, /seen\.has\(key\)/);
     assert.match(historyStrip, /visibleHistory\.map/);
   });
 
@@ -175,7 +179,7 @@ describe("gallery navigation UX contract", () => {
     assert.match(historyStrip, /history-strip--horizontal/);
     assert.match(historyStrip, /history-strip--sidebar/);
     assert.match(historyStrip, /data-layout=\{historyStripLayout\}/);
-    assert.match(historyStrip, /function getHistoryItemKey\(item: GenerateItem\): string/);
+    assert.match(historyStrip, /getGalleryItemKey\(item\)/);
     assert.match(historyStrip, /scrollIntoView\(\{ block: "nearest", inline: "nearest" \}\)/);
     assert.match(historyStrip, /ref=\{\(node\) => \{/);
     assert.match(settings, /HistoryStripLayoutToggle/);

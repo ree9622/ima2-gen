@@ -29,7 +29,8 @@ Deferred / 미래 항목은 `_plan/`이 아니라 `devlog/_future/`에 둔다.
 | 3 | `260430_issue28-canvas-pptx-export/` | open / hardened | GitHub #28. Canvas composition을 one-slide PPTX로 export. #27 SVG overlay 재사용이 권장 경로다. |
 | 4 | `260514_canvas-library-research/` | research | Canvas export/editing library reference. #27/#28/#31 구현 때 필요한 비교 자료만 참조한다. |
 | 5 | `260514_canvas-background-removal-library-research/` | research | Background cleanup/removal reference. 현재 GitHub closeout 대상은 아니다. |
-| 6 | `260515_fork-prompting-modularization-research/` | research / modularization | Prompt Builder, composer, history/viewer modularization reference. 구현 범위가 정해지면 별도 issue plan으로 승격한다. |
+| 6 | `260516_issue71-classic-prompt-context-injection/` | planning | GitHub #71. Classic current prompt injection + quality element prompt context. Prompt Studio 전의 즉시 구현 slice다. |
+| 7 | `260515_fork-prompting-modularization-research/` | research / modularization | Prompt Builder, composer, history/viewer modularization reference. #71이 첫 구현 승격 lane이다. |
 
 ## 2026-05-16 GH / Devlog Closeout
 
@@ -76,3 +77,4 @@ require implementation are:
 
 - 2026-05-16: GitHub issue snapshot과 현재 코드/test를 대조해 #47/#48/#59/#60/#62/#63/#64-#70/#68/#69 및 agent-mode completed folders를 `_fin`으로 이동했다. Active lane은 #31/#27/#28 Canvas follow-up과 research references만 남겼다.
 - 2026-05-16: `260515_fork-prompting-modularization-research/` 안의 Agent image focus/sheet regression slice를 구현/QA 기록으로 보강했다. 해당 slice는 `f250784`로 완료됐지만 Prompt Studio modularization 전체는 미완료라 폴더를 `_plan`에 유지한다.
+- 2026-05-16: GitHub #71을 열고 `260516_issue71-classic-prompt-context-injection/` planning lane을 추가했다. `cli-jaw`/Codex CLI prompt injection pattern을 참고해 Classic current prompt injection과 quality element injection을 server-backed prompt context manifest로 구현하는 방향이다.

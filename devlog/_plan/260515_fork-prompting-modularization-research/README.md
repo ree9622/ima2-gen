@@ -43,6 +43,14 @@ Defer larger layout changes, sidebar history grouping, and zoom/pan polish until
 
 The Agent image focus and responsive sheet regression found during this lane was implemented and verified in commit `f250784` (`[agent] fix: sync agent image focus`). This does not complete the full Prompt Studio / fork modularization lane, so the folder remains in `_plan` instead of moving to `_fin`.
 
+The first promoted implementation issue from this research lane is GitHub #71:
+
+```text
+devlog/_plan/260516_issue71-classic-prompt-context-injection/
+```
+
+#71 focuses on the immediate Classic current-prompt injection and quality-element injection slice before the full Prompt Builder panel.
+
 ## Guardrails
 
 - Do not port the fork package rename, binary rename, or distribution branding.

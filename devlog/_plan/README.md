@@ -75,3 +75,4 @@ require implementation are:
 ## 변경 기록
 
 - 2026-05-16: GitHub issue snapshot과 현재 코드/test를 대조해 #47/#48/#59/#60/#62/#63/#64-#70/#68/#69 및 agent-mode completed folders를 `_fin`으로 이동했다. Active lane은 #31/#27/#28 Canvas follow-up과 research references만 남겼다.
+- 2026-05-16: `260515_fork-prompting-modularization-research/` 안의 Agent image focus/sheet regression slice를 구현/QA 기록으로 보강했다. 해당 slice는 `f250784`로 완료됐지만 Prompt Studio modularization 전체는 미완료라 폴더를 `_plan`에 유지한다.

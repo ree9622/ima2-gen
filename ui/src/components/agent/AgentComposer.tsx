@@ -75,8 +75,8 @@ export function AgentComposer({ webSearchEnabled, insertedPrompt, onWebSearchCha
         ref={textareaRef}
         value={draft}
         aria-autocomplete="list"
+        aria-haspopup="listbox"
         aria-label={t("agent.composerPlaceholder")}
-        aria-expanded={menuVisible}
         {...(menuVisible ? { "aria-controls": listboxId } : {})}
         aria-activedescendant={activeOptionId}
         autoCapitalize="off"

@@ -22,6 +22,7 @@ import {
 } from "../lib/agentQueueStore.js";
 import { ensureAgentQueueWorker, tickAgentQueueWorker } from "../lib/agentQueueWorker.js";
 import { parseAgentSlashCommand, formatAgentQuestionReply, formatAgentSlashHelp } from "../lib/agentCommandParser.js";
+import { requestAgentQuestionAnswer } from "../lib/agentQuestionResponder.js";
 import { agentAllowedToolPayload, runAgentTurn } from "../lib/agentRuntime.js";
 import { errInfo } from "../lib/errInfo.js";
 import { requireRuntimeContext, type RouteRuntimeContext } from "../lib/runtimeContext.js";
@@ -155,18 +156,37 @@ export function registerAgentRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
     res.json({ queue: listAgentQueueItems(req.params.sessionId) });
   });
 
-  app.post("/api/agent/sessions/:sessionId/queue", (req: Request<{ sessionId: string }>, res: Response) => {
+  app.post("/api/agent/sessions/:sessionId/queue", async (req: Request<{ sessionId: string }>, res: Response) => {
     try {
       if (!getAgentSession(req.params.sessionId)) throw notFound(req.params.sessionId);
       const body = (req.body ?? {}) as AgentQueueBody;
       const rawPrompt = cleanPrompt(body.prompt);
       const command = parseAgentSlashCommand(rawPrompt);
       appendAgentTurn({ sessionId: req.params.sessionId, role: "user", text: rawPrompt, status: "complete" });
-      if (command?.name === "question" || command?.name === "help") {
+      if (command?.name === "help") {
         appendAgentTurn({
           sessionId: req.params.sessionId,
           role: "assistant",
-          text: command.name === "help" ? formatAgentSlashHelp() : formatAgentQuestionReply(command.prompt),
+          text: formatAgentSlashHelp(),
+          status: "complete",
+        });
+        return res.status(200).json({ queueItem: null, workspace: getAgentWorkspacePayload(req.params.sessionId) });
+      }
+      if (command?.name === "question") {
+        const options = normalizeQueueOptions(req.params.sessionId, body);
+        const question = command.prompt.trim();
+        const answer = question
+          ? (await requestAgentQuestionAnswer(ctx, question, {
+              provider: cleanOption(options.provider),
+              model: cleanOption(options.model),
+              reasoningEffort: cleanOption(options.reasoningEffort),
+              requestId: cleanOption(body.requestId),
+            })).text
+          : formatAgentQuestionReply(command.prompt);
+        appendAgentTurn({
+          sessionId: req.params.sessionId,
+          role: "assistant",
+          text: answer,
           status: "complete",
         });
         return res.status(200).json({ queueItem: null, workspace: getAgentWorkspacePayload(req.params.sessionId) });

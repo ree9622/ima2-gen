@@ -77,6 +77,14 @@ function sseResponse(events: unknown[]) {
   }), { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
 }
 
+function textSseResponse(text: string) {
+  return sseResponse([
+    { type: "response.output_text.delta", delta: text },
+    { type: "response.output_item.done", item: { type: "message", content: [{ type: "output_text", text }] } },
+    { type: "response.completed", response: { usage: { total_tokens: 1 } } },
+  ]);
+}
+
 async function pngB64() {
   const buffer = await sharp({
     create: {
@@ -90,14 +98,24 @@ async function pngB64() {
 }
 
 describe("Agent Mode slash command contract", () => {
-  it("/question returns a text assistant turn without creating queue work", async () => {
+  it("/question gets a text assistant answer without creating queue work", async () => {
     await withApp(async (baseUrl) => {
+      globalThis.fetch = async (url, init) => {
+        if (String(url).startsWith(baseUrl)) return originalFetch(url, init);
+        const payload = JSON.parse(String(init?.body));
+        assert.equal(payload.tools, undefined);
+        assert.equal(payload.tool_choice, undefined);
+        return textSseResponse("Yes. Decide the style before generating.");
+      };
       const created = await createSession(baseUrl);
       const sessionId = created.selectedSessionId;
       const res = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/queue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: "/question should we ask for style first?" }),
+        body: JSON.stringify({
+          prompt: "/question should we ask for style first?",
+          options: { provider: "api" },
+        }),
       });
       const body = await res.json() as any;
       assert.equal(res.status, 200);
@@ -105,27 +123,40 @@ describe("Agent Mode slash command contract", () => {
       assert.equal(body.workspace.queueBySession[sessionId].length, 0);
       assert.ok(body.workspace.turnsBySession[sessionId].some((turn: any) => (
         turn.role === "assistant" &&
-        turn.text === "should we ask for style first?" &&
+        turn.text === "Yes. Decide the style before generating." &&
         turn.imageIds.length === 0
       )));
+      assert.ok(!body.workspace.turnsBySession[sessionId].some((turn: any) => (
+        turn.role === "assistant" && turn.text === "should we ask for style first?"
+      )), "/question must not echo the user's input as the assistant answer");
     });
   });
 
-  it("/question preserves leading numbers in text", async () => {
+  it("/question preserves leading numbers in the upstream text request", async () => {
     await withApp(async (baseUrl) => {
+      let upstreamPrompt = "";
+      globalThis.fetch = async (url, init) => {
+        if (String(url).startsWith(baseUrl)) return originalFetch(url, init);
+        const payload = JSON.parse(String(init?.body)) as {
+          input?: Array<{ role?: string; content?: unknown }>;
+        };
+        upstreamPrompt = String(payload.input?.find((item) => item.role === "user")?.content ?? "");
+        return textSseResponse("Two options would work: warm or cool.");
+      };
       const created = await createSession(baseUrl);
       const sessionId = created.selectedSessionId;
       const res = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/queue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: "/question 2 options?" }),
+        body: JSON.stringify({ prompt: "/question 2 options?", options: { provider: "api" } }),
       });
       const body = await res.json() as any;
       assert.equal(res.status, 200);
       assert.equal(body.queueItem, null);
+      assert.equal(upstreamPrompt, "2 options?");
       assert.ok(body.workspace.turnsBySession[sessionId].some((turn: any) => (
         turn.role === "assistant" &&
-        turn.text === "2 options?" &&
+        turn.text === "Two options would work: warm or cool." &&
         turn.imageIds.length === 0
       )));
     });
@@ -135,6 +166,8 @@ describe("Agent Mode slash command contract", () => {
     const finalImage = await pngB64();
     globalThis.fetch = async (url, init) => {
       if (String(url).startsWith("http://127.0.0.1:")) return originalFetch(url, init);
+      const payload = JSON.parse(String(init?.body));
+      if (!payload.tools) return textSseResponse("Warm tones are a good direction.");
       return sseResponse([
         {
           type: "response.output_item.done",
@@ -150,7 +183,10 @@ describe("Agent Mode slash command contract", () => {
       const questionRes = await fetch(`${baseUrl}/api/agent/sessions/${sessionId}/queue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: "/question warm or cool tones?" }),
+        body: JSON.stringify({
+          prompt: "/question warm or cool tones?",
+          options: { provider: "api" },
+        }),
       });
       assert.equal(questionRes.status, 200);
       const questionBody = await questionRes.json() as any;

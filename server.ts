@@ -18,6 +18,7 @@ import { migrateGeneratedStorage } from "./lib/storageMigration.js";
 import { purgeStaleJobs } from "./lib/inflight.js";
 import { configureLogger } from "./lib/logger.js";
 import { createRequestLogger } from "./lib/requestLogger.js";
+import { configureApiCachePolicy } from "./lib/apiCachePolicy.js";
 import { configureRoutes } from "./routes/index.js";
 import { config } from "./config.js";
 import { getServerPort, listenWithPortFallback } from "./lib/runtimePorts.js";
@@ -79,6 +80,7 @@ function setUiStaticHeaders(res: Response, filePath: string) {
 
 export function buildApp(ctx: RuntimeContext) {
   const app = express();
+  configureApiCachePolicy(app);
   configureLogger({ level: ctx.config.log.level });
   app.use(createRequestLogger());
   app.use(express.json({ limit: ctx.config.server.bodyLimit }));

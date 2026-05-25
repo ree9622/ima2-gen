@@ -52,7 +52,7 @@ describe("web search toggle contract", () => {
     const nodes = readSource("routes/nodes.ts");
     const providerOptions = readSource("lib/providerOptions.ts");
     const oauth = readSource("lib/oauthProxy.ts");
-    const adapter = readSource("lib/responsesImageAdapter.ts");
+    const responsesTools = readSource("lib/responsesTools.ts");
 
     assert.match(generate, /webSearchEnabled: rawWebSearchEnabled = true/);
     assert.match(nodes, /searchMode: rawSearchMode = "on"/);
@@ -61,6 +61,6 @@ describe("web search toggle contract", () => {
     assert.match(providerOptions, /apiConfig\.allowWebSearch !== false/);
     assert.match(oauth, /function resolveWebSearchEnabled/);
     assert.match(oauth, /\.\.\(webSearchEnabled \? \[\{ type: "web_search" \}\] : \[\]\)/);
-    assert.match(adapter, /\.\.\(webSearchEnabled \? \[\{ type: "web_search" \}\] : \[\]\)/);
+    assert.match(responsesTools, /\.\.\(webSearchEnabled \? \[\{ type: "web_search" \}\] : \[\]\)/);
   });
 });

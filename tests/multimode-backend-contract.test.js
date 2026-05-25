@@ -42,6 +42,7 @@ describe("multimode backend contract", () => {
   it("uses a strict prompt wrapper and collects multiple image_generation_call outputs", () => {
     const oauth = readSource("lib/oauthProxy.ts");
     const adapter = readSource("lib/responsesImageAdapter.ts");
+    const responsesTools = readSource("lib/responsesTools.ts");
     const parser = readSource("lib/responsesParse.ts");
 
     assert.match(oauth, /export function buildMultimodeSequencePrompt/);
@@ -62,8 +63,8 @@ describe("multimode backend contract", () => {
       /export async function generateMultimodeViaResponses[\s\S]*?onPartialImage: options\.onPartialImage,[\s\S]*?onFinalImage: options\.onFinalImage,/,
     );
     assert.match(parser, /extraIgnored/);
-    assert.match(adapter, /function tools\(webSearchEnabled/);
-    assert.match(adapter, /\.\.\(webSearchEnabled \? \[\{ type: "web_search" \}\] : \[\]\)/);
+    assert.match(responsesTools, /function tools\(webSearchEnabled/);
+    assert.match(responsesTools, /\.\.\(webSearchEnabled \? \[\{ type: "web_search" \}\] : \[\]\)/);
     assert.match(adapter, /tool_choice: "required"/);
   });
 

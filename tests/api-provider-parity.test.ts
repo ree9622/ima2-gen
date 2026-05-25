@@ -128,6 +128,32 @@ describe("API provider parity", () => {
       assert.equal(calls[0].body.reasoning.effort, "high");
       assert.equal(calls[0].body.tools[0].type, "web_search");
       assert.equal(calls[0].body.tools[1].type, "image_generation");
+      assert.deepEqual(calls[0].body.tool_choice, { type: "image_generation" });
+    });
+  });
+
+  it("generate provider=api forces the image tool when web search is off", async () => {
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      if (String(url).startsWith("http://127.0.0.1:")) {
+        return originalFetch(url, init);
+      }
+      calls.push({ body: JSON.parse(init.body) });
+      return sseResponse(imageEvents());
+    };
+    await withApp(async ({ baseUrl }) => {
+      const res = await fetch(`${baseUrl}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "api provider no search",
+          provider: "api",
+          webSearchEnabled: false,
+        }),
+      });
+      assert.equal(res.status, 200);
+      assert.deepEqual(calls[0].body.tools.map((tool) => tool.type), ["image_generation"]);
+      assert.deepEqual(calls[0].body.tool_choice, { type: "image_generation" });
     });
   });
 
@@ -214,6 +240,7 @@ describe("API provider parity", () => {
       const content = calls[0].input[1].content;
       assert.ok(content.some((item) => item.type === "input_image"));
       assert.ok(content.some((item) => item.type === "input_text" && /mask guide/.test(item.text)));
+      assert.deepEqual(calls[0].tool_choice, { type: "image_generation" });
     });
   });
 

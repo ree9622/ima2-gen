@@ -195,6 +195,11 @@ export const config = {
       fileCfg.oauth?.maskedEditEnabled,
       false,
     ),
+    forceImageToolChoice: pickBool(
+      env.IMA2_OAUTH_FORCE_IMAGE_TOOL_CHOICE,
+      fileCfg.oauth?.forceImageToolChoice,
+      true,
+    ),
     researchSuffix: pickStr(
       env.IMA2_RESEARCH_SUFFIX,
       fileCfg.oauth?.researchSuffix,

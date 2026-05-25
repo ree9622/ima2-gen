@@ -12,6 +12,12 @@ import {
   type ParsedResponsesResult,
 } from "./responsesParse.js";
 import {
+  imageToolChoice,
+  imageToolChoiceKind,
+  tools,
+  toolTypes,
+} from "./responsesTools.js";
+import {
   AUTO_PROMPT_FIDELITY_SUFFIX,
   DIRECT_PROMPT_FIDELITY_SUFFIX,
   EDIT_DEVELOPER_PROMPT,
@@ -146,26 +152,6 @@ async function getEndpoint(ctx: RouteRuntimeContext, provider: string | undefine
     url: `${safeBaseUrl(ctx?.oauthUrl || `http://127.0.0.1:${port}`)}/v1/responses`,
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
   };
-}
-
-interface ImageGenOptions {
-  quality?: string;
-  size?: string;
-  moderation?: string;
-  partial_images?: number;
-}
-
-type ResponseTool = { type: string; quality?: string; size?: string; moderation?: string; partial_images?: number };
-
-function tools(webSearchEnabled: boolean, imageOptions: ImageGenOptions): ResponseTool[] {
-  return [
-    ...(webSearchEnabled ? [{ type: "web_search" }] : []),
-    { type: "image_generation", ...imageOptions },
-  ];
-}
-
-function toolTypes(requestTools: ResponseTool[]): string[] {
-  return requestTools.map((tool) => tool.type);
 }
 
 type ReferenceRef = string | { b64?: string; detectedMime?: string | null; declaredMime?: string | null };
@@ -331,6 +317,7 @@ interface GenerateOptions {
   references?: ReferenceRef[];
   mask?: string;
   signal?: AbortSignal | null;
+  forceImageToolChoice?: boolean;
 }
 
 export async function generateViaResponses(provider: string | undefined, prompt: string | undefined, quality: string | undefined, size: string | undefined, moderation: string = "low", references: ReferenceRef[] = [], requestId: string | null = null, mode: string = "auto", ctxRaw: RouteRuntimeContext = {}, options: GenerateOptions = {}) {
@@ -338,7 +325,8 @@ export async function generateViaResponses(provider: string | undefined, prompt:
   const model = options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini";
   const webSearchEnabled = options.webSearchEnabled !== false && options.searchMode !== "off";
   const requestTools = tools(webSearchEnabled, { quality, size, moderation, ...(options.partialImages ? { partial_images: options.partialImages } : {}) });
-  const toolChoiceKind = "required";
+  const toolChoice = imageToolChoice(options.forceImageToolChoice ?? ctx.config?.oauth?.forceImageToolChoice !== false);
+  const toolChoiceKind = imageToolChoiceKind(toolChoice);
   const referenceInputs = references.map(normalizeRef);
   const userContent = referenceInputs.length
     ? [...referenceInputs, { type: "input_text", text: buildUserTextPrompt(prompt, mode, { webSearchEnabled }) }]
@@ -359,7 +347,7 @@ export async function generateViaResponses(provider: string | undefined, prompt:
         { role: "user", content: userContent },
       ],
       tools: requestTools,
-      tool_choice: toolChoiceKind,
+      tool_choice: toolChoice,
       reasoning: { effort: options.reasoningEffort || "low" },
       stream: true,
     },
@@ -428,7 +416,8 @@ export async function editViaResponses(provider: string | undefined, prompt: str
   const model = options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini";
   const webSearchEnabled = options.webSearchEnabled !== false && options.searchMode !== "off";
   const requestTools = tools(webSearchEnabled, { quality, size, moderation });
-  const toolChoiceKind = "required";
+  const toolChoice = imageToolChoice(options.forceImageToolChoice ?? ctx.config?.oauth?.forceImageToolChoice !== false);
+  const toolChoiceKind = imageToolChoiceKind(toolChoice);
   const imageForRequest = await compressReferenceB64ForOAuth(imageB64, {
     maxB64Bytes: ctx.config?.limits?.maxRefB64Bytes,
     force: true,
@@ -465,7 +454,7 @@ export async function editViaResponses(provider: string | undefined, prompt: str
         { role: "user", content: userContent },
       ],
       tools: requestTools,
-      tool_choice: toolChoiceKind,
+      tool_choice: toolChoice,
       reasoning: { effort: options.reasoningEffort || "low" },
       stream: true,
     },

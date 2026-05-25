@@ -91,4 +91,19 @@ describe("CLI feature parity contract", () => {
     assert.match(docs, /classic\\\|node\\\|multimode/);
     assert.match(docs, /server-side favorites filtering/);
   });
+
+  it("public docs describe sanitized EMPTY_RESPONSE support bundle", () => {
+    const cliDocs = readSource("docs/CLI.md");
+    const faq = readSource("docs/FAQ.md");
+    const faqKo = readSource("docs/FAQ.ko.md");
+    const readme = readSource("README.md");
+
+    for (const docs of [cliDocs, faq, faqKo, readme]) {
+      assert.match(docs, /ima2 doctor image-probe --json/);
+      assert.match(docs, /ima2 gen "고양이" --no-web-search --json/);
+      assert.match(docs, /OAuth token|OAuth token 파일|OAuth token files/);
+      assert.match(docs, /API key|API keys|API 키/);
+      assert.match(docs, /base64/);
+    }
+  });
 });

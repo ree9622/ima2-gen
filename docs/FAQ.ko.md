@@ -1,6 +1,6 @@
 # ima2-gen 자주 묻는 질문
 
-마지막 확인: 2026-04-25
+마지막 확인: 2026-05-25
 
 이 문서는 설치, 업데이트, OAuth, 갤러리, 레퍼런스 이미지 관련 질문을 모아둔 FAQ입니다. README는 짧게 유지하고, 자세한 설명은 이곳에 둡니다.
 
@@ -16,6 +16,7 @@ English version: [FAQ.md](FAQ.md)
 | 업데이트 후 예전 이미지가 안 보임 | `ima2 doctor`를 실행한 뒤 [예전 이미지 복구 안내](RECOVER_OLD_IMAGES.md)를 확인합니다. |
 | `gpt-5.5`만 실패함 | Codex CLI를 업데이트하고, 안정 대안으로 `gpt-5.4`를 사용합니다. |
 | 레퍼런스 업로드 실패 | JPEG/PNG로 변환하고 해상도를 낮춰 보세요. 레퍼런스는 최대 5장입니다. |
+| 이미지 생성이 `EMPTY_RESPONSE` 또는 no image data로 끝남 | `ima2 doctor image-probe --json`을 실행한 뒤 아래의 안전한 지원 번들을 모아 주세요. |
 | Windows에서 `10531` 포트 관련 OAuth/proxy 오류가 남 | `ima2 doctor`를 실행하고, 필요하면 `IMA2_OAUTH_PROXY_PORT=11531 ima2 serve`로 시작하세요. |
 | 프록시/VPN 환경에서 `fetch failed`가 반복됨 | 프록시 클라이언트의 TUN/TURN류 모드를 켜거나, 같은 터미널에 `HTTP_PROXY` / `HTTPS_PROXY`를 설정하세요. |
 
@@ -224,6 +225,52 @@ ima2 ping
 ```
 
 필요하면 `ima2 serve`를 다시 시작합니다.
+
+### OAuth 이미지 생성이 이미지 없이 끝나면 무엇을 공유해야 하나요?
+
+먼저 moderation으로 단정하지 말고 image probe를 실행하세요. `EMPTY_RESPONSE`는
+Responses 경로에서 `ima2-gen`이 사용할 수 있는 이미지 데이터가 나오지 않았다는
+뜻입니다. 원인은 OAuth capability, stream parsing, web-search/tool-choice
+상호작용, 로컬 프록시/네트워크 transport, 지원되지 않는 옵션, 실제 refusal 등으로
+나뉠 수 있습니다.
+
+먼저 실행하세요.
+
+```bash
+ima2 doctor
+ima2 doctor image-probe --json > ima2-image-probe.json
+```
+
+`ima2 serve`가 실행 중이면 검색을 끈 생성과 일반 생성 결과도 하나씩 저장하세요.
+
+```bash
+ima2 gen "고양이" --no-web-search --json > ima2-cat-no-search.json
+ima2 gen "고양이" --json > ima2-cat-current.json
+```
+
+probe JSON은 공개 이슈에 첨부할 수 있도록 설계되어 있습니다. 진단 코드,
+event count, tool-call 요약, byte count는 담지만 prompt text, auth token,
+credential URL, base64 image data는 담지 않습니다.
+
+이슈를 열 때 포함해 주세요.
+
+- `ima2 doctor` 출력
+- `ima2-image-probe.json`
+- 저장했다면 `ima2-cat-no-search.json`, `ima2-cat-current.json`
+- `ima2-gen` 버전과 Windows 버전
+- VPN, 회사 프록시, 백신 TLS 검사, custom CA 사용 여부
+- API 키가 이미 설정되어 있다면 같은 PC에서 `provider: "api"`가 동작하는지
+
+ChatGPT 쿠키, OAuth token 파일, API key, raw upstream response, prompt history,
+generated base64는 공유하지 마세요.
+
+결과는 이렇게 분류합니다.
+
+- text probe도 실패: OAuth 재로그인, 프록시, 모델 접근성을 먼저 봅니다.
+- text는 되지만 minimal non-stream image가 실패: 계정, OAuth backend, model, image-tool capability 가능성이 큽니다.
+- non-stream image는 되지만 stream image가 실패: stream parsing 또는 transport 가능성이 큽니다.
+- 검색 끈 생성은 되지만 일반 생성이 실패: web-search/tool-choice 상호작용 가능성이 큽니다.
+- bytes는 읽었지만 event가 없음: SSE delimiter 또는 `data:` parsing 가능성이 큽니다.
 
 ### 프록시나 VPN 뒤에서 `fetch failed`가 계속 나면 어떻게 하나요?
 

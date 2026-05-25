@@ -143,6 +143,7 @@ The settings workspace keeps account, model, appearance, and language controls a
 | `ima2 setup` | Reconfigure saved auth |
 | `ima2 status` | Show config and OAuth status |
 | `ima2 doctor` | Diagnose Node, package, config, and auth |
+| `ima2 doctor image-probe [--json]` | Run sanitized image probes for no-image diagnostics |
 | `ima2 open` | Open the web UI |
 | `ima2 reset` | Remove saved config |
 
@@ -235,6 +236,9 @@ Check that the local OAuth proxy is reachable. On networks that require a proxy,
 
 **Images fail with `API_KEY_REQUIRED`**
 Set `OPENAI_API_KEY` or configure an API key before using `provider: "api"`. The default OAuth path still works without an API key.
+
+**Image generation returns `EMPTY_RESPONSE` or no image data**
+Run `ima2 doctor image-probe --json > ima2-image-probe.json` and attach the safe JSON when opening an issue. For OAuth cases, also capture `ima2 gen "고양이" --no-web-search --json` and `ima2 gen "고양이" --json` while `ima2 serve` is running. Do not share ChatGPT cookies, OAuth token files, API keys, raw upstream responses, prompt history, or generated base64. See the [FAQ support bundle](docs/FAQ.md#what-should-i-share-when-oauth-image-generation-returns-no-image).
 
 **A large reference image fails**
 The app compresses large JPEG/PNG references before upload. If a file still fails, convert it to JPEG or PNG at a lower resolution and try again. HEIC/HEIF files are not supported by the browser path.

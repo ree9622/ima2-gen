@@ -1,6 +1,6 @@
 # ima2-gen FAQ
 
-Last reviewed: 2026-04-25
+Last reviewed: 2026-05-25
 
 This FAQ collects the questions that tend to come up after installing or updating `ima2-gen`. The README stays short; this page is the place for practical details and recovery steps.
 
@@ -16,6 +16,7 @@ For Korean, see [FAQ.ko.md](FAQ.ko.md).
 | Old gallery images look missing | Run `ima2 doctor`, then see [Recover Old Generated Images](RECOVER_OLD_IMAGES.md). |
 | `gpt-5.5` fails | Update Codex CLI first, then try `gpt-5.4` as the stable fallback. |
 | Reference upload fails | Use JPEG/PNG, lower the resolution, and keep references to 5 images or fewer. |
+| Image generation returns `EMPTY_RESPONSE` or no image data | Run `ima2 doctor image-probe --json`, then collect the safe support bundle below. |
 | Windows reports OAuth/proxy failures around port `10531` | Run `ima2 doctor`; if needed start with `IMA2_OAUTH_PROXY_PORT=11531 ima2 serve`. |
 | `fetch failed` repeats on a proxy/VPN network | Enable proxy TUN/TURN-style mode, or set `HTTP_PROXY` / `HTTPS_PROXY` in the same terminal. |
 
@@ -232,6 +233,52 @@ ima2 ping
 ```
 
 Then restart `ima2 serve` if needed.
+
+### What should I share when OAuth image generation returns no image?
+
+Use the image probe before assuming moderation. `EMPTY_RESPONSE` means the
+Responses path did not produce image data that `ima2-gen` could use; it can be
+caused by OAuth capability, stream parsing, web-search/tool-choice behavior,
+local proxy/network transport, unsupported options, or a real refusal.
+
+Run this first:
+
+```bash
+ima2 doctor
+ima2 doctor image-probe --json > ima2-image-probe.json
+```
+
+If `ima2 serve` is running, also capture one search-off and one normal cat
+generation result:
+
+```bash
+ima2 gen "고양이" --no-web-search --json > ima2-cat-no-search.json
+ima2 gen "고양이" --json > ima2-cat-current.json
+```
+
+The probe JSON is designed to be safe to attach to a public issue. It reports
+diagnostic codes, event counts, tool-call summaries, and byte counts, but not
+prompt text, auth tokens, credential URLs, or base64 image data.
+
+When opening an issue, include:
+
+- `ima2 doctor` output.
+- `ima2-image-probe.json`.
+- `ima2-cat-no-search.json` and `ima2-cat-current.json`, if you captured them.
+- `ima2-gen` version and Windows version.
+- Whether you use VPN, corporate proxy, antivirus TLS inspection, or a custom CA.
+- Whether `provider: "api"` works on the same machine, if you already have an API key configured.
+
+Do not share ChatGPT cookies, OAuth token files, API keys, raw upstream
+responses, prompt history, or generated base64.
+
+How to read the result:
+
+- Text probe fails: refresh OAuth and inspect proxy/model availability first.
+- Text works but minimal non-stream image fails: likely account, OAuth backend, model, or image-tool capability.
+- Non-stream image works but stream image fails: likely stream parsing or transport.
+- Search-off generation works but normal generation fails: likely web-search/tool-choice interaction.
+- Bytes were read but no events were parsed: likely SSE delimiter or `data:` parsing.
 
 ### What if `fetch failed` keeps happening behind a proxy or VPN?
 

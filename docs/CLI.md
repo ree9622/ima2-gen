@@ -12,6 +12,7 @@ For a quick start, see the [main README](../README.md). For endpoint mapping, se
 | `ima2 setup` / `ima2 login` | Reconfigure saved auth (interactive) |
 | `ima2 status` | Show config and OAuth status |
 | `ima2 doctor` | Diagnose Node, package, config, and auth |
+| `ima2 doctor image-probe [--json]` | Run live sanitized Responses image probes for `EMPTY_RESPONSE` support |
 | `ima2 open` | Open the web UI in a browser |
 | `ima2 reset` | Remove saved config |
 
@@ -82,6 +83,41 @@ For dense or critical text, keep the text large and explicit. Exact placement,
 small text, and pixel-perfect typography can still need iteration or post-editing.
 
 Multimode-specific flags include `--max-images <1..8>`, `--ref <file>` (repeatable, max 5), `--mode <auto|direct>`, `--provider <auto|oauth|api>`, and `--show-partial`. `ima2 edit --mask` remains intentionally deferred to #31 because current mask plumbing is guided edit rather than guaranteed true masked/inpaint semantics.
+
+## Diagnostics
+
+`ima2 doctor image-probe` runs live Responses probes that help classify image
+generation failures such as `EMPTY_RESPONSE`. It is intended for support
+bundles, especially when OAuth is green but a simple prompt produces no image.
+
+```bash
+ima2 doctor image-probe --json > ima2-image-probe.json
+```
+
+Use `--matrix` when a maintainer asks for current-payload comparison probes:
+
+```bash
+ima2 doctor image-probe --matrix --json > ima2-image-probe.json
+```
+
+The JSON output is sanitized for issue attachments. It includes diagnostic
+codes, event counts, tool-call summaries, byte counts, provider/model labels,
+and probe statuses. It does not include prompt text, auth tokens, URLs with
+credentials, raw upstream responses, or base64 image data.
+
+For OAuth no-image reports, a useful support bundle is:
+
+```bash
+ima2 doctor
+ima2 doctor image-probe --json > ima2-image-probe.json
+ima2 gen "고양이" --no-web-search --json > ima2-cat-no-search.json
+ima2 gen "고양이" --json > ima2-cat-current.json
+```
+
+Do not share ChatGPT cookies, OAuth token files, API keys, prompt history, raw
+upstream responses, or generated base64. Share `ima2-gen` version, OS version,
+and whether VPN, corporate proxy, antivirus TLS inspection, or a custom CA is in
+use.
 
 ## History and metadata
 

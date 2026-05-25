@@ -105,6 +105,55 @@ test("empty response with metadata maps to EMPTY_RESPONSE", () => {
   assert.equal(normalized.eventCount, 3);
 });
 
+test("empty response preserves sanitized Responses diagnostics", () => {
+  const err: any = new Error("No image data received");
+  err.eventCount = 4;
+  err.eventTypes = { "response.output_item.done": 2, "response.completed": 1 };
+  err.webSearchCalls = 1;
+  err.toolTypes = ["web_search", "image_generation"];
+  err.toolChoiceKind = "required";
+  err.responseDiagnostics = {
+    eventTypes: err.eventTypes,
+    streamStats: {
+      chunkCount: 2,
+      bytesRead: 250,
+      maxChunkBytes: 200,
+      parseSkipCount: 0,
+      finalBufferChars: 0,
+      sawDoneSentinel: false,
+      sawResponseCompleted: true,
+    },
+    outputItemSummary: [{
+      eventType: "response.output_item.done",
+      itemType: "web_search_call",
+      status: "completed",
+      hasResult: false,
+      resultChars: 0,
+      revisedPromptChars: 0,
+      hasError: false,
+      errorCode: null,
+      errorType: null,
+      errorParam: null,
+    }],
+    imageCallSeen: false,
+    imageCallCompleted: false,
+    imageCallFailed: false,
+    imageResultCount: 0,
+    webSearchCallSeen: true,
+    messageOutputSeen: true,
+    outputTextChars: 42,
+  };
+
+  const normalized = normalizeGenerationFailure(err);
+  assert.equal(normalized.code, "EMPTY_RESPONSE");
+  assert.equal(normalized.diagnosticReason, "web_search_only_response");
+  assert.deepEqual(normalized.eventTypes, err.eventTypes);
+  assert.equal(normalized.webSearchCalls, 1);
+  assert.equal(normalized.responseDiagnostics.outputItemSummary[0].resultChars, 0);
+  assert.deepEqual(normalized.toolTypes, ["web_search", "image_generation"]);
+  assert.equal(normalized.toolChoiceKind, "required");
+});
+
 test("empty response with reference mismatch preserves diagnostic metadata", () => {
   const err: Error & {
     status?: number; code?: string;

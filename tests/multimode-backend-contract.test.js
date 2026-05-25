@@ -42,6 +42,7 @@ describe("multimode backend contract", () => {
   it("uses a strict prompt wrapper and collects multiple image_generation_call outputs", () => {
     const oauth = readSource("lib/oauthProxy.ts");
     const adapter = readSource("lib/responsesImageAdapter.ts");
+    const parser = readSource("lib/responsesParse.ts");
 
     assert.match(oauth, /export function buildMultimodeSequencePrompt/);
     assert.match(oauth, /You MUST create up to N separate image_generation_call outputs/);
@@ -50,16 +51,17 @@ describe("multimode backend contract", () => {
     assert.match(oauth, /Do not create a contact sheet/);
     assert.match(oauth, /Do not create a storyboard sheet/);
     assert.match(oauth, /Do not put multiple panels inside one image/);
-    assert.match(adapter, /async function parseStream/);
-    assert.match(adapter, /const images: ParsedImage\[\] = \[\]/);
-    assert.match(adapter, /images\.push\(/);
-    assert.match(adapter, /onFinalImage/);
-    assert.match(adapter, /await onFinalImage\?\.\(image, index\)/);
+    assert.match(adapter, /parseStream/);
+    assert.match(parser, /export async function parseStream/);
+    assert.match(parser, /images: \[\]/);
+    assert.match(parser, /state\.images\.push\(/);
+    assert.match(parser, /onFinalImage/);
+    assert.match(parser, /await onFinalImage\?\.\(image, index\)/);
     assert.match(
       adapter,
       /export async function generateMultimodeViaResponses[\s\S]*?onPartialImage: options\.onPartialImage,[\s\S]*?onFinalImage: options\.onFinalImage,/,
     );
-    assert.match(adapter, /extraIgnored/);
+    assert.match(parser, /extraIgnored/);
     assert.match(adapter, /function tools\(webSearchEnabled/);
     assert.match(adapter, /\.\.\(webSearchEnabled \? \[\{ type: "web_search" \}\] : \[\]\)/);
     assert.match(adapter, /tool_choice: "required"/);

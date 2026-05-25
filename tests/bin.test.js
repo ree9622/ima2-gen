@@ -86,6 +86,47 @@ describe("ima2 CLI", () => {
     assert.ok(code === 0 || code === 1, "doctor should exit 0 or 1");
   });
 
+  it("should show doctor image-probe help without running live probes", async () => {
+    const { stdout, code } = await runCLI(["doctor", "image-probe", "--help"]);
+    assert.strictEqual(code, 0, "doctor image-probe --help should exit 0");
+    assert.ok(stdout.includes("ima2 doctor image-probe"), "help should mention image-probe command");
+    assert.ok(stdout.includes("--matrix"), "help should document matrix probes");
+    assert.ok(stdout.includes("base64 image data"), "help should document redaction");
+  });
+
+  it("should redact credential URLs from doctor image-probe JSON failures", async () => {
+    const { stdout, code } = await runCLI([
+      "doctor",
+      "image-probe",
+      "--json",
+      "--oauth-url",
+      "http://user:pass@127.0.0.1:9",
+      "--timeout-ms",
+      "100",
+    ]);
+    assert.strictEqual(code, 1, "failed probes should exit 1");
+    assert.doesNotMatch(stdout, /user:pass/, "JSON output must not echo URL credentials");
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.summary.failed, 3);
+    assert.ok(parsed.probes.every((probe) => !String(probe.error?.message || "").includes("user:pass")));
+  });
+
+  it("should redact malformed API key material from doctor image-probe JSON failures", async () => {
+    mkdirSync(TEST_DIR, { recursive: true });
+    writeFileSync(TEST_CONFIG, JSON.stringify({ provider: "api", apiKey: "sk-test\nSECRET" }));
+    try {
+      const { stdout, code } = await runCLI(["doctor", "image-probe", "--json", "--timeout-ms", "100"]);
+      assert.strictEqual(code, 1, "failed probes should exit 1");
+      assert.doesNotMatch(stdout, /SECRET|sk-test/, "JSON output must not echo malformed API key material");
+      const parsed = JSON.parse(stdout);
+      assert.equal(parsed.summary.failed, 3);
+      assert.ok(parsed.probes.every((probe) => probe.error?.code === "AUTH_API_KEY_INVALID"));
+      assert.ok(parsed.probes.every((probe) => !/SECRET|sk-test/.test(String(probe.error?.message || ""))));
+    } finally {
+      writeFileSync(TEST_CONFIG, "{}");
+    }
+  });
+
   it("should handle unknown command", async () => {
     const { stdout, code } = await runCLI(["foobar"]);
     assert.strictEqual(code, 1, "unknown command should exit 1");

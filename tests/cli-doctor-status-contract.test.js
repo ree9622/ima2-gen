@@ -9,15 +9,16 @@ function readSource(path) {
 describe("CLI doctor/status hardening contract", () => {
   it("surfaces generated dir, advertised server, skill integrity, and native binding health", () => {
     const ima2 = readSource("bin/ima2.ts");
-    const doctor = readSource("bin/lib/doctor-checks.ts");
+    const doctorCommand = readSource("bin/commands/doctor.ts");
+    const doctorChecks = readSource("bin/lib/doctor-checks.ts");
 
     assert.match(ima2, /Generated dir:/);
     assert.match(ima2, /Advertised server:/);
-    assert.match(ima2, /buildHardeningDoctorLines/);
-    assert.match(doctor, /Preferred backend port/);
-    assert.match(doctor, /Card News:/);
-    assert.match(doctor, /packaged skill/);
-    assert.match(doctor, /better-sqlite3 native binding/);
-    assert.match(doctor, /chmod 600/);
+    assert.match(doctorCommand, /buildHardeningDoctorLines/);
+    assert.match(doctorChecks, /Preferred backend port/);
+    assert.match(doctorChecks, /Card News:/);
+    assert.match(doctorChecks, /packaged skill/);
+    assert.match(doctorChecks, /better-sqlite3 native binding/);
+    assert.match(doctorChecks, /chmod 600/);
   });
 });

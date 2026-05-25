@@ -1,10 +1,16 @@
-import { setJobPhase } from "./inflight.js";
 import { logEvent } from "./logger.js";
 import { classifyUpstreamError, classifyUpstreamErrorCode } from "./errorClassify.js";
 import { compressReferenceB64ForOAuth } from "./referenceImageCompress.js";
 import { detectImageMimeFromB64 } from "./refs.js";
 import { errInfo } from "./errInfo.js";
+import { setJobPhase } from "./inflight.js";
 import { type RouteRuntimeContext, requireRuntimeContext } from "./runtimeContext.js";
+import {
+  parseJson,
+  parseStream,
+  type FinalImageHandler,
+  type ParsedResponsesResult,
+} from "./responsesParse.js";
 import {
   AUTO_PROMPT_FIDELITY_SUFFIX,
   DIRECT_PROMPT_FIDELITY_SUFFIX,
@@ -20,9 +26,6 @@ import {
   waitForOAuthReady,
 } from "./oauthProxy.js";
 
-interface ParsedImage { b64: string; revisedPrompt: string | null; }
-type FinalImageHandler = (image: ParsedImage, index: number) => Promise<void> | void;
-
 interface MakeErrorOptions {
   status?: number;
   code?: string;
@@ -37,12 +40,15 @@ interface ResponsesError extends Error {
   [key: string]: unknown;
 }
 
+const RESPONSES_ERROR_MARKER = "ima2ResponsesError";
+
 function makeError(message: string, { status = 500, code = "RESPONSES_IMAGE_ERROR", cause, ...rest }: MakeErrorOptions = {}): ResponsesError {
   const err = new Error(message) as ResponsesError;
   err.status = status;
   err.code = code;
   if (cause) err.cause = cause;
   Object.assign(err, rest);
+  Object.defineProperty(err, RESPONSES_ERROR_MARKER, { value: true });
   return err;
 }
 
@@ -87,27 +93,57 @@ function safeUpstreamClientMessage(upstream: UpstreamError | null | undefined, s
   return "OpenAI rejected the image request.";
 }
 
+function safeBaseUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return value.replace(/\/$/, "");
+  }
+}
+
+function apiAuthorizationHeader(apiKey: string | undefined) {
+  const key = typeof apiKey === "string" ? apiKey.trim() : "";
+  if (!key) {
+    throw makeError("API key is required for API provider image generation", {
+      status: 401,
+      code: "API_KEY_REQUIRED",
+    });
+  }
+  if (/[\u0000-\u001f\u007f]/.test(key)) {
+    throw makeError("API key contains invalid characters.", {
+      status: 401,
+      code: "AUTH_API_KEY_INVALID",
+    });
+  }
+  return `Bearer ${key}`;
+}
+
+function isKnownResponsesError(value: unknown) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    (value as { ima2ResponsesError?: unknown }).ima2ResponsesError === true,
+  );
+}
+
 async function getEndpoint(ctx: RouteRuntimeContext, provider: string | undefined, _scope: string) {
   if (provider === "api") {
-    if (!ctx?.apiKey) {
-      throw makeError("API key is required for API provider image generation", {
-        status: 401,
-        code: "API_KEY_REQUIRED",
-      });
-    }
     return {
       url: "https://api.openai.com/v1/responses",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
-        Authorization: `Bearer ${ctx.apiKey}`,
+        Authorization: apiAuthorizationHeader(ctx.apiKey),
       },
     };
   }
   await waitForOAuthReady(ctx);
   const port = ctx?.config?.oauth?.proxyPort || 10531;
   return {
-    url: `${ctx?.oauthUrl || `http://127.0.0.1:${port}`}/v1/responses`,
+    url: `${safeBaseUrl(ctx?.oauthUrl || `http://127.0.0.1:${port}`)}/v1/responses`,
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
   };
 }
@@ -119,11 +155,17 @@ interface ImageGenOptions {
   partial_images?: number;
 }
 
-function tools(webSearchEnabled: boolean, imageOptions: ImageGenOptions) {
+type ResponseTool = { type: string; quality?: string; size?: string; moderation?: string; partial_images?: number };
+
+function tools(webSearchEnabled: boolean, imageOptions: ImageGenOptions): ResponseTool[] {
   return [
     ...(webSearchEnabled ? [{ type: "web_search" }] : []),
     { type: "image_generation", ...imageOptions },
   ];
+}
+
+function toolTypes(requestTools: ResponseTool[]): string[] {
+  return requestTools.map((tool) => tool.type);
 }
 
 type ReferenceRef = string | { b64?: string; detectedMime?: string | null; declaredMime?: string | null };
@@ -142,177 +184,6 @@ function normalizeRef(ref: ReferenceRef) {
   return { type: "input_image", image_url: `data:${mime};base64,${b64}` };
 }
 
-function extractSseData(block: string) {
-  let eventData = "";
-  for (const line of block.split("\n")) {
-    if (line.startsWith("data: ")) eventData += line.slice(6);
-  }
-  return eventData;
-}
-
-interface SseData {
-  type?: string;
-  delta?: string;
-  text?: string;
-  item?: {
-    type?: string;
-    partial_image?: string;
-    image?: string;
-    result?: string;
-    index?: number;
-    revised_prompt?: string;
-    content?: Array<{ type?: string; text?: string }>;
-  };
-  partial_image?: string;
-  image?: string;
-  result?: string;
-  index?: number;
-  response?: { usage?: Record<string, number>; tool_usage?: { web_search?: { num_requests?: number } } };
-  error?: { code?: string };
-}
-
-function extractPartialImage(data: SseData) {
-  if (typeof data?.type !== "string" || !data.type.includes("partial")) return null;
-  const item = data.item || {};
-  const b64 = data.partial_image || data.image || data.result || item.partial_image || item.image || item.result;
-  if (typeof b64 !== "string" || b64.length === 0) return null;
-  const index = Number.isFinite(data.index) ? data.index : Number.isFinite(item.index) ? item.index : null;
-  return { b64, index };
-}
-
-function extractTextDelta(data: SseData): string | null {
-  if (data.type === "response.output_text.delta" && typeof data.delta === "string") return data.delta;
-  return null;
-}
-
-function extractFinalText(data: SseData): string | null {
-  if (data.type === "response.output_text.done" && typeof data.text === "string") return cleanTextOutput(data.text);
-  if (data.type === "response.output_item.done" && data.item?.type === "message") {
-    return extractJsonItemText(data.item);
-  }
-  return null;
-}
-
-function extractJsonItemText(item: { type?: string; text?: string; content?: Array<{ type?: string; text?: string }> }): string | null {
-  if (item.type === "output_text" && typeof item.text === "string") return cleanTextOutput(item.text);
-  if (!Array.isArray(item.content)) return null;
-  const text = item.content
-    .filter((part) => part.type === "output_text" && typeof part.text === "string")
-    .map((part) => part.text)
-    .join("\n\n");
-  return cleanTextOutput(text);
-}
-
-function cleanTextOutput(value: string): string | null {
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, 4_000) : null;
-}
-
-interface ParseStreamOptions {
-  requestId?: string | null;
-  scope: string;
-  maxImages?: number;
-  onPartialImage?: ((partial: { b64: string; index: number | null | undefined }) => void) | null;
-  onFinalImage?: FinalImageHandler | null;
-}
-
-async function parseStream(res: Response, {
-  requestId,
-  scope,
-  maxImages = 1,
-  onPartialImage = null,
-  onFinalImage = null,
-}: ParseStreamOptions) {
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  const images: ParsedImage[] = [];
-  const eventTypes: Record<string, number> = {};
-  let buffer = "";
-  let usage: Record<string, number> | null = null;
-  let textOutput = "";
-  let finalTextOutput: string | null = null;
-  let webSearchCalls = 0;
-  let eventCount = 0;
-  let extraIgnored = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let boundary;
-    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const eventData = extractSseData(block);
-      if (!eventData || eventData === "[DONE]") continue;
-      let data: SseData;
-      try { data = JSON.parse(eventData); } catch { continue; }
-      eventCount++;
-      eventTypes[data.type || "_unknown"] = (eventTypes[data.type || "_unknown"] || 0) + 1;
-      const delta = extractTextDelta(data);
-      if (delta) textOutput += delta;
-      const finalText = extractFinalText(data);
-      if (finalText) finalTextOutput = finalText;
-      const partial = extractPartialImage(data);
-      if (partial && typeof onPartialImage === "function") onPartialImage(partial);
-      if (data.type === "response.output_item.done" && data.item?.type === "image_generation_call") {
-        if (data.item.result && images.length < maxImages) {
-          const image = {
-            b64: data.item.result,
-            revisedPrompt: typeof data.item.revised_prompt === "string" ? data.item.revised_prompt : null,
-          };
-          const index = images.length;
-          images.push(image);
-          if (requestId) setJobPhase(requestId, "decoding");
-          await onFinalImage?.(image, index);
-        } else if (data.item.result) extraIgnored++;
-      }
-      if (data.type === "response.output_item.done" && data.item?.type === "web_search_call") webSearchCalls++;
-      if (data.type === "response.completed") {
-        usage = data.response?.usage || null;
-        const wsNum = data.response?.tool_usage?.web_search?.num_requests;
-        if (typeof wsNum === "number" && wsNum > webSearchCalls) webSearchCalls = wsNum;
-      }
-      if (data.type === "error") {
-        throw makeError("Responses stream returned an error", {
-          code: data.error?.code || "RESPONSES_STREAM_ERROR",
-          eventCount,
-          eventType: data.type,
-        });
-      }
-    }
-  }
-  logEvent(scope, "stream_end", { requestId, events: eventCount, imageCount: images.length });
-  return { images, usage, webSearchCalls, eventCount, eventTypes, extraIgnored, text: finalTextOutput ?? cleanTextOutput(textOutput) };
-}
-
-async function parseJson(res: Response, maxImages: number) {
-  const json = await res.json() as {
-    output?: Array<{
-      type?: string;
-      result?: string;
-      revised_prompt?: string;
-      text?: string;
-      content?: Array<{ type?: string; text?: string }>;
-    }>;
-    usage?: Record<string, number>;
-  };
-  const images: ParsedImage[] = [];
-  const textParts: string[] = [];
-  let webSearchCalls = 0;
-  for (const item of json.output || []) {
-    if (item.type === "image_generation_call" && item.result && images.length < maxImages) {
-      images.push({
-        b64: item.result,
-        revisedPrompt: typeof item.revised_prompt === "string" ? item.revised_prompt : null,
-      });
-    }
-    if (item.type === "web_search_call") webSearchCalls++;
-    const itemText = extractJsonItemText(item);
-    if (itemText) textParts.push(itemText);
-  }
-  return { images, usage: json.usage || null, webSearchCalls, eventCount: 0, eventTypes: {}, extraIgnored: 0, text: cleanTextOutput(textParts.join("\n\n")) };
-}
-
 interface PostResponsesArgs {
   ctx: RouteRuntimeContext;
   provider: string | undefined;
@@ -323,6 +194,42 @@ interface PostResponsesArgs {
   signal?: AbortSignal | null;
   onPartialImage?: ((partial: { b64: string; index: number | null | undefined }) => void) | null;
   onFinalImage?: FinalImageHandler | null;
+}
+
+interface EmptyResponseMeta {
+  provider: string | undefined;
+  model: string;
+  toolTypes: string[];
+  toolChoiceKind: string;
+  quality?: string;
+  size?: string;
+  moderation?: string;
+  webSearchEnabled?: boolean;
+  refsCount?: number;
+  inputImageCount?: number;
+  promptChars?: number;
+}
+
+function emptyResponseError(message: string, result: ParsedResponsesResult, meta: EmptyResponseMeta): ResponsesError {
+  return makeError(message, {
+    status: 422,
+    code: "EMPTY_RESPONSE",
+    eventCount: result.eventCount,
+    eventTypes: result.eventTypes,
+    webSearchCalls: result.webSearchCalls,
+    responseDiagnostics: result.diagnostics,
+    provider: meta.provider,
+    model: meta.model,
+    quality: meta.quality,
+    size: meta.size,
+    moderation: meta.moderation,
+    webSearchEnabled: meta.webSearchEnabled,
+    refsCount: meta.refsCount,
+    inputImageCount: meta.inputImageCount,
+    promptChars: meta.promptChars,
+    toolTypes: meta.toolTypes,
+    toolChoiceKind: meta.toolChoiceKind,
+  });
 }
 
 function combineAbortSignals(signals: AbortSignal[]): AbortSignal {
@@ -400,7 +307,13 @@ async function postResponses({
       }
       throw makeError("Responses image generation timed out", { status: 504, code: "RESPONSES_IMAGE_TIMEOUT", cause: err.raw });
     }
-    throw err.raw;
+    if (isKnownResponsesError(err.raw)) throw err.raw;
+    throw makeError("Responses request failed before receiving a response", {
+      status: 502,
+      code: "NETWORK_FAILED",
+      errorName: err.name,
+      upstreamMessageRedacted: true,
+    });
   } finally {
     clearTimeout(timer);
   }
@@ -422,7 +335,10 @@ interface GenerateOptions {
 
 export async function generateViaResponses(provider: string | undefined, prompt: string | undefined, quality: string | undefined, size: string | undefined, moderation: string = "low", references: ReferenceRef[] = [], requestId: string | null = null, mode: string = "auto", ctxRaw: RouteRuntimeContext = {}, options: GenerateOptions = {}) {
   const ctx = requireRuntimeContext(ctxRaw);
+  const model = options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini";
   const webSearchEnabled = options.webSearchEnabled !== false && options.searchMode !== "off";
+  const requestTools = tools(webSearchEnabled, { quality, size, moderation, ...(options.partialImages ? { partial_images: options.partialImages } : {}) });
+  const toolChoiceKind = "required";
   const referenceInputs = references.map(normalizeRef);
   const userContent = referenceInputs.length
     ? [...referenceInputs, { type: "input_text", text: buildUserTextPrompt(prompt, mode, { webSearchEnabled }) }]
@@ -437,26 +353,42 @@ export async function generateViaResponses(provider: string | undefined, prompt:
     onPartialImage: options.onPartialImage,
     onFinalImage: options.onFinalImage,
     payload: {
-      model: options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini",
+      model,
       input: [
         { role: "developer", content: webSearchEnabled ? GENERATE_DEVELOPER_PROMPT : GENERATE_NO_SEARCH_DEVELOPER_PROMPT },
         { role: "user", content: userContent },
       ],
-      tools: tools(webSearchEnabled, { quality, size, moderation, ...(options.partialImages ? { partial_images: options.partialImages } : {}) }),
-      tool_choice: "required",
+      tools: requestTools,
+      tool_choice: toolChoiceKind,
       reasoning: { effort: options.reasoningEffort || "low" },
       stream: true,
     },
   });
   const image = result.images[0];
-  if (!image?.b64) throw makeError("No image data received from Responses API", { code: "EMPTY_RESPONSE", eventCount: result.eventCount });
+  if (!image?.b64) {
+    throw emptyResponseError("No image data received from Responses API", result, {
+      provider,
+      model,
+      quality,
+      size,
+      moderation,
+      webSearchEnabled,
+      refsCount: referenceInputs.length,
+      inputImageCount: referenceInputs.length,
+      promptChars: typeof prompt === "string" ? prompt.length : 0,
+      toolTypes: toolTypes(requestTools),
+      toolChoiceKind,
+    });
+  }
   return { b64: image.b64, usage: result.usage, webSearchCalls: result.webSearchCalls, revisedPrompt: image.revisedPrompt, text: result.text };
 }
 
 export async function generateMultimodeViaResponses(provider: string | undefined, prompt: string | undefined, quality: string | undefined, size: string | undefined, moderation: string = "low", references: ReferenceRef[] = [], requestId: string | null = null, mode: string = "auto", ctxRaw: RouteRuntimeContext = {}, options: GenerateOptions = {}) {
   const ctx = requireRuntimeContext(ctxRaw);
   const maxImages = Math.min(8, Math.max(1, Math.trunc(Number(options.maxImages) || 1)));
+  const model = options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini";
   const webSearchEnabled = options.webSearchEnabled !== false && options.searchMode !== "off";
+  const requestTools = tools(webSearchEnabled, { quality, size, moderation, ...(options.partialImages ? { partial_images: options.partialImages } : {}) });
   const userText = buildMultimodeSequencePrompt(
     mode === "direct"
       ? `${prompt}${DIRECT_PROMPT_FIDELITY_SUFFIX}`
@@ -478,12 +410,12 @@ export async function generateMultimodeViaResponses(provider: string | undefined
     onPartialImage: options.onPartialImage,
     onFinalImage: options.onFinalImage,
     payload: {
-      model: options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini",
+      model,
       input: [
         { role: "developer", content: webSearchEnabled ? MULTIMODE_DEVELOPER_PROMPT : MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT },
         { role: "user", content: userContent },
       ],
-      tools: tools(webSearchEnabled, { quality, size, moderation, ...(options.partialImages ? { partial_images: options.partialImages } : {}) }),
+      tools: requestTools,
       tool_choice: "required",
       reasoning: { effort: options.reasoningEffort || "low" },
       stream: true,
@@ -493,7 +425,10 @@ export async function generateMultimodeViaResponses(provider: string | undefined
 
 export async function editViaResponses(provider: string | undefined, prompt: string | undefined, imageB64: string | undefined, quality: string | undefined, size: string | undefined, moderation: string = "low", mode: string = "auto", ctxRaw: RouteRuntimeContext = {}, requestId: string | null = null, options: GenerateOptions = {}) {
   const ctx = requireRuntimeContext(ctxRaw);
+  const model = options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini";
   const webSearchEnabled = options.webSearchEnabled !== false && options.searchMode !== "off";
+  const requestTools = tools(webSearchEnabled, { quality, size, moderation });
+  const toolChoiceKind = "required";
   const imageForRequest = await compressReferenceB64ForOAuth(imageB64, {
     maxB64Bytes: ctx.config?.limits?.maxRefB64Bytes,
     force: true,
@@ -524,18 +459,32 @@ export async function editViaResponses(provider: string | undefined, prompt: str
     maxImages: 1,
     signal: options.signal,
     payload: {
-      model: options.model || ctx.config?.imageModels?.default || "gpt-5.4-mini",
+      model,
       input: [
         { role: "developer", content: webSearchEnabled ? EDIT_DEVELOPER_PROMPT : EDIT_NO_SEARCH_DEVELOPER_PROMPT },
         { role: "user", content: userContent },
       ],
-      tools: tools(webSearchEnabled, { quality, size, moderation }),
-      tool_choice: "required",
+      tools: requestTools,
+      tool_choice: toolChoiceKind,
       reasoning: { effort: options.reasoningEffort || "low" },
       stream: true,
     },
   });
   const image = result.images[0];
-  if (!image?.b64) throw makeError("No image data received from Responses edit", { code: "EMPTY_RESPONSE", eventCount: result.eventCount });
+  if (!image?.b64) {
+    throw emptyResponseError("No image data received from Responses edit", result, {
+      provider,
+      model,
+      quality,
+      size,
+      moderation,
+      webSearchEnabled,
+      refsCount: referenceImages.length,
+      inputImageCount: 1 + referenceImages.length + (maskContent.length ? 1 : 0),
+      promptChars: typeof prompt === "string" ? prompt.length : 0,
+      toolTypes: toolTypes(requestTools),
+      toolChoiceKind,
+    });
+  }
   return { b64: image.b64, usage: result.usage, revisedPrompt: image.revisedPrompt, webSearchCalls: result.webSearchCalls };
 }

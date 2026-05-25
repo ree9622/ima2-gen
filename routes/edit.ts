@@ -251,6 +251,7 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       });
     } catch (e) {
       const err = errInfo(e);
+      const ext = (err.raw && typeof err.raw === "object" ? err.raw as Record<string, unknown> : {});
       const fallbackCode = err.code || classifyUpstreamError(err.message);
       if (isGenerationCanceledError(err.raw) || isJobCanceled(requestId)) {
         const canceled = makeGenerationCanceledError();
@@ -267,7 +268,23 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       finishHttpStatus = err.status || 500;
       finishErrorCode = fallbackCode || "EDIT_FAILED";
       logError("edit", "error", err.raw, { requestId, code: finishErrorCode });
-      res.status(err.status || 500).json({ error: err.message, code: fallbackCode });
+      res.status(err.status || 500).json({
+        error: err.message,
+        code: fallbackCode,
+        upstreamCode: ext.upstreamCode || null,
+        upstreamType: ext.upstreamType || null,
+        upstreamParam: ext.upstreamParam || null,
+        diagnosticReason: ext.diagnosticReason || null,
+        retryKind: ext.retryKind || null,
+        referencesDroppedOnRetry: ext.referencesDroppedOnRetry ?? null,
+        errorEventCount: ext.eventCount ?? null,
+        eventTypes: ext.eventTypes || null,
+        webSearchCalls: ext.webSearchCalls ?? null,
+        responseDiagnostics: ext.responseDiagnostics || null,
+        toolTypes: ext.toolTypes || null,
+        toolChoiceKind: ext.toolChoiceKind || null,
+        requestId,
+      });
     } finally {
       finishJob(requestId, {
         canceled: finishCanceled,

@@ -286,6 +286,11 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             retryKind: firstErr.retryKind || null,
             referencesDroppedOnRetry: firstErr.referencesDroppedOnRetry ?? null,
             errorEventCount: firstErr.eventCount ?? null,
+            eventTypes: firstErr.eventTypes || null,
+            webSearchCalls: firstErr.webSearchCalls ?? null,
+            responseDiagnostics: firstErr.responseDiagnostics || null,
+            toolTypes: firstErr.toolTypes || null,
+            toolChoiceKind: firstErr.toolChoiceKind || null,
             requestId,
           });
         }
@@ -360,6 +365,11 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         retryKind: ext.retryKind || null,
         referencesDroppedOnRetry: ext.referencesDroppedOnRetry ?? null,
         errorEventCount: ext.eventCount ?? null,
+        eventTypes: ext.eventTypes || null,
+        webSearchCalls: ext.webSearchCalls ?? null,
+        responseDiagnostics: ext.responseDiagnostics || null,
+        toolTypes: ext.toolTypes || null,
+        toolChoiceKind: ext.toolChoiceKind || null,
         requestId,
       });
     } finally {

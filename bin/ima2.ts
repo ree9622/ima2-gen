@@ -3,13 +3,11 @@ import { createInterface } from "readline/promises";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { createRequire } from "module";
 import { spawn, execSync } from "child_process";
 import { confirmDestructiveAction } from "./lib/destructive-confirm.js";
-import { buildHardeningDoctorLines } from "./lib/doctor-checks.js";
+import { doctor } from "./commands/doctor.js";
 import { openUrl, resolveBin } from "./lib/platform.js";
 import { maybePromptGithubStar } from "./lib/star-prompt.js";
-import { buildStorageDoctorLines } from "./lib/storage-doctor.js";
 import { ensureFreshUiDist } from "./lib/ui-build.js";
 import { detectCodexAuth } from "../lib/codexDetect.js";
 import { config as runtimeConfig } from "../config.js";
@@ -17,7 +15,6 @@ import { config as runtimeConfig } from "../config.js";
 import { errInfo } from "../lib/errInfo.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const requireFromRoot = createRequire(join(ROOT, "package.json"));
 // Config lives under runtimeConfig.storage.configDir (honors IMA2_CONFIG_DIR).
 // Legacy installs that stored config at <packageRoot>/.ima2/config.json will be
 // migrated on first write.
@@ -60,18 +57,6 @@ function loadAdvertisement() {
 function advertisedServerUrl() {
   const adv = loadAdvertisement();
   return adv?.backend?.url || adv?.url || (adv?.port ? `http://localhost:${adv.port}` : null);
-}
-
-function missingRuntimeDeps() {
-  const deps = ["express", "better-sqlite3", "openai", "openai-oauth"];
-  return deps.filter((dep) => {
-    try {
-      requireFromRoot.resolve(dep);
-      return false;
-    } catch {
-      return true;
-    }
-  });
 }
 
 async function setup() {
@@ -221,97 +206,6 @@ async function showStatus() {
   console.log("");
 }
 
-async function doctor() {
-  console.log(`\n  ${pkg.name} v${pkg.version} — Doctor\n`);
-
-  let ok = 0;
-  let fail = 0;
-
-  // Node version
-  const nodeVersion = process.version;
-  const nodeMajor = parseInt(nodeVersion.slice(1).split(".")[0]);
-  if (nodeMajor >= 20) {
-    console.log(`  ✓ Node.js ${nodeVersion} (>= 20)`);
-    ok++;
-  } else {
-    console.log(`  ✗ Node.js ${nodeVersion} (requires >= 20)`);
-    fail++;
-  }
-
-  // package.json exists
-  if (existsSync(join(ROOT, "package.json"))) {
-    console.log("  ✓ package.json found");
-    ok++;
-  } else {
-    console.log("  ✗ package.json missing");
-    fail++;
-  }
-
-  // Runtime dependencies may be hoisted by npm, pnpm, or Yarn. Resolve the
-  // packages instead of requiring a package-local node_modules folder.
-  const missingDeps = missingRuntimeDeps();
-  if (missingDeps.length === 0) {
-    console.log("  ✓ runtime dependencies resolvable");
-    ok++;
-  } else {
-    console.log(`  ✗ missing runtime dependencies: ${missingDeps.join(", ")}`);
-    fail++;
-  }
-
-  // .env
-  if (existsSync(join(ROOT, ".env"))) {
-    console.log("  ✓ .env file exists");
-    ok++;
-  } else {
-    console.log("  ⚠ .env file not found (optional — copy from .env.example)");
-  }
-
-  // Config
-  const config = loadConfig();
-  if (config.provider) {
-    console.log(`  ✓ Configured: ${config.provider}`);
-    ok++;
-  } else {
-    console.log("  ⚠ Not configured — run 'ima2 setup'");
-  }
-
-  // Port availability (simple check)
-  const adv = loadAdvertisement();
-  console.log(`  ℹ Preferred backend port: ${runtimeConfig.server.port}`);
-  if (adv?.backend || adv?.port) {
-    console.log(`  ℹ Backend actual URL: ${adv?.backend?.url || adv?.url || `http://localhost:${adv.port}`}`);
-    if (adv?.oauth) {
-      console.log(`  ℹ OAuth actual URL: ${adv.oauth.url} (${adv.oauth.status || "unknown"})`);
-    }
-  }
-
-  const hardeningLines = await buildHardeningDoctorLines({
-    root: ROOT,
-    configFile: CONFIG_FILE,
-    fileConfig: config,
-  });
-  for (const line of hardeningLines) {
-    const prefix =
-      line.kind === "pass" ? "✓"
-      : line.kind === "fail" ? "✗"
-      : line.kind === "warn" ? "⚠"
-      : "ℹ";
-    console.log(`  ${prefix} ${line.text}`);
-    if (line.kind === "pass") ok++;
-    if (line.kind === "fail") fail++;
-  }
-
-  const storageLines = await buildStorageDoctorLines({
-    rootDir: ROOT,
-    config: runtimeConfig,
-  });
-  console.log("");
-  for (const line of storageLines) console.log(line);
-
-  console.log(`\n  ${ok} passed, ${fail} failed\n`);
-  process.exit(fail > 0 ? 1 : 0);
-}
-
 function openBrowser() {
   const url = advertisedServerUrl() || `http://localhost:${runtimeConfig.server.port}`;
   const res = openUrl(url);
@@ -400,7 +294,7 @@ if (args.includes("-v") || args.includes("--version")) {
 }
 
 if ((!command || args.includes("-h") || args.includes("--help"))
-    && !["gen", "edit", "ls", "show", "ps", "cancel", "session", "history", "prompt", "multimode", "node", "annotate", "canvas-versions", "metadata", "comfy", "cardnews", "inflight", "storage", "billing", "providers", "oauth", "config", "defaults", "capabilities", "skill", "ping"].includes(command)) {
+    && !["doctor", "gen", "edit", "ls", "show", "ps", "cancel", "session", "history", "prompt", "multimode", "node", "annotate", "canvas-versions", "metadata", "comfy", "cardnews", "inflight", "storage", "billing", "providers", "oauth", "config", "defaults", "capabilities", "skill", "ping"].includes(command)) {
   showHelp();
   process.exit(command ? 0 : 1);
 }
@@ -417,7 +311,7 @@ switch (command) {
     showStatus();
     break;
   case "doctor":
-    await doctor();
+    await doctor(args.slice(1));
     break;
   case "open":
     openBrowser();

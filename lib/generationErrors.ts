@@ -34,8 +34,16 @@ export interface UpstreamErr {
   eventType?: string;
   eventCount?: number;
   eventTypes?: unknown;
+  webSearchCalls?: number;
+  responseDiagnostics?: unknown;
+  webSearchEnabled?: boolean;
+  toolTypes?: unknown;
+  toolChoiceKind?: string;
+  promptChars?: number;
   quality?: string;
+  moderation?: string;
   model?: string;
+  provider?: string;
   refsCount?: number;
   inputImageCount?: number;
   referenceDiagnostics?: unknown;
@@ -49,7 +57,28 @@ export interface UpstreamErr {
 function diagnosticReasonFrom(err: UpstreamErr | null | undefined) {
   if (typeof err?.diagnosticReason === "string" && err.diagnosticReason) return err.diagnosticReason;
   if (Number(err?.referenceMismatchCount) > 0) return "reference_mime_mismatch_candidate";
+  const responseDiagnosticReason = responseDiagnosticReasonFrom(err);
+  if (responseDiagnosticReason) return responseDiagnosticReason;
   if (has4kSize(err?.size)) return "experimental_4k_empty_response";
+  return null;
+}
+
+function responseDiagnosticReasonFrom(err: UpstreamErr | null | undefined) {
+  if (!err?.responseDiagnostics || typeof err.responseDiagnostics !== "object") return null;
+  const diagnostics = err.responseDiagnostics as {
+    imageCallSeen?: unknown;
+    imageCallCompleted?: unknown;
+    imageCallFailed?: unknown;
+    imageResultCount?: unknown;
+    messageOutputSeen?: unknown;
+    streamStats?: { bytesRead?: unknown };
+  };
+  const bytesRead = Number(diagnostics.streamStats?.bytesRead);
+  if (Number.isFinite(bytesRead) && bytesRead > 0 && Number(err.eventCount) === 0) return "stream_parse_failed";
+  if (diagnostics.imageCallFailed === true) return "image_tool_failed";
+  if (diagnostics.imageCallCompleted === true && Number(diagnostics.imageResultCount) === 0) return "image_tool_completed_without_result";
+  if (diagnostics.imageCallSeen !== true && Number(err.webSearchCalls) > 0) return "web_search_only_response";
+  if (diagnostics.imageCallSeen !== true && diagnostics.messageOutputSeen === true) return "image_tool_not_called";
   return null;
 }
 
@@ -129,8 +158,16 @@ export function normalizeGenerationFailure(lastErr: UpstreamErr | null | undefin
     if (lastErr.size) err.size = lastErr.size;
     if (lastErr.quality) err.quality = lastErr.quality;
     if (lastErr.model) err.model = lastErr.model;
+    if (lastErr.provider) err.provider = lastErr.provider;
+    if (lastErr.moderation) err.moderation = lastErr.moderation;
     if (typeof lastErr.eventCount === "number") err.eventCount = lastErr.eventCount;
     if (lastErr.eventTypes) err.eventTypes = lastErr.eventTypes;
+    if (typeof lastErr.webSearchCalls === "number") err.webSearchCalls = lastErr.webSearchCalls;
+    if (lastErr.responseDiagnostics) err.responseDiagnostics = lastErr.responseDiagnostics;
+    if (typeof lastErr.webSearchEnabled === "boolean") err.webSearchEnabled = lastErr.webSearchEnabled;
+    if (Array.isArray(lastErr.toolTypes)) err.toolTypes = lastErr.toolTypes;
+    if (lastErr.toolChoiceKind) err.toolChoiceKind = lastErr.toolChoiceKind;
+    if (typeof lastErr.promptChars === "number") err.promptChars = lastErr.promptChars;
     if (typeof lastErr.refsCount === "number") err.refsCount = lastErr.refsCount;
     if (typeof lastErr.inputImageCount === "number") err.inputImageCount = lastErr.inputImageCount;
     if (Array.isArray(lastErr.referenceDiagnostics)) err.referenceDiagnostics = lastErr.referenceDiagnostics;

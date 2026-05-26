@@ -2,6 +2,8 @@
 .ima2/
 node_modules/
 generated/
+backups/
+logs/
 .DS_Store
 devlog/
 ui/dist/

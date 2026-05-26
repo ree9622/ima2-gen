@@ -32,6 +32,7 @@ contradicts current code, prefer current code plus the active roadmap.
 | `devlog/_plan/260517_agent-mode-auto-generation-jawdev/` | implementation-patched | Agent Mode auto generation policy: deterministic request-aware variants/parallelism, text responses, `/question`, slash commands, and plan observability. |
 | `devlog/_plan/260519_issue72-slash-command-dropup/` | plan | GitHub #72 Agent Composer slash command dropup menu plus tab autocomplete. |
 | `devlog/_plan/260525_empty-response-diagnostics-jawdev/` | P / plan | GitHub #76 OAuth/Responses `EMPTY_RESPONSE` diagnostics and hardening lane for DCInside/Windows reports. Public phase reports live in #76 comments; the detailed lane folder is a local ignored working note unless explicitly force-added. |
+| `devlog/_plan/260526_issue75-prompt-studio-regressions/` | active / phase implementation | GitHub #75 Prompt Studio regressions: selection/navigation state, viewer/composer layout, multimode/direct state, quick reasoning settings, and manual gaps. |
 
 ## 2026-05-16 Completion References
 
@@ -58,6 +59,7 @@ contradicts current code, prefer current code plus the active roadmap.
 | #71 | Active planning. Classic current prompt injection and quality element context before Prompt Studio. |
 | #72 | Active planning. Slash command dropup menu, prefix filtering, tab autocomplete, and keyboard navigation. |
 | #76 | Active planning. OAuth/Responses `EMPTY_RESPONSE` diagnostics and hardening for Windows/OAuth reports. |
+| #75 | Active phase implementation. Prompt Studio regression pass starting with composer selection decoupling, visible recent-history keyboard bounds, fixed gallery opener, and gallery scroll preservation. |
 | #59 | Implemented, moved to `_fin`, and closed on GitHub during the 2026-05-16 closeout. |
 | #64-#70 | Implemented, moved to `_fin`, and closed on GitHub during the 2026-05-16 closeout. |
 | #68/#69 | Implemented as UX hardening under the #64-#70 closeout and closed on GitHub. |
@@ -81,3 +83,4 @@ contradicts current code, prefer current code plus the active roadmap.
 - 2026-05-17: Added `260517_agent-ui-polish-jawdev/` and `260517_agent-mode-auto-generation-jawdev/` to the active plan references and roadmap summary.
 - 2026-05-17: Updated Agent auto generation lane status after first implementation patch and focused contract verification.
 - 2026-05-25: Added GitHub #76 and `260525_empty-response-diagnostics-jawdev/` for DCInside Windows OAuth `EMPTY_RESPONSE` triage and planned Responses/OAuth diagnostic hardening, including image-tool-call hardening. Recorded that public phase reports live in #76 comments while the detailed lane folder remains a local ignored working note unless force-added.
+- 2026-05-26: Added GitHub #75 and `260526_issue75-prompt-studio-regressions/` for Prompt Studio regression implementation. Phase 1 covers prompt selection side effects, sidebar shortcut domain bounds, fixed gallery opener, and gallery viewport preservation.

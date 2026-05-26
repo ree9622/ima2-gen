@@ -20,7 +20,7 @@ export const PROMPT_STUDIO_WORKSPACE_PRESET: WorkspaceOverrides = {
   promptBuilderSurface: "right-panel",
   composerPlacement: "bottom",
   multimodeHistoryGrouping: "sequence",
-  restoreComposerFromHistory: true,
+  restoreComposerFromHistory: false,
   viewerTools: "zoom-pan",
 };
 

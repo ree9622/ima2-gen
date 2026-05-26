@@ -131,7 +131,8 @@ import {
   resolveVisibleShortcutCurrent,
   type GalleryShortcutAction,
 } from "../lib/galleryShortcuts";
-import { compareSequenceItems } from "../lib/history/sidebarHistory";
+import { compareSequenceItems, getSidebarHistoryShortcutTarget } from "../lib/history/sidebarHistory";
+import { resolveWorkspaceSettings } from "../lib/workspaceProfile";
 
 export type GalleryScope = "current-session" | "all";
 
@@ -871,6 +872,15 @@ function removeImageFromMultimodeSequences(
     };
   }
   return changed ? next : sequences;
+}
+
+function getActiveSidebarSequenceId(
+  state: Pick<AppState, "multimodePreviewFlightId" | "multimodeSequences">,
+): string | null {
+  const id = state.multimodePreviewFlightId;
+  if (!id) return null;
+  if (id.startsWith("history:")) return id.slice("history:".length);
+  return state.multimodeSequences[id]?.sequenceId ?? null;
 }
 
 type AppState = {
@@ -3072,7 +3082,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? resolveVisibleShortcutCurrent(history, item) ?? getVisibleGalleryItems(history)[0] ?? null
       : resolveVisibleShortcutCurrent(history, item) ?? item;
     saveSelectedFilename(target?.filename ?? null);
-    const composerPatch = target ? getHistoryComposerPatch(target) : {};
+    const shouldRestoreComposer = resolveWorkspaceSettings(get().workspaceProfile).restoreComposerFromHistory;
+    const composerPatch = shouldRestoreComposer && target ? getHistoryComposerPatch(target) : {};
     if (Object.keys(composerPatch).length > 0) {
       saveGenerationDefaultsPatch(composerPatch);
     }
@@ -3125,7 +3136,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   markGeneratedResultsSeen: () => set({ unseenGeneratedCount: 0 }),
 
   selectHistoryShortcutTarget: (action) => {
-    const target = getShortcutTarget(get().history, get().currentImage, action);
+    const state = get();
+    const workspaceSettings = resolveWorkspaceSettings(state.workspaceProfile);
+    if (state.uiMode === "classic" && workspaceSettings.multimodeHistoryGrouping === "sequence") {
+      const target = getSidebarHistoryShortcutTarget(
+        state.history,
+        state.currentImage,
+        action,
+        getActiveSidebarSequenceId(state),
+      );
+      if (!target) return;
+      if (target.type === "sequence") {
+        get().showHistorySequence(target.sequenceId);
+        return;
+      }
+      get().selectHistory(target.item);
+      return;
+    }
+    const target = getShortcutTarget(state.history, state.currentImage, action);
     if (!target) return;
     get().selectHistory(target);
   },

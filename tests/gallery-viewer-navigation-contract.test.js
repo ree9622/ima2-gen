@@ -27,12 +27,17 @@ describe("gallery viewer focusless navigation contract", () => {
     assert.doesNotMatch(hook, /Delete:\s*/);
     assert.doesNotMatch(hook, /Shift\+Delete/);
     assert.match(hook, /uiMode !== "classic"/);
+    assert.match(hook, /hasNavigationAnchor/);
+    assert.match(hook, /Boolean\(s\.currentImage\) \|\| Boolean\(s\.multimodePreviewFlightId\)/);
+    assert.match(hook, /if \(!hasNavigationAnchor\) return/);
+    assert.doesNotMatch(hook, /if \(!currentImage\) return/);
     assert.match(hook, /event\.defaultPrevented/);
     assert.match(hook, /isEditableTarget\(event\.target\)/);
 
     assert.match(domEvents, /HTMLButtonElement/);
     assert.match(store, /selectHistoryShortcutTarget:\s*\(action\) =>/);
-    assert.match(store, /getShortcutTarget\(get\(\)\.history,\s*get\(\)\.currentImage,\s*action\)/);
+    assert.match(store, /getSidebarHistoryShortcutTarget\(/);
+    assert.match(store, /getShortcutTarget\(state\.history,\s*state\.currentImage,\s*action\)/);
     assert.match(store, /resolveVisibleShortcutCurrent,/);
     assert.match(store, /getVisibleGalleryItems,/);
     assert.match(store, /saveSelectedFilename\(target\?\.filename \?\? null\)/);

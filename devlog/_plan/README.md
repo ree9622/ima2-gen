@@ -36,6 +36,7 @@ Deferred / 미래 항목은 `_plan/`이 아니라 `devlog/_future/`에 둔다.
 | 10 | `260517_agent-mode-auto-generation-jawdev/` | implementation-patched | Agent Mode auto generation policy: deterministic request-aware variants/parallelism, text responses, `/question`, slash commands, manual caps, and queue/tool observability. |
 | 11 | `260519_issue72-slash-command-dropup/` | plan | GitHub #72. Agent Composer slash command dropup menu + tab autocomplete. 정적 pill → floating dropup, prefix 필터, 키보드 내비게이션, browser QA. |
 | 12 | `260525_empty-response-diagnostics-jawdev/` | P / plan | GitHub #76. DCInside/Windows OAuth `EMPTY_RESPONSE` triage lane. Adds sanitized stream fingerprint, image doctor probes, parser/payload hardening, image-tool-call hardening, prompt-only fallback, and support-safe repro playbook. Public phase reports live in #76 comments; the detailed lane folder is a local ignored working note unless explicitly force-added. |
+| 13 | `260526_issue75-prompt-studio-regressions/` | active / phase implementation | GitHub #75. Prompt Studio selection/navigation, viewer/composer layout, multimode/direct state, quick reasoning settings, and manual gaps. Phase 1 starts with state decoupling and visible recent-history navigation. |
 
 ## 2026-05-16 GH / Devlog Closeout
 
@@ -72,6 +73,7 @@ verification, or triage scopes are:
 | #28 | `260430_issue28-canvas-pptx-export/` | Add PptxGenJS export, preferably reusing #27 overlay output. |
 | #72 | `260519_issue72-slash-command-dropup/` | Slash command dropup menu + tab autocomplete. 정적 pill 뱃지 → floating dropup, 키보드 내비게이션, prefix 필터링. |
 | #76 | `260525_empty-response-diagnostics-jawdev/` | Classify and harden OAuth/Responses `EMPTY_RESPONSE` failures. Public phase reports live in #76 comments; the detailed lane folder is a local ignored working note unless explicitly force-added. |
+| #75 | `260526_issue75-prompt-studio-regressions/` | Prompt Studio regression pass. Phase 1 fixes prompt selection side effects, visible recent-history shortcut bounds, fixed gallery opener, and gallery scroll preservation. |
 
 ## 다음 작업 원칙
 
@@ -90,3 +92,4 @@ verification, or triage scopes are:
 - 2026-05-17: `260517_agent-mode-auto-generation-jawdev/`에 deterministic planner, slash command parser, `/question` text bypass, planned parallelism runtime wiring, right sidebar tab split, composer slash hints, focused contract tests, reviewer concern closure, and Chrome/Computer Use QA closeout를 추가했다. 구현/검증 근거는 해당 lane의 `08_implementation_patch_log.md`가 source of truth이며, 폴더 이동은 별도 closeout 작업에서 처리한다.
 - 2026-05-19: GitHub #72를 열고 `260519_issue72-slash-command-dropup/` planning lane을 추가했다. Agent Composer의 정적 slash command pill 뱃지를 floating dropup 메뉴 + Tab 자동완성 + 화살표 키 내비게이션으로 교체하는 작업이다. browser 스킬 기반 QA 체크리스트 포함.
 - 2026-05-25: DCInside Windows OAuth `EMPTY_RESPONSE` 제보를 바탕으로 GitHub #76과 `260525_empty-response-diagnostics-jawdev/` planning lane을 추가했다. Classic `generateViaResponses()`의 stream parser, `web_search`/`tool_choice`, image-tool-call hardening, OAuth capability, non-stream fallback, support-safe Windows repro를 분리해 검증한다. 상세 lane 폴더는 로컬 ignored working note이고, 공개 phase report는 #76 comment로 남긴다.
+- 2026-05-26: GitHub #75를 `260526_issue75-prompt-studio-regressions/` active lane으로 추가했다. Prompt Studio의 선택/탐색 상태, viewer/composer layout, multimode/direct 상태 표시, quick reasoning 설정, 수동 매뉴얼 보강을 phase별로 구현/검증한다.

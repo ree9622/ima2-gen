@@ -14,7 +14,7 @@ const KEY_TO_ACTION: Record<string, GalleryShortcutAction | undefined> = {
 
 export function useGalleryViewerNavigation() {
   const uiMode = useAppStore((s) => s.uiMode);
-  const currentImage = useAppStore((s) => s.currentImage);
+  const hasNavigationAnchor = useAppStore((s) => Boolean(s.currentImage) || Boolean(s.multimodePreviewFlightId));
   const selectHistoryShortcutTarget = useAppStore((s) => s.selectHistoryShortcutTarget);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function useGalleryViewerNavigation() {
       if (!action) return;
       if (event.defaultPrevented) return;
       if (isEditableTarget(event.target)) return;
-      if (!currentImage) return;
+      if (!hasNavigationAnchor) return;
 
       event.preventDefault();
       selectHistoryShortcutTarget(action);
@@ -33,5 +33,5 @@ export function useGalleryViewerNavigation() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentImage, selectHistoryShortcutTarget, uiMode]);
+  }, [hasNavigationAnchor, selectHistoryShortcutTarget, uiMode]);
 }

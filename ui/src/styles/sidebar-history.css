@@ -17,12 +17,18 @@
   gap: 8px;
 }
 
+.sidebar-history__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-history__gallery-button,
 .sidebar-history__toggle {
-  min-width: 42px;
   min-height: 26px;
   padding: 0 9px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface-2);
   color: var(--text-dim);
   font-family: var(--mono);
@@ -30,6 +36,20 @@
   cursor: pointer;
 }
 
+.sidebar-history__gallery-button {
+  width: 30px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.sidebar-history__toggle {
+  min-width: 42px;
+  border-radius: 999px;
+}
+
+.sidebar-history__gallery-button:hover,
+.sidebar-history__gallery-button:focus-visible,
 .sidebar-history__toggle:hover,
 .sidebar-history__toggle:focus-visible {
   border-color: var(--border-strong);

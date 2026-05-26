@@ -58,6 +58,10 @@ export function GalleryModal() {
   const scrollRef = useRef<HTMLDivElement | null>(null), itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
+  const previousViewRef = useRef<{ open: boolean; selectedKey: string | null }>({
+    open: false,
+    selectedKey: null,
+  });
   const galleryHistory = useMemo(() => uniqueGalleryItems(history.filter(isGalleryVisibleItem)), [history]);
   const setScrollNode = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
@@ -209,10 +213,16 @@ export function GalleryModal() {
     : filtered.length;
 
   useLayoutEffect(() => {
-    if (!open) return;
     const selectedKey = currentImage ? getGalleryItemKey(currentImage) : null;
+    if (!open) {
+      previousViewRef.current = { open: false, selectedKey };
+      return;
+    }
+    const previous = previousViewRef.current;
+    const shouldCenterSelected = !previous.open || previous.selectedKey !== selectedKey;
+    previousViewRef.current = { open: true, selectedKey };
     const selectedEl = selectedKey ? itemRefs.current[selectedKey] : null;
-    if (selectedEl) {
+    if (shouldCenterSelected && selectedEl) {
       selectedEl.scrollIntoView({ block: "center" });
       return;
     }

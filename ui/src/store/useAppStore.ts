@@ -15,6 +15,7 @@ import type {
 import { isMultiResponse } from "../types";
 import {
   postGenerate,
+  postGenerateQueued,
   getHistory,
   getInflight,
   cancelInflight,
@@ -113,6 +114,26 @@ function saveMaxAttempts(n: number): void {
   } catch {}
 }
 
+const LEGACY_FICTIONAL_PERSONA_PROMPT_RE =
+  /fictional AI-generated virtual personas|not depictions of real, identifiable individuals/i;
+
+function migrateUserPrefsState(persistedState: unknown, version: number): unknown {
+  if (version < 2 && persistedState && typeof persistedState === "object") {
+    const state = persistedState as {
+      systemPrompt?: unknown;
+      systemPromptEnabled?: unknown;
+    };
+    if (
+      typeof state.systemPrompt === "string" &&
+      LEGACY_FICTIONAL_PERSONA_PROMPT_RE.test(state.systemPrompt)
+    ) {
+      state.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+      state.systemPromptEnabled = true;
+    }
+  }
+  return persistedState;
+}
+
 
 // Activity log entry: in-flight items used to be ephemeral, but the user wants
 // them to persist after success/failure with color cues + retry. We keep the
@@ -153,7 +174,9 @@ export type PersistedInFlight = {
   clientNodeId?: ClientNodeId;
 };
 
-const INFLIGHT_TTL_MS = 180_000;            // running TTL (legacy guard against stuck items)
+const INFLIGHT_TTL_MS = 45 * 60_000;        // matches server durable queue / inflight TTL
+const SERVER_QUEUE_MISSING_GRACE_MS = 20_000;
+const SERVER_QUEUE_REQUEST_ID_RE = /^f_\d+_\d+_[a-z0-9]+$/;
 
 // upstream 73f228e 흡수: 같은 노드에서 generate 가 동시에 두 번 호출되지 않게
 // module-level Map 으로 잠금. React state 가 disabled 로 전환되기 전 빠른 더블
@@ -189,6 +212,23 @@ function activityTtlMs(item: PersistedInFlight): number {
 function isExpired(item: PersistedInFlight, now: number): boolean {
   const stamp = item.endedAt ?? item.startedAt;
   return now - stamp > activityTtlMs(item);
+}
+
+function serverMissingQueueError(
+  item: PersistedInFlight,
+  now = Date.now(),
+): PersistedInFlight | null {
+  if ((item.status ?? "running") !== "running") return null;
+  if (!SERVER_QUEUE_REQUEST_ID_RE.test(item.id)) return null;
+  if (now - item.startedAt < SERVER_QUEUE_MISSING_GRACE_MS) return null;
+  return {
+    ...item,
+    status: "error",
+    endedAt: now,
+    elapsedMs: now - item.startedAt,
+    errorMessage: item.errorMessage || "서버 큐에서 작업을 찾을 수 없습니다.",
+    phase: undefined,
+  };
 }
 
 function loadInFlight(): PersistedInFlight[] {
@@ -288,6 +328,54 @@ function extractInflightMeta(job: InflightJob): {
         ? (metaClientNodeId as ClientNodeId)
         : undefined,
   };
+}
+
+function queueStatusOf(job: InflightJob): string | undefined {
+  return typeof job.status === "string"
+    ? job.status
+    : typeof job.queueStatus === "string"
+      ? job.queueStatus
+      : undefined;
+}
+
+function terminalActivityFromJob(
+  f: PersistedInFlight,
+  j: InflightJob,
+  now = Date.now(),
+): PersistedInFlight | null {
+  const status = queueStatusOf(j);
+  if (status === "failed" || status === "canceled") {
+    return {
+      ...f,
+      status: "error",
+      endedAt: now,
+      elapsedMs: now - f.startedAt,
+      errorMessage:
+        typeof j.errorMessage === "string" && j.errorMessage
+          ? j.errorMessage
+          : status === "canceled"
+            ? "취소됨"
+            : "생성 실패",
+      phase: undefined,
+    };
+  }
+  if (status === "succeeded") {
+    return {
+      ...f,
+      status: "success",
+      endedAt: now,
+      elapsedMs: now - f.startedAt,
+      filename: typeof j.filename === "string" && j.filename ? j.filename : f.filename,
+      errorMessage: undefined,
+      phase: undefined,
+    };
+  }
+  return null;
+}
+
+function isServerJobTerminal(j: InflightJob): boolean {
+  const status = queueStatusOf(j);
+  return status === "failed" || status === "canceled" || status === "succeeded";
 }
 
 // Centralized debug logger. Toggle via `localStorage["ima2.debug"] = "1"` or
@@ -462,9 +550,16 @@ function historyItemToGenerateItem(it: HistoryItem): GenerateItem {
     originalPrompt: it.originalPrompt ?? undefined,
     systemPrompt: it.systemPrompt ?? undefined,
     systemPromptEnabled: it.systemPromptEnabled === true,
+    promptRuntime: it.promptRuntime ?? undefined,
     size: it.size ?? undefined,
     quality: it.quality ?? undefined,
     provider: it.provider,
+    width: it.width ?? undefined,
+    height: it.height ?? undefined,
+    resolution: it.resolution ?? undefined,
+    imageRoute: it.imageRoute ?? it.promptRuntime?.route ?? undefined,
+    imageModel: it.imageModel ?? it.promptRuntime?.imageModel ?? undefined,
+    responsesModel: it.responsesModel ?? it.promptRuntime?.model ?? undefined,
     codexAccount: it.codexAccount ?? undefined,
     usage: (it.usage as GenerateItem["usage"]) ?? undefined,
     createdAt: it.createdAt,
@@ -1815,7 +1910,19 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           // Only update entries still running locally.
           if ((f.status ?? "running") !== "running") return f;
           const j = byId.get(f.id);
-          if (!j) return f;
+          if (!j) {
+            const missing = serverMissingQueueError(f);
+            if (missing) {
+              changed = true;
+              return missing;
+            }
+            return f;
+          }
+          const terminal = terminalActivityFromJob(f, j);
+          if (terminal) {
+            changed = true;
+            return terminal;
+          }
           const newPhase = typeof j.phase === "string" ? j.phase : f.phase;
           const newAttempt = typeof j.attempt === "number" ? j.attempt : f.attempt;
           const newMax = typeof j.maxAttempts === "number" ? j.maxAttempts : f.maxAttempts;
@@ -1961,6 +2068,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         //    recovery meta (kind/sessionId/parentNodeId/clientNodeId) from
         //    the server so a refreshed tab can rebuild node parent links.
         const serverJob = serverById.get(f.id);
+        if (serverJob) {
+          const terminal = terminalActivityFromJob(f, serverJob, now);
+          if (terminal) {
+            merged.push(terminal);
+            kept++;
+            continue;
+          }
+        }
         if (status === "running" && serverJob) {
           const meta = extractInflightMeta(serverJob);
           merged.push({
@@ -1971,6 +2086,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             clientNodeId: meta.clientNodeId ?? f.clientNodeId,
           });
           kept++;
+          continue;
+        }
+        const missingQueueError = serverMissingQueueError(f, now);
+        if (missingQueueError) {
+          merged.push(missingQueueError);
+          dropped++;
           continue;
         }
         // 2) History has a row with our requestId → server finished and
@@ -2020,6 +2141,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       }
       const localIds = new Set(merged.map((f) => f.id));
       for (const j of jobs) {
+        if (isServerJobTerminal(j)) continue;
         if (!localIds.has(j.requestId)) {
           // Server-only entry — started in another tab/process or after our
           // localStorage was cleared. Populate full recovery meta so node
@@ -2170,49 +2292,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       } catch {}
     }
     if (!sid) {
-      // Classic-mode image — no graph session to jump to. Prefill the
-      // composer with this image's prompt + options so the click feels
-      // like "open this for re-work" instead of a dead end.
-      // upstream abfb80d 흡수: prompt 없는 이미지(외부 import 등)도 dead-end
-      // 띄우지 말고 이미지를 ref로 첨부해서 "빈 prompt + ref" 상태로 진입.
-      const prompt = (target.prompt ?? "").trim();
-      const hasPrompt = prompt.length > 0;
-      const s = get();
-      const next: Partial<AppState> = {
-        quality: (target.quality as Quality) || s.quality,
-        sizePreset: (target.size as SizePreset) || s.sizePreset,
-        moderation: (target.moderation as Moderation) || s.moderation,
-      };
-      if (hasPrompt) {
-        next.prompt = prompt;
-        next.originalPrompt =
-          typeof target.originalPrompt === "string" && target.originalPrompt.length > 0
-            ? target.originalPrompt
-            : null;
-      }
-      set(next);
-      if (!hasPrompt && target.image) {
-        try {
-          await get().addReferenceDataUrl(target.image);
-        } catch {
-          // ref 첨부 실패는 무시 — 빈 composer라도 열리게
-        }
-      }
-      get().showToast(
-        hasPrompt
-          ? "프롬프트와 옵션을 가져왔습니다."
-          : "이미지를 참조로 첨부했어요. 프롬프트 입력 후 생성하세요.",
-      );
-      // Focus the composer textarea after the lightbox unmounts.
-      setTimeout(() => {
-        const el = document.querySelector<HTMLTextAreaElement>(
-          ".composer__textarea, .prompt-area",
-        );
-        if (el) {
-          el.focus();
-          el.setSelectionRange(el.value.length, el.value.length);
-        }
-      }, 50);
+      get().showToast("연결된 노드 세션이 없습니다.");
       return;
     }
     if (get().uiMode !== "node") get().setUIMode("node");
@@ -3807,6 +3887,88 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       `hasOriginal=${Boolean(s.originalPrompt && s.originalPrompt !== prompt)}`,
     );
 
+    if (count > 1) {
+      let queued = 0;
+      let enqueueFailed = 0;
+      let queueUnsupported = false;
+      let firstQueueErr: string | null = null;
+      await Promise.all(
+        flightIds.map(async (flightId) => {
+          try {
+            await postGenerateQueued({
+              prompt,
+              quality,
+              size,
+              format: s.format,
+              moderation: s.moderation,
+              provider: s.provider,
+              n: 1,
+              requestId: flightId,
+              maxAttempts: s.maxAttempts,
+              ...(s.originalPrompt && s.originalPrompt !== prompt
+                ? { originalPrompt: s.originalPrompt }
+                : {}),
+              systemPrompt: s.systemPrompt,
+              includeSystemPrompt: s.systemPromptEnabled,
+              ...(references ? { references } : {}),
+              ...(referenceMeta ? { referenceMeta } : {}),
+              ...(overrides?.outfitModule ? { outfitModule: overrides.outfitModule } : {}),
+              ...(overrides?.batchId
+                ? {
+                    batchId: overrides.batchId,
+                    batchIndex: overrides.batchIndex ?? 0,
+                    batchTotal: overrides.batchTotal,
+                    batchSource: overrides.batchSource,
+                  }
+                : {}),
+            });
+            queued += 1;
+          } catch (err) {
+            if ((err as { status?: number })?.status === 404) {
+              queueUnsupported = true;
+              return;
+            }
+            enqueueFailed += 1;
+            const msg = err instanceof Error ? err.message : "서버 큐 등록에 실패했습니다.";
+            if (firstQueueErr === null) firstQueueErr = msg;
+            set((state) => ({
+              activeGenerations: Math.max(0, state.activeGenerations - 1),
+              inFlight: state.inFlight.map((f) =>
+                f.id === flightId
+                  ? {
+                      ...f,
+                      status: "error",
+                      endedAt: Date.now(),
+                      elapsedMs: Date.now() - startedAt,
+                      errorMessage: msg,
+                      phase: undefined,
+                    }
+                  : f,
+              ),
+            }));
+          } finally {
+            saveInFlight(get().inFlight);
+          }
+        }),
+      );
+      if (queueUnsupported && queued === 0 && enqueueFailed === 0) {
+        console.warn("[ima2][generate] /api/generate/queue returned 404; falling back to legacy /api/generate");
+        get().showToast("서버 큐 API가 아직 반영되지 않아 기존 방식으로 생성합니다.", true);
+      } else {
+        if (queued > 0) {
+          get().showToast(
+            enqueueFailed > 0
+              ? `${queued}/${count}장 서버 큐에 등록됨 (${enqueueFailed}장 실패)`
+              : `${queued}장을 서버 큐에 등록했습니다.`,
+            enqueueFailed > 0,
+          );
+        } else {
+          get().showToast(firstQueueErr ?? "서버 큐 등록에 실패했습니다.", true);
+        }
+        return;
+      }
+    }
+
     await Promise.all(
       flightIds.map(async (flightId) => {
         const slotStartedAt = Date.now();
@@ -3867,8 +4029,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               : {}),
             systemPrompt: res.systemPrompt ?? undefined,
             systemPromptEnabled: res.systemPromptEnabled === true,
+            promptRuntime: (res as { promptRuntime?: GenerateItem["promptRuntime"] }).promptRuntime ?? undefined,
             elapsed: res.elapsed,
             provider: res.provider,
+            imageRoute: (res as { imageRoute?: string | null }).imageRoute ?? (res as { promptRuntime?: GenerateItem["promptRuntime"] }).promptRuntime?.route ?? undefined,
+            imageModel: (res as { imageModel?: string | null }).imageModel ?? (res as { promptRuntime?: GenerateItem["promptRuntime"] }).promptRuntime?.imageModel ?? undefined,
+            responsesModel: (res as { responsesModel?: string | null }).responsesModel ?? (res as { promptRuntime?: GenerateItem["promptRuntime"] }).promptRuntime?.model ?? undefined,
             usage: res.usage,
             quality: res.quality ?? s.quality,
             size: res.size ?? size,
@@ -4055,7 +4221,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 }), {
   name: "ima2.userPrefs",
   storage: createJSONStorage(() => localStorage),
-  version: 1,
+  version: 2,
+  migrate: migrateUserPrefsState,
   // Whitelist exactly the right-panel inputs. Anything else (refs / history
   // / inflight / sessions / draft / sexy-tune state) is left to its existing
   // persistence path or is purposely transient.

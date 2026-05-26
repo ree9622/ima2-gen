@@ -13,7 +13,7 @@ const MAX_REFS = 5;
 // Per-prompt cap when importing .txt files. Each .txt is one prompt; very
 // long files are typically a paste mistake (e.g. a whole document) rather
 // than an intentional 10k-char prompt, so we clamp instead of bailing.
-const TXT_PROMPT_MAX = 8000;
+const TXT_PROMPT_MAX = 32000;
 
 // Hard ceiling on how many .txt files we'll process in one batch. Above this
 // we ask for confirmation since the multiplier with `count` can be huge
@@ -610,7 +610,7 @@ export function PromptComposer() {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
         multiple
         hidden
         onChange={(e) => {

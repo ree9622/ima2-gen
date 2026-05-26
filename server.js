@@ -1,9 +1,11 @@
 import "./lib/timestampConsole.js";
 import "dotenv/config";
 import express from "express";
+import sharp from "sharp";
 import { writeFile, mkdir, readFile, readdir, stat, rename } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { request as httpRequest } from "http";
 import { spawn } from "child_process";
 import { spawnBin, onShutdown } from "./bin/lib/platform.js";
 import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsReadFileSync } from "fs";
@@ -12,6 +14,18 @@ import { randomBytes } from "crypto";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64, loadAssetSidecar, importExistingFile, writeNodeResult, readNodeResult, pruneNodeResults } from "./lib/nodeStore.js";
 import { derivePreviews, variantUrls } from "./lib/imageVariants.js";
 import { startJob, finishJob, listJobs, listJobsRaw, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
+import {
+  enqueueGenerationJob,
+  getGenerationJob,
+  claimNextGenerationJob,
+  setGenerationJobPhase,
+  completeGenerationJob,
+  failGenerationJob,
+  cancelGenerationJob,
+  requeueGenerationJob,
+  recoverQueuedGenerationJobs,
+  listGenerationJobs,
+} from "./lib/generationQueueStore.js";
 import {
   createSession,
   listSessions,
@@ -83,6 +97,7 @@ import { resolveRefLineage } from "./lib/refLineage.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
 import { withDefaultPrompt, buildDeveloperPrompt, resolveSystemPrompt } from "./lib/defaultPrompt.js";
 import {
+  PROMPT_MAX,
   validatePrompt,
   validateQuality,
   validateFormat,
@@ -125,6 +140,8 @@ let OAUTH_URL = `http://127.0.0.1:${OAUTH_PORT}`;
 let OAUTH_READY = false;
 let OAUTH_LAST_ERROR = null;
 const HAS_API_KEY = !!apiKey;
+const RESPONSES_MODEL = process.env.IMA2_RESPONSES_MODEL || "gpt-5.5";
+const RESPONSES_IMAGE_MODEL_LABEL = "gpt-image-2:auto";
 
 let openai = null;
 if (HAS_API_KEY) {
@@ -145,9 +162,18 @@ app.use(express.json({ limit: "50mb" }));
 // X-Auth-User), so the migration is a no-op for already-authenticated
 // requests and only adds a 401 for unauthenticated ones once enabled.
 const LEGACY_OWNER = process.env.IMA2_LEGACY_OWNER || "ree9622";
+const INTERNAL_QUEUE_TOKEN = randomBytes(16).toString("hex");
 app.use((req, _res, next) => {
   const raw = req.get("X-Auth-User") || "";
   req.authUser = raw.trim() || null;
+  next();
+});
+app.use((req, _res, next) => {
+  if (req.get("X-IMA2-Internal-Queue") === INTERNAL_QUEUE_TOKEN) {
+    const owner = req.get("X-IMA2-Queue-Owner") || LEGACY_OWNER;
+    req.authUser = owner;
+    req.internalQueueAuth = true;
+  }
   next();
 });
 app.use(cookieParserMiddleware);
@@ -269,6 +295,7 @@ function abortActiveGeneration(requestId) {
 
 const SHUTDOWN_GATED_ROUTES = new Set([
   "POST /api/generate",
+  "POST /api/generate/queue",
   "POST /api/edit",
   "POST /api/node/generate",
   "POST /api/enhance", // optional convenience; same drain rule
@@ -404,14 +431,11 @@ const EDIT_DEVELOPER_WRAPPER =
   "Apply the user's edit to the original image. Preserve the person's FACE and IDENTITY exactly — the result must be unambiguously the SAME individual. Preserve the original's style and composition unless the edit specifies otherwise. Vary only what the user explicitly requests. Avoid technical defects (deformed anatomy, watermark, jpeg artifacts).";
 
 const REFERENCE_DEVELOPER_WRAPPER =
-  "Reference mode. The user has attached one or more reference images of an AI-generated synthetic character (a fictional virtual person, not a real individual).\n" +
-  "PRESERVATION HIERARCHY (most important first — never compromise the higher items):\n" +
-  "  1. FACE — preserve EXACTLY. Same facial features, same eye shape and spacing, same nose shape, same lip contour, same jawline, same eyebrow shape, same skin tone, same apparent age. The person's face must be instantly recognizable as the SAME individual across every variation. This is the single most important constraint.\n" +
-  "  2. IDENTITY — same hair color and base hairstyle, same body proportions, same overall build, same gender presentation. Only change these if the user explicitly says so.\n" +
-  "  3. ANYTHING the user does NOT explicitly mention — keep close to the reference (accessories, minor clothing details, mood).\n" +
-  "WHAT MAY VARY — and only what the user explicitly asks for: pose, angle, expression, framing, camera distance, outfit, background, location, time of day, lighting.\n" +
-  "If the user says 'change the outfit', do change it — do NOT keep the reference outfit. The reference is authoritative for FACE and IDENTITY only; for outfit/pose/background follow the user's request literally.\n" +
-  "When multiple reference images are attached, treat them as multi-angle references of the same person; the FIRST image is the primary identity anchor.\n" +
+  "Reference mode. The user has attached one or more reference images. Treat them as visual reference material for the user's explicit request.\n" +
+  "Do not assume the reference is a person, woman, portrait, AI character, or identity anchor unless the user explicitly asks for a person/character variation or the prompt clearly requires preserving a human subject.\n" +
+  "For resize, resolution, wallpaper, crop, extend, format, or simple transformation requests, preserve the attached image's original subject and composition as much as possible while adapting to the requested output. Do not invent a new person, face, body, gender presentation, outfit, or character.\n" +
+  "For explicit human variation requests, preserve the same person and face from the reference unless the user asks to change them. Only vary pose, angle, expression, framing, outfit, background, location, time of day, or lighting when requested.\n" +
+  "When multiple reference images are attached, use them as supporting visual references. Treat them as the same person's multi-angle identity references only when the user's prompt makes that intent clear.\n" +
   "Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts). Do not perform a web search; the reference image(s) are already the source of truth.";
 
 // 클라이언트가 매 요청마다 보낸 systemPrompt/includeSystemPrompt 를 정규화.
@@ -425,6 +449,9 @@ function readSystemPromptOpts(body) {
   if (body.includeSystemPrompt === false) {
     out.includeSystemPrompt = false;
   }
+  if (body.disablePromptMutation === true || body.promptMutationDisabled === true) {
+    out.disablePromptMutation = true;
+  }
   return out;
 }
 
@@ -434,6 +461,41 @@ function buildSystemPromptMetadata(systemPromptOpts = {}) {
     return { systemPrompt: null, systemPromptEnabled: false };
   }
   return { systemPrompt, systemPromptEnabled: true };
+}
+
+function isPromptMutationDisabled(systemPromptOpts = {}) {
+  return systemPromptOpts.disablePromptMutation === true ||
+    systemPromptOpts.promptMutationDisabled === true;
+}
+
+function buildPromptRuntimeMetadata({
+  prompt,
+  userPrompt,
+  developerPrompt,
+  tools = [],
+  systemPromptOpts = {},
+  hasRefs = false,
+  route = null,
+  model = null,
+  imageModel = null,
+  reasoningEffort = null,
+}) {
+  const systemPrompt = resolveSystemPrompt(systemPromptOpts);
+  return {
+    prompt,
+    userPrompt,
+    developerPrompt,
+    systemPrompt: systemPrompt || null,
+    systemPromptEnabled: !!systemPrompt,
+    promptMutationDisabled: isPromptMutationDisabled(systemPromptOpts),
+    userPromptMutated: userPrompt !== prompt,
+    hasRefs: hasRefs === true,
+    toolNames: tools.map((t) => t?.type).filter(Boolean),
+    route,
+    model,
+    imageModel,
+    reasoningEffort,
+  };
 }
 
 // upstream 2b2b9d4 흡수 (4K 진단): 빈 응답 에러에 진단 사유를 붙여
@@ -462,15 +524,91 @@ function diagnoseRefMismatch(references) {
   return null;
 }
 
+function parseTargetResolution(prompt) {
+  if (typeof prompt !== "string") return null;
+  const match = prompt.match(/(\d{3,5})\s*[x×]\s*(\d{3,5})/i);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+  if (width < 256 || height < 256 || width > 8192 || height > 8192) return null;
+  return { width, height };
+}
+
+const DIRECT_REF_TRANSFORM_HINT_RE =
+  /첨부\s*(사진|이미지)|해상도|리사이즈|크기|사이즈|폰\s*(배경|바탕)\s*화면|바탕\s*화면|월페이퍼|attached\s+(photo|image)|reference\s+(photo|image)|resolution|resize|wallpaper/i;
+
+const HUMAN_GENERATION_HINT_RE =
+  /얼굴|인물|사람|여자|남자|캐릭터|포즈|옷|의상|머리|표정|face|person|woman|man|character|pose|outfit|clothing|hairstyle|expression/i;
+
+function getDirectReferenceTransform(prompt, references) {
+  if (!Array.isArray(references) || references.length !== 1) return null;
+  if (typeof prompt !== "string") return null;
+  const brief = prompt.split(/\n\s*\n/)[0]?.trim() || prompt.trim();
+  if (!DIRECT_REF_TRANSFORM_HINT_RE.test(brief)) return null;
+  if (HUMAN_GENERATION_HINT_RE.test(brief)) return null;
+  const resolution = parseTargetResolution(brief);
+  if (!resolution) return null;
+  return resolution;
+}
+
+async function renderDirectReferenceTransform(prompt, references, tag) {
+  const target = getDirectReferenceTransform(prompt, references);
+  if (!target) return null;
+  console.log(`${tag} direct reference transform: ${target.width}x${target.height}`);
+  const source = Buffer.from(references[0], "base64");
+  const out = await sharp(source, { failOn: "none" })
+    .rotate()
+    .resize(target.width, target.height, {
+      fit: "cover",
+      position: "centre",
+    })
+    .png()
+    .toBuffer();
+  return {
+    b64: out.toString("base64"),
+    usage: null,
+    webSearchCalls: 0,
+    codexAccount: null,
+    promptUsed: prompt,
+    revisedPrompt: null,
+    localTransform: {
+      kind: "reference_resize",
+      width: target.width,
+      height: target.height,
+      fit: "cover",
+    },
+  };
+}
+
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}, systemPromptOpts = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
   const { partialImages, onPartialImage, abortSignal } = options;
+  const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
   console.log(
     `${tag} call: quality=${quality} size=${size} moderation=${moderation} ` +
     `refs=${references.length} promptLen=${prompt.length}` +
     (partialImages ? ` partial=${partialImages}` : ""),
   );
+
+  const directReferenceTransform = await renderDirectReferenceTransform(prompt, references, tag);
+  if (directReferenceTransform) {
+    return {
+      ...directReferenceTransform,
+      promptRuntime: buildPromptRuntimeMetadata({
+        prompt,
+        userPrompt: prompt,
+        developerPrompt: null,
+        tools: [{ type: "local_sharp_resize" }],
+        systemPromptOpts,
+        hasRefs,
+        route: "local-transform",
+        model: "sharp",
+        imageModel: null,
+      }),
+    };
+  }
 
   // gpt-image-2 (the actual image model dispatched by the Responses API
   // image_generation tool) processes every input image at high fidelity
@@ -484,13 +622,12 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     ...(partialImages ? { partial_images: partialImages } : {}),
   };
 
-  const tools = hasRefs ? [imageTool] : [{ type: "web_search" }, imageTool];
+  const tools = hasRefs || promptMutationDisabled ? [imageTool] : [{ type: "web_search" }, imageTool];
 
-  // user role carries only the user's prompt (plus boostRefPrompt's short
-  // face-lock cue when reference mode + a short/variation prompt). All wrapper
-  // text lives in REFERENCE_DEVELOPER_PROMPT / GENERATE_DEVELOPER_PROMPT to
-  // keep model autonomy on the user's wording itself.
-  const textPrompt = hasRefs ? boostRefPrompt(prompt) : prompt;
+  // user role carries only the user's prompt. Reference face-lock boosting is
+  // a prompt mutation, so it is skipped when the UI default prompt toggle is
+  // off; in that mode the user's text should be passed through verbatim.
+  const textPrompt = hasRefs && !promptMutationDisabled ? boostRefPrompt(prompt) : prompt;
 
   const userContent = hasRefs
     ? [
@@ -507,31 +644,49 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     hasRefs ? REFERENCE_DEVELOPER_WRAPPER : GENERATE_DEVELOPER_WRAPPER,
     systemPromptOpts,
   );
-
-  const stream = await runResponses({
-    url: OAUTH_URL,
-    body: {
-      model: "gpt-5.5",
-      reasoning: { effort: "medium" },
-      input: [
-        { role: "developer", content: developerPrompt },
-        { role: "user", content: userContent },
-      ],
-      tools,
-      tool_choice: hasRefs ? "required" : "auto",
-      stream: true,
-    },
-    onPhase,
-    onPartialImage,
-    signal: abortSignal,
+  const promptRuntime = buildPromptRuntimeMetadata({
+    prompt,
+    userPrompt: textPrompt,
+    developerPrompt,
+    tools,
+    systemPromptOpts,
+    hasRefs,
+    route: "responses-tool",
+    model: RESPONSES_MODEL,
+    imageModel: RESPONSES_IMAGE_MODEL_LABEL,
+    reasoningEffort: "medium",
   });
+
+  let stream;
+  try {
+    stream = await runResponses({
+      url: OAUTH_URL,
+      body: {
+        model: RESPONSES_MODEL,
+        reasoning: { effort: "medium" },
+        input: [
+          { role: "developer", content: developerPrompt },
+          { role: "user", content: userContent },
+        ],
+        tools,
+        tool_choice: hasRefs ? "required" : "auto",
+        stream: true,
+      },
+      onPhase,
+      onPartialImage,
+      signal: abortSignal,
+    });
+  } catch (err) {
+    err.promptRuntime = promptRuntime;
+    throw err;
+  }
 
   if (stream.b64) {
     console.log(
       `${tag} stream SUCCESS: b64Len=${stream.b64.length} events=${stream.eventCount} ` +
       `webSearchCalls=${stream.webSearchCalls ?? 0}`,
     );
-    return { b64: stream.b64, usage: stream.usage, webSearchCalls: stream.webSearchCalls, codexAccount: stream.codexAccount };
+    return { b64: stream.b64, usage: stream.usage, webSearchCalls: stream.webSearchCalls, codexAccount: stream.codexAccount, promptRuntime };
   }
 
   // Ref-mode already uses minimal tools + tool_choice:required; a fallback
@@ -549,6 +704,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     e.code = "UPSTREAM_EMPTY";
     if (reason) e.diagnosticReason = reason;
     e.refsCount = references.length;
+    e.promptRuntime = promptRuntime;
     throw e;
   }
 
@@ -561,7 +717,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   const retry = await runResponses({
     url: OAUTH_URL,
     body: {
-      model: "gpt-5.5",
+      model: RESPONSES_MODEL,
       reasoning: { effort: "medium" },
       input: [
         { role: "developer", content: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts) },
@@ -576,7 +732,24 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     console.log(
       `${tag} non-stream retry SUCCESS: b64Len=${retry.b64.length}`,
     );
-    return { b64: retry.b64, usage: retry.usage, webSearchCalls: stream.webSearchCalls, codexAccount: retry.codexAccount || stream.codexAccount };
+    return {
+      b64: retry.b64,
+      usage: retry.usage,
+      webSearchCalls: stream.webSearchCalls,
+      codexAccount: retry.codexAccount || stream.codexAccount,
+      promptRuntime: buildPromptRuntimeMetadata({
+        prompt,
+        userPrompt: prompt,
+        developerPrompt: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts),
+        tools: [{ type: "image_generation" }],
+        systemPromptOpts,
+        hasRefs: false,
+        route: "responses-tool",
+        model: RESPONSES_MODEL,
+        imageModel: RESPONSES_IMAGE_MODEL_LABEL,
+        reasoningEffort: "medium",
+      }),
+    };
   }
 
   const finalReason = diagnose4kReason(size);
@@ -589,6 +762,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   );
   e.code = "UPSTREAM_EMPTY";
   if (finalReason) e.diagnosticReason = finalReason;
+  e.promptRuntime = promptRuntime;
   throw e;
 }
 
@@ -686,7 +860,9 @@ function waitWithGenerationCancel(ms, signal, requestId) {
 }
 
 async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttempt = null, ctx = {}) {
-  const attempts = buildAttemptSequence(prompt, maxAttempts, { hasRefs: ctx.hasRefs === true });
+  const attempts = ctx.disablePromptMutation === true
+    ? Array.from({ length: Math.max(1, Math.min(10, Math.floor(Number(maxAttempts) || 1))) }, () => prompt)
+    : buildAttemptSequence(prompt, maxAttempts, { hasRefs: ctx.hasRefs === true });
   const log = [];
   let lastErr;
   // Tracks back-to-back network failures so the loop bails fast when the
@@ -729,6 +905,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           refusalText: r.refusalText || null,
           eventTypeCounts: r.eventTypeCounts || null,
           usage: r.usage || null,
+          promptRuntime: r.promptRuntime || null,
         });
         console.log(
           `${tag} attempt ${i + 1}/${attempts.length} SUCCESS in ${durationMs}ms ` +
@@ -760,6 +937,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         refusalText: r?.refusalText || null,
         eventTypeCounts: r?.eventTypeCounts || null,
         usage: r?.usage || null,
+        promptRuntime: r?.promptRuntime || null,
       });
       if (r?.reasoningSummary || r?.refusalText) {
         console.warn(
@@ -799,6 +977,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         eventTypeCounts: e?.eventTypeCounts || null,
         reasoningSummary: e?.reasoningSummary || null,
         refusalText: e?.refusalText || null,
+        promptRuntime: e?.promptRuntime || null,
       });
       console.warn(
         `${tag} attempt ${i + 1}/${attempts.length} THREW after ${durationMs}ms: ` +
@@ -931,6 +1110,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   const lastViolation = parseSafetyViolation(lastErr);
   const lastLog = log[log.length - 1] || {};
   const llmRewriteEnabled = process.env.IMA2_DISABLE_LLM_REWRITE !== "1" &&
+    ctx.disablePromptMutation !== true &&
     ctx.disableLLMRewrite !== true;
   const looksSafetyRelated =
     lastErr?.code === "SAFETY_REFUSAL" ||
@@ -983,6 +1163,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
             refusalText: r.refusalText || null,
             eventTypeCounts: r.eventTypeCounts || null,
             usage: r.usage || null,
+            promptRuntime: r.promptRuntime || null,
           });
           console.log(
             `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) SUCCESS in ${durationMs}ms ` +
@@ -1015,6 +1196,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           refusalText: r?.refusalText || null,
           eventTypeCounts: r?.eventTypeCounts || null,
           usage: r?.usage || null,
+          promptRuntime: r?.promptRuntime || null,
         });
         console.warn(
           `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) EMPTY (safety refusal) after ${durationMs}ms`,
@@ -1038,6 +1220,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           eventTypeCounts: e?.eventTypeCounts || null,
           reasoningSummary: e?.reasoningSummary || null,
           refusalText: e?.refusalText || null,
+          promptRuntime: e?.promptRuntime || null,
         });
         console.warn(
           `${tag} attempt ${i + 1}/${attempts.length + 1} (LLM-REWRITE) THREW after ${durationMs}ms: ` +
@@ -1057,7 +1240,8 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   // upstream 45b7892: SAFETY_REFUSAL/EMPTY_RESPONSE/UPSTREAM_EMPTY 별로 메시지/status 분기.
   let finalCode;
   let finalMsg;
-  if (lastErr?.code === "SAFETY_REFUSAL") {
+  const finalViolation = parseSafetyViolation(lastErr);
+  if (lastErr?.code === "SAFETY_REFUSAL" || finalViolation) {
     finalCode = "SAFETY_REFUSAL";
     finalMsg = "Content generation refused after retries";
   } else if (lastErr?.code === "EMPTY_RESPONSE" || lastErr?.code === "UPSTREAM_EMPTY") {
@@ -1070,7 +1254,9 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   const err = new Error(finalMsg);
   err.code = finalCode;
   err.status = (finalCode === "SAFETY_REFUSAL" || finalCode === "EMPTY_RESPONSE") ? 422 : 502;
+  if (finalViolation) err.violationCategories = Array.from(finalViolation.categories);
   if (lastErr?.diagnosticReason) err.diagnosticReason = lastErr.diagnosticReason;
+  err.promptRuntime = lastErr?.promptRuntime || log.findLast?.((a) => a?.promptRuntime)?.promptRuntime || null;
   err.cause = lastErr;
   err.attempts = log;
   throw err;
@@ -1111,6 +1297,7 @@ function clampMaxAttempts(v, fallback = 2) {
 // re-attached when the user invokes retry from a history item that had them.
 async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null, batchId = null, batchIndex = null, systemPrompt = null, systemPromptEnabled = false }) {
   try {
+    const promptRuntime = error?.promptRuntime || (Array.isArray(attempts) ? attempts.findLast?.((a) => a?.promptRuntime)?.promptRuntime : null) || null;
     const dir = join(__dirname, "generated", ".failed");
     await mkdir(dir, { recursive: true });
     const id = `${Date.now()}_${randomBytes(4).toString("hex")}`;
@@ -1127,6 +1314,9 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       format: format || null,
       moderation: moderation || null,
       provider: "oauth",
+      imageRoute: promptRuntime?.route || null,
+      imageModel: promptRuntime?.imageModel || null,
+      responsesModel: promptRuntime?.model || null,
       createdAt: Date.now(),
       sessionId,
       parentNodeId,
@@ -1135,6 +1325,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       owner: owner || LEGACY_OWNER,
       requestId,
       attempts: attempts || [],
+      promptRuntime,
       attemptsTotalUsage: sumAttemptsUsage(attempts),
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
@@ -1590,6 +1781,10 @@ app.get("/api/providers", (_req, res) => {
     oauth: true,
     oauthPort: OAUTH_PORT,
     apiKeyDisabled: true,
+    directImageApi: false,
+    directImageModel: null,
+    responsesModel: RESPONSES_MODEL,
+    responsesImageModel: RESPONSES_IMAGE_MODEL_LABEL,
   });
 });
 
@@ -1609,6 +1804,10 @@ app.get("/api/health", async (req, res) => {
     ok: true,
     version: __pkg.version,
     provider: "oauth",
+    directImageApi: false,
+    directImageModel: null,
+    responsesModel: RESPONSES_MODEL,
+    responsesImageModel: RESPONSES_IMAGE_MODEL_LABEL,
     uptimeSec: Math.round(process.uptime()),
     activeJobs: listJobs().length,
     pid: process.pid,
@@ -1693,6 +1892,27 @@ function invalidateHistoryCache() {
   __historyRowsCache = null;
 }
 
+async function readImageResolution(full) {
+  try {
+    const meta = await sharp(full, { failOn: "none" }).metadata();
+    const width = Number(meta?.width);
+    const height = Number(meta?.height);
+    if (
+      Number.isFinite(width) &&
+      Number.isFinite(height) &&
+      width > 0 &&
+      height > 0
+    ) {
+      return {
+        width,
+        height,
+        resolution: `${width}x${height}`,
+      };
+    }
+  } catch {}
+  return { width: null, height: null, resolution: null };
+}
+
 async function loadHistoryRows(baseDir) {
   const now = Date.now();
   let dirMtimeMs = 0;
@@ -1718,6 +1938,7 @@ async function loadHistoryRows(baseDir) {
       } catch (e) {
         if (e.code !== "ENOENT") console.warn("[history] sidecar parse fail:", rel, e.message);
       }
+      const imageResolution = await readImageResolution(full);
       return {
         _meta: meta,
         filename: rel,
@@ -1731,9 +1952,15 @@ async function loadHistoryRows(baseDir) {
         systemPromptEnabled: meta?.systemPromptEnabled === true && typeof meta?.systemPrompt === "string" && meta.systemPrompt.length > 0,
         quality: meta?.quality || null,
         size: meta?.size || null,
+        width: imageResolution.width,
+        height: imageResolution.height,
+        resolution: imageResolution.resolution,
         format: meta?.format || name.split(".").pop(),
         moderation: meta?.moderation || null,
         provider: meta?.provider || "oauth",
+        imageRoute: meta?.imageRoute || meta?.promptRuntime?.route || null,
+        imageModel: meta?.imageModel || meta?.promptRuntime?.imageModel || null,
+        responsesModel: meta?.responsesModel || meta?.promptRuntime?.model || null,
         codexAccount: typeof meta?.codexAccount === "string" ? meta.codexAccount : null,
         usage: meta?.usage || null,
         webSearchCalls: meta?.webSearchCalls || 0,
@@ -1745,6 +1972,7 @@ async function loadHistoryRows(baseDir) {
         favorite: meta?.favorite === true,
         maxAttempts: typeof meta?.maxAttempts === "number" ? meta.maxAttempts : null,
         attempts: Array.isArray(meta?.attempts) ? meta.attempts : [],
+        promptRuntime: meta?.promptRuntime || null,
         referenceCount: typeof meta?.referenceCount === "number" ? meta.referenceCount : 0,
         references: Array.isArray(meta?.references) ? meta.references : [],
         requestId: typeof meta?.requestId === "string" ? meta.requestId : null,
@@ -1938,12 +2166,18 @@ app.get("/api/generation-log", async (req, res) => {
           endpoint: meta?.kind === "edit" ? "edit" : meta?.nodeId ? "node" : "generate",
           prompt: meta?.prompt || null,
           originalPrompt: typeof meta?.originalPrompt === "string" ? meta.originalPrompt : null,
+          systemPrompt: typeof meta?.systemPrompt === "string" && meta.systemPrompt.length > 0 ? meta.systemPrompt : null,
+          systemPromptEnabled: meta?.systemPromptEnabled === true,
           quality: meta?.quality || null,
           size: meta?.size || null,
           format: meta?.format || name.split(".").pop(),
           moderation: meta?.moderation || null,
           maxAttempts: typeof meta?.maxAttempts === "number" ? meta.maxAttempts : null,
           attempts: Array.isArray(meta?.attempts) ? meta.attempts : [],
+          promptRuntime: meta?.promptRuntime || null,
+          imageRoute: meta?.imageRoute || meta?.promptRuntime?.route || null,
+          imageModel: meta?.imageModel || meta?.promptRuntime?.imageModel || null,
+          responsesModel: meta?.responsesModel || meta?.promptRuntime?.model || null,
           referenceCount: typeof meta?.referenceCount === "number" ? meta.referenceCount : 0,
           references: Array.isArray(meta?.references) ? meta.references : [],
           filename: rel,
@@ -1969,12 +2203,19 @@ app.get("/api/generation-log", async (req, res) => {
           createdAt: m.createdAt || 0,
           endpoint: m.endpoint || "generate",
           prompt: m.prompt || null,
+          originalPrompt: typeof m.originalPrompt === "string" ? m.originalPrompt : null,
+          systemPrompt: typeof m.systemPrompt === "string" && m.systemPrompt.length > 0 ? m.systemPrompt : null,
+          systemPromptEnabled: m.systemPromptEnabled === true,
           quality: m.quality || null,
           size: m.size || null,
           format: m.format || null,
           moderation: m.moderation || null,
           maxAttempts: Array.isArray(m.attempts) ? m.attempts.length : null,
           attempts: Array.isArray(m.attempts) ? m.attempts : [],
+          promptRuntime: m.promptRuntime || null,
+          imageRoute: m.imageRoute || m.promptRuntime?.route || null,
+          imageModel: m.imageModel || m.promptRuntime?.imageModel || null,
+          responsesModel: m.responsesModel || m.promptRuntime?.model || null,
           referenceCount: typeof m.referenceCount === "number" ? m.referenceCount : 0,
           filename: null,
           url: null,
@@ -2099,7 +2340,45 @@ app.get("/api/oauth/status", async (_req, res) => {
 });
 
 // -- Inflight registry --
-app.get("/api/inflight", (req, res) => {
+const INFLIGHT_QUEUE_RECENT_MS = 60 * 60 * 1000;
+
+function queueJobFilename(job) {
+  const result = job?.result;
+  if (!result || typeof result !== "object") return null;
+  if (typeof result.filename === "string" && result.filename) return result.filename;
+  const first = Array.isArray(result.images) ? result.images[0] : null;
+  return typeof first?.filename === "string" && first.filename ? first.filename : null;
+}
+
+function queueJobErrorMessage(job) {
+  const err = job?.error;
+  if (!err || typeof err !== "object") return null;
+  if (typeof err.message === "string" && err.message) return err.message;
+  if (typeof err.error === "string" && err.error) return err.error;
+  return null;
+}
+
+function mergeQueueJobForInflight(job, liveJob = null) {
+  const status = job?.status || "queued";
+  return {
+    requestId: job.requestId,
+    kind: job.kind || GENERATION_QUEUE_KIND,
+    prompt: liveJob?.prompt || job.prompt || "",
+    owner: job.owner || liveJob?.owner || null,
+    startedAt: liveJob?.startedAt || job.startedAt || job.createdAt || Date.now(),
+    phase: job.phase || liveJob?.phase || "queued",
+    phaseAt: liveJob?.phaseAt || job.updatedAt || job.createdAt || Date.now(),
+    attempt: liveJob?.attempt,
+    maxAttempts: liveJob?.maxAttempts,
+    meta: liveJob?.meta || job.meta || {},
+    status,
+    queueStatus: status,
+    filename: queueJobFilename(job),
+    errorMessage: queueJobErrorMessage(job),
+  };
+}
+
+app.get("/api/inflight", async (req, res) => {
   const kind =
     typeof req.query.kind === "string" && req.query.kind.length > 0
       ? req.query.kind
@@ -2108,14 +2387,35 @@ app.get("/api/inflight", (req, res) => {
     typeof req.query.sessionId === "string" && req.query.sessionId.length > 0
       ? req.query.sessionId
       : undefined;
-  res.json({ jobs: listJobs({ kind, sessionId, owner: req.authUser }) });
+  const liveJobs = listJobs({ kind, sessionId, owner: req.authUser });
+  if (kind && kind !== GENERATION_QUEUE_KIND) {
+    return res.json({ jobs: liveJobs.map((j) => ({ ...j, status: "running" })) });
+  }
+  try {
+    const recentQueueJobs = await listGenerationJobs({
+      kind: GENERATION_QUEUE_KIND,
+      owner: req.authUser,
+      updatedSince: Date.now() - INFLIGHT_QUEUE_RECENT_MS,
+      limit: 500,
+    });
+    const byId = new Map(liveJobs.map((j) => [j.requestId, { ...j, status: "running" }]));
+    for (const q of recentQueueJobs) {
+      const live = byId.get(q.requestId) || null;
+      byId.set(q.requestId, mergeQueueJobForInflight(q, live));
+    }
+    res.json({ jobs: Array.from(byId.values()) });
+  } catch (err) {
+    console.warn("[inflight] queue merge failed:", err?.message || err);
+    res.json({ jobs: liveJobs.map((j) => ({ ...j, status: "running" })) });
+  }
 });
 
-app.delete("/api/inflight/:requestId", (req, res) => {
+app.delete("/api/inflight/:requestId", async (req, res) => {
   if (req.authUser) {
     const job = getJob(req.params.requestId);
     if (job && job.owner !== req.authUser) return res.status(404).end();
   }
+  await cancelGenerationJob(req.params.requestId);
   abortActiveGeneration(req.params.requestId);
   finishJob(req.params.requestId, { canceled: true });
   res.status(204).end();
@@ -2230,6 +2530,234 @@ app.get("/api/batch/:id", async (req, res) => {
   }
 });
 
+// -- Durable classic generation queue --
+//
+// /api/generate keeps its historical synchronous contract for CLI and single
+// image calls. The UI uses this queue route for multi-image fanout so work
+// accepted by the server no longer depends on the browser keeping four HTTP
+// requests open. Queue rows are persisted in MySQL when IMA2_QUEUE_DB_URL is
+// configured, otherwise SQLite; inflight rows remain the live recovery surface
+// the existing UI already knows how to reconcile.
+const GENERATION_QUEUE_KIND = "classic";
+const GENERATION_QUEUE_CONCURRENCY = Math.max(
+  1,
+  Math.min(10, Number.parseInt(process.env.IMA2_QUEUE_CONCURRENCY || "10", 10) || 10),
+);
+const GENERATION_QUEUE_WORKER_TIMEOUT_MS = Math.max(
+  5 * 60 * 1000,
+  Number.parseInt(process.env.IMA2_QUEUE_WORKER_TIMEOUT_MS || String(35 * 60 * 1000), 10) ||
+    35 * 60 * 1000,
+);
+let generationQueueActive = 0;
+let generationQueueDraining = false;
+let generationQueueWakeRequested = false;
+
+function queueJobMetaFromPayload(payload, authUser) {
+  return {
+    kind: "classic",
+    sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
+    parentNodeId: null,
+    clientNodeId: typeof payload.clientNodeId === "string" ? payload.clientNodeId : null,
+    quality: typeof payload.quality === "string" ? payload.quality : "low",
+    size: typeof payload.size === "string" ? payload.size : "1024x1024",
+    n: 1,
+    owner: authUser || LEGACY_OWNER,
+  };
+}
+
+function kickGenerationQueue() {
+  if (SHUTTING_DOWN) return;
+  if (generationQueueDraining) {
+    generationQueueWakeRequested = true;
+    return;
+  }
+  generationQueueDraining = true;
+  void drainGenerationQueue();
+}
+
+async function drainGenerationQueue() {
+  try {
+    do {
+      generationQueueWakeRequested = false;
+      while (!SHUTTING_DOWN && generationQueueActive < GENERATION_QUEUE_CONCURRENCY) {
+        const job = await claimNextGenerationJob(GENERATION_QUEUE_KIND);
+        if (!job) break;
+        if (SHUTTING_DOWN) {
+          await requeueGenerationJob(job.requestId);
+          setJobPhase(job.requestId, "queued");
+          await setGenerationJobPhase(job.requestId, "queued");
+          break;
+        }
+        generationQueueActive += 1;
+        void processQueuedGenerationJob(job)
+          .catch((err) => {
+            console.error("[generation_queue] worker crashed:", err?.message || err);
+          })
+          .finally(() => {
+            generationQueueActive = Math.max(0, generationQueueActive - 1);
+            if (!SHUTTING_DOWN) kickGenerationQueue();
+          });
+      }
+    } while (
+      generationQueueWakeRequested &&
+      !SHUTTING_DOWN &&
+      generationQueueActive < GENERATION_QUEUE_CONCURRENCY
+    );
+  } finally {
+    generationQueueDraining = false;
+    if (
+      generationQueueWakeRequested &&
+      !SHUTTING_DOWN &&
+      generationQueueActive < GENERATION_QUEUE_CONCURRENCY
+    ) {
+      kickGenerationQueue();
+    }
+  }
+}
+
+function postJsonToLocalServer(path, payload, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const req = httpRequest(
+      {
+        hostname: "127.0.0.1",
+        port: PORT,
+        path,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+          ...headers,
+        },
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode || 0,
+            text: () => Promise.resolve(Buffer.concat(chunks).toString("utf8")),
+          });
+        });
+      },
+    );
+    req.setTimeout(GENERATION_QUEUE_WORKER_TIMEOUT_MS, () => {
+      const err = new Error(
+        `Queue worker timed out after ${GENERATION_QUEUE_WORKER_TIMEOUT_MS}ms waiting for ${path}`,
+      );
+      err.code = "QUEUE_WORKER_TIMEOUT";
+      req.destroy(err);
+    });
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+async function processQueuedGenerationJob(job) {
+  setJobPhase(job.requestId, "running");
+  await setGenerationJobPhase(job.requestId, "running");
+  const payload = {
+    ...job.payload,
+    requestId: job.requestId,
+    n: 1,
+  };
+  try {
+    const response = await postJsonToLocalServer("/api/generate", payload, {
+        "Content-Type": "application/json",
+        "X-IMA2-Client": "queue",
+        "X-IMA2-Internal-Queue": INTERNAL_QUEUE_TOKEN,
+        "X-IMA2-Queue-Owner": job.owner || LEGACY_OWNER,
+    });
+    const text = await response.text();
+    let body = {};
+    try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text.slice(0, 500) }; }
+    const latest = await getGenerationJob(job.requestId);
+    if (latest?.status === "canceled") return;
+    if (response.ok) {
+      await completeGenerationJob(job.requestId, body);
+      return;
+    }
+    await failGenerationJob(job.requestId, {
+      status: response.status,
+      code: body?.code || body?.error?.code || "GENERATION_FAILED",
+      message:
+        typeof body?.error === "string"
+          ? body.error
+          : body?.error?.message || `Generation failed: HTTP ${response.status}`,
+    });
+  } catch (err) {
+    const latest = await getGenerationJob(job.requestId);
+    if (latest?.status === "canceled") return;
+    await failGenerationJob(job.requestId, err);
+    finishJob(job.requestId, {
+      status: "failed",
+      errorCode: err?.code || "QUEUE_WORKER_FAILED",
+    });
+  }
+}
+
+app.post("/api/generate/queue", async (req, res) => {
+  try {
+    const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
+    if (!requestId) {
+      return res.status(400).json({ error: { code: "REQUEST_ID_REQUIRED", message: "requestId required" } });
+    }
+    const nCheck = validateCount(req.body?.n ?? 1, { max: 1 });
+    if (!nCheck.ok) return send400(res, nCheck);
+    const pCheck = validatePrompt(req.body?.prompt);
+    if (!pCheck.ok) return send400(res, pCheck);
+    const qCheck = validateQuality(req.body?.quality ?? "low");
+    if (!qCheck.ok) return send400(res, qCheck);
+    const sCheck = validateSize(req.body?.size ?? "1024x1024");
+    if (!sCheck.ok) return send400(res, sCheck);
+    const fCheck = validateFormat(req.body?.format ?? "png");
+    if (!fCheck.ok) return send400(res, fCheck);
+    const mCheck = validateModeration(req.body?.moderation ?? "auto");
+    if (!mCheck.ok) return send400(res, mCheck);
+    if (req.body?.provider === "api") {
+      return res.status(403).json({
+        error: { code: "APIKEY_DISABLED", message: "API key provider is disabled. Use OAuth/Responses." },
+      });
+    }
+
+    const payload = {
+      ...req.body,
+      prompt: pCheck.value,
+      quality: qCheck.value,
+      size: sCheck.value,
+      format: fCheck.value,
+      moderation: mCheck.value,
+      provider: req.body?.provider || "auto",
+      n: 1,
+      requestId,
+    };
+    const maxAttempts = clampMaxAttempts(req.body?.maxAttempts, 2);
+    const meta = queueJobMetaFromPayload(payload, req.authUser);
+    await enqueueGenerationJob({
+      requestId,
+      kind: GENERATION_QUEUE_KIND,
+      owner: req.authUser || LEGACY_OWNER,
+      prompt: pCheck.value,
+      payload: { ...payload, maxAttempts },
+      meta,
+    });
+    startJob({
+      requestId,
+      kind: GENERATION_QUEUE_KIND,
+      prompt: pCheck.value,
+      maxAttempts,
+      owner: req.authUser || LEGACY_OWNER,
+      meta,
+    });
+    kickGenerationQueue();
+    res.status(202).json({ queued: true, requestId, status: "queued" });
+  } catch (err) {
+    console.error("[generate/queue] error:", err.message);
+    res.status(500).json({ error: err.message, code: err.code || "QUEUE_ENQUEUE_FAILED" });
+  }
+});
+
 // -- Generate image (supports parallel via n) --
 app.post("/api/generate", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
@@ -2263,7 +2791,7 @@ app.post("/api/generate", async (req, res) => {
     const maxAttempts = clampMaxAttempts(rawMaxAttempts, 2);
     const originalPrompt =
       typeof rawOriginalPrompt === "string" && rawOriginalPrompt.trim().length > 0
-        ? rawOriginalPrompt.trim().slice(0, 4000)
+        ? rawOriginalPrompt.trim().slice(0, PROMPT_MAX)
         : null;
 
     const pCheck = validatePrompt(rawPrompt);
@@ -2308,12 +2836,12 @@ app.post("/api/generate", async (req, res) => {
     const refB64s = refCheck.refs;
 
     if (provider === "api") {
-      return res.status(403).json({ error: { code: "APIKEY_DISABLED", message: "API key provider is disabled. Use OAuth (Codex login)." } });
+      return res.status(403).json({ error: { code: "APIKEY_DISABLED", message: "API key provider is disabled. Use OAuth/Responses." } });
     }
-    const useOAuth = true;
+    const imageRoute = "responses-tool";
     const __client = req.get("x-ima2-client") || "ui";
     const __batchTag = batchId ? ` batch=${batchId}#${batchIndex}/${batchTotal}` : "";
-    console.log(`[generate][${__client}] provider=oauth quality=${quality} size=${size} moderation=${moderation} n=${count} refs=${refB64s.length}${__batchTag}`);
+    console.log(`[generate][${__client}] provider=${provider} route=${imageRoute} quality=${quality} size=${size} moderation=${moderation} n=${count} refs=${refB64s.length}${__batchTag}`);
     const startTime = Date.now();
     if (batchId) {
       // Best-effort — meta write race between sibling calls is harmless,
@@ -2352,24 +2880,27 @@ app.post("/api/generate", async (req, res) => {
 
     const systemPromptOpts = readSystemPromptOpts(req.body);
     const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
+    const disablePromptMutation = isPromptMutationDisabled(systemPromptOpts);
+    const generateWithSelectedRoute = (attemptPrompt) =>
+      generateViaOAuth(
+        attemptPrompt,
+        quality,
+        size,
+        moderation,
+        refB64s,
+        requestId,
+        { abortSignal: generationAbort.signal },
+        systemPromptOpts,
+      );
+
     const generateOne = () =>
       runPromptAttempts(
         prompt,
-        (attemptPrompt) =>
-          generateViaOAuth(
-            attemptPrompt,
-            quality,
-            size,
-            moderation,
-            refB64s,
-            requestId,
-            { abortSignal: generationAbort.signal },
-            systemPromptOpts,
-          ),
+        generateWithSelectedRoute,
         "generate",
         maxAttempts,
         requestId ? (i, _n) => setJobAttempt(requestId, i) : null,
-        { requestId, hasRefs: refB64s.length > 0, abortSignal: generationAbort.signal },
+        { requestId, hasRefs: refB64s.length > 0, abortSignal: generationAbort.signal, disablePromptMutation },
       );
 
     const results = await Promise.allSettled(Array.from({ length: count }, generateOne));
@@ -2409,12 +2940,17 @@ app.post("/api/generate", async (req, res) => {
           format,
           moderation,
           provider: "oauth",
+          imageRoute: r.value.route || r.value.promptRuntime?.route || null,
+          imageModel: r.value.imageModel || r.value.promptRuntime?.imageModel || null,
+          responsesModel: r.value.promptRuntime?.model || null,
           codexAccount: r.value.codexAccount || null,
           createdAt: Date.now(),
           usage: r.value.usage || null,
           webSearchCalls: r.value.webSearchCalls || 0,
+          ...(r.value.localTransform ? { localTransform: r.value.localTransform } : {}),
           maxAttempts,
           attempts: Array.isArray(r.value.attempts) ? r.value.attempts : [],
+          promptRuntime: r.value.promptRuntime || null,
           attemptsTotalUsage: sumAttemptsUsage(r.value.attempts),
           referenceCount: refB64s.length,
           references: refLineage,
@@ -2525,11 +3061,15 @@ app.post("/api/generate", async (req, res) => {
     const extra = {
       usage: totalUsage,
       provider: "oauth",
+      imageRoute: results.find((r) => r.status === "fulfilled" && r.value?.promptRuntime)?.value?.promptRuntime?.route || imageRoute,
+      imageModel: results.find((r) => r.status === "fulfilled" && r.value?.promptRuntime)?.value?.promptRuntime?.imageModel || null,
+      responsesModel: results.find((r) => r.status === "fulfilled" && r.value?.promptRuntime)?.value?.promptRuntime?.model || null,
       webSearchCalls: totalWebSearchCalls,
       quality,
       size,
       moderation,
       ...systemPromptMeta,
+      promptRuntime: results.find((r) => r.status === "fulfilled" && r.value?.promptRuntime)?.value?.promptRuntime || null,
       safetyRetryAvailable: hasCompliantRetry(prompt),
       promptRewrittenForSafety,
     };
@@ -2580,35 +3120,60 @@ app.post("/api/generate", async (req, res) => {
 // -- OAuth edit: send image as input to Responses API --
 async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto", systemPromptOpts = {}, options = {}) {
   const { abortSignal } = options;
-  // user role carries only the user's prompt (plus boostRefPrompt's face-lock
-  // cue when short/variation). Wrapper text lives in EDIT_DEVELOPER_PROMPT.
-  const { b64, usage } = await runResponses({
-    url: OAUTH_URL,
-    body: {
-      model: "gpt-5.5",
-      reasoning: { effort: "medium" },
-      input: [
-        { role: "developer", content: buildDeveloperPrompt(EDIT_DEVELOPER_WRAPPER, systemPromptOpts) },
-        {
-          role: "user",
-          content: [
-            { type: "input_image", image_url: `data:${detectImageMimeFromB64(imageB64) || "image/png"};base64,${imageB64}` },
-            { type: "input_text", text: boostRefPrompt(prompt) },
-          ],
-        },
-      ],
-      // gpt-image-2 auto-applies high fidelity; do NOT pass input_fidelity.
-      tools: [{ type: "image_generation", quality, size, moderation }],
-      tool_choice: "required",
-      stream: true,
-    },
-    signal: abortSignal,
+  const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
+  // user role carries only the user's prompt. Reference face-lock boosting is
+  // skipped when the UI default prompt toggle is off.
+  const userPrompt = promptMutationDisabled ? prompt : boostRefPrompt(prompt);
+  const developerPrompt = buildDeveloperPrompt(EDIT_DEVELOPER_WRAPPER, systemPromptOpts);
+  const tools = [{ type: "image_generation", quality, size, moderation }];
+  const promptRuntime = buildPromptRuntimeMetadata({
+    prompt,
+    userPrompt,
+    developerPrompt,
+    tools,
+    systemPromptOpts,
+    hasRefs: true,
+    route: "responses-tool",
+    model: RESPONSES_MODEL,
+    imageModel: RESPONSES_IMAGE_MODEL_LABEL,
+    reasoningEffort: "medium",
   });
+  let result;
+  try {
+    result = await runResponses({
+      url: OAUTH_URL,
+      body: {
+        model: RESPONSES_MODEL,
+        reasoning: { effort: "medium" },
+        input: [
+          { role: "developer", content: developerPrompt },
+          {
+            role: "user",
+            content: [
+              { type: "input_image", image_url: `data:${detectImageMimeFromB64(imageB64) || "image/png"};base64,${imageB64}` },
+              { type: "input_text", text: userPrompt },
+            ],
+          },
+        ],
+        // gpt-image-2 auto-applies high fidelity; do NOT pass input_fidelity.
+        tools,
+        tool_choice: "required",
+        stream: true,
+      },
+      signal: abortSignal,
+    });
+  } catch (err) {
+    err.promptRuntime = promptRuntime;
+    throw err;
+  }
+  const { b64, usage } = result;
   if (b64) {
     console.log("[oauth-edit] got image, b64 length:", b64.length);
-    return { b64, usage };
+    return { b64, usage, promptRuntime };
   }
-  throw new Error("No image data received from OAuth edit");
+  const e = new Error("No image data received from OAuth edit");
+  e.promptRuntime = promptRuntime;
+  throw e;
 }
 
 // -- Edit image (inpainting) --
@@ -2621,7 +3186,7 @@ app.post("/api/edit", async (req, res) => {
     const maxAttempts = clampMaxAttempts(rawMaxAttempts, 2);
     const originalPrompt =
       typeof rawOriginalPrompt === "string" && rawOriginalPrompt.trim().length > 0
-        ? rawOriginalPrompt.trim().slice(0, 4000)
+        ? rawOriginalPrompt.trim().slice(0, PROMPT_MAX)
         : null;
 
     if (!imageB64)
@@ -2664,6 +3229,7 @@ app.post("/api/edit", async (req, res) => {
 
     const systemPromptOpts = readSystemPromptOpts(req.body);
     const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
+    const disablePromptMutation = isPromptMutationDisabled(systemPromptOpts);
     let editResult;
     try {
       editResult = await runPromptAttempts(
@@ -2681,7 +3247,7 @@ app.post("/api/edit", async (req, res) => {
         "edit",
         maxAttempts,
         null,
-        { requestId, hasRefs: true, abortSignal: generationAbort.signal },
+        { requestId, hasRefs: true, abortSignal: generationAbort.signal, disablePromptMutation },
       );
     } catch (e) {
       await writeFailureSidecar({
@@ -2731,12 +3297,16 @@ app.post("/api/edit", async (req, res) => {
       moderation,
       format: "png",
       provider: "oauth",
+      imageRoute: editResult.promptRuntime?.route || null,
+      imageModel: editResult.promptRuntime?.imageModel || null,
+      responsesModel: editResult.promptRuntime?.model || null,
       kind: "edit",
       createdAt: Date.now(),
       usage: usage || null,
       webSearchCalls: 0,
       maxAttempts,
       attempts: Array.isArray(editAttempts) ? editAttempts : [],
+      promptRuntime: editResult.promptRuntime || null,
       owner: req.authUser || LEGACY_OWNER,
       requestId,
     };
@@ -2749,8 +3319,12 @@ app.post("/api/edit", async (req, res) => {
       requestId,
       usage,
       provider: "oauth",
+      imageRoute: editResult.promptRuntime?.route || null,
+      imageModel: editResult.promptRuntime?.imageModel || null,
+      responsesModel: editResult.promptRuntime?.model || null,
       moderation,
       ...systemPromptMeta,
+      promptRuntime: editResult.promptRuntime || null,
       safetyRetryAvailable: hasCompliantRetry(prompt),
       promptRewrittenForSafety: promptRewrittenForSafety === true,
     });
@@ -2829,7 +3403,7 @@ app.post("/api/node/generate", async (req, res) => {
     void rawMaxAttempts;
     const originalPrompt =
       typeof rawOriginalPrompt === "string" && rawOriginalPrompt.trim().length > 0
-        ? rawOriginalPrompt.trim().slice(0, 4000)
+        ? rawOriginalPrompt.trim().slice(0, PROMPT_MAX)
         : null;
     const { provider = "oauth" } = body;
 
@@ -2887,6 +3461,7 @@ app.post("/api/node/generate", async (req, res) => {
 
     const systemPromptOpts = readSystemPromptOpts(body);
     const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
+    const disablePromptMutation = isPromptMutationDisabled(systemPromptOpts);
     let nodeResult;
     try {
       nodeResult = await runPromptAttempts(
@@ -2926,7 +3501,7 @@ app.post("/api/node/generate", async (req, res) => {
         "node",
         maxAttempts,
         requestId ? (i) => setJobAttempt(requestId, i) : null,
-        { requestId, hasRefs: !!parentB64 || refB64s.length > 0, abortSignal: generationAbort.signal },
+        { requestId, hasRefs: !!parentB64 || refB64s.length > 0, abortSignal: generationAbort.signal, disablePromptMutation },
       );
     } catch (err) {
       await writeFailureSidecar({
@@ -2964,6 +3539,7 @@ app.post("/api/node/generate", async (req, res) => {
       prompt,
       promptUsed: nodeResult.promptUsed || prompt,
       promptRewrittenForSafety: nodeResult.promptRewrittenForSafety === true,
+      promptRuntime: nodeResult.promptRuntime || null,
       ...(originalPrompt ? { originalPrompt } : {}),
       ...systemPromptMeta,
       options: { quality, size, format, moderation },
@@ -2973,6 +3549,9 @@ app.post("/api/node/generate", async (req, res) => {
       usage: usage || null,
       webSearchCalls,
       provider: "oauth",
+      imageRoute: nodeResult.promptRuntime?.route || null,
+      imageModel: nodeResult.promptRuntime?.imageModel || null,
+      responsesModel: nodeResult.promptRuntime?.model || null,
       kind: parentB64 ? "edit" : "generate",
       // Fields consumed by /api/history flat scan (so node images appear in history too)
       quality, size, format, moderation,
@@ -2998,6 +3577,9 @@ app.post("/api/node/generate", async (req, res) => {
       usage,
       webSearchCalls,
       provider: "oauth",
+      imageRoute: nodeResult.promptRuntime?.route || null,
+      imageModel: nodeResult.promptRuntime?.imageModel || null,
+      responsesModel: nodeResult.promptRuntime?.model || null,
       moderation,
       ...systemPromptMeta,
       // Echo the resolved size so the UI can derive the node preview aspect
@@ -3512,7 +4094,7 @@ app.post("/api/enhance-prompt", async (req, res) => {
     if (!prompt) {
       return res.status(400).json({ error: "prompt required", code: "EMPTY_PROMPT" });
     }
-    if (prompt.length > 4000) {
+    if (prompt.length > PROMPT_MAX) {
       return res.status(400).json({ error: "prompt too long", code: "PROMPT_TOO_LONG" });
     }
 
@@ -3687,7 +4269,7 @@ onShutdown(async (sig) => {
       // listJobsRaw skips purgeStaleJobs() so the drain doesn't
       // accidentally drop a row whose fetch is still running. Stale
       // rows get cleaned up at startup of the next process anyway.
-      active = listJobsRaw();
+      active = listJobsRaw().filter((j) => j.phase !== "queued");
     } catch (err) {
       console.warn(`[shutdown] listJobsRaw failed during drain: ${err?.message || err}`);
       break;
@@ -3725,10 +4307,14 @@ process.on("exit", __unadvertise);
 // Step 4-B: opportunistic TTL sweep on boot; subsequent writes also rotate.
 void pruneNodeResults(__dirname).catch(() => {});
 
-app.listen(PORT, HOST, () => {
+app.listen(PORT, HOST, async () => {
   const advertised = HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST;
   console.log(`Image Gen running at http://${advertised}:${PORT} (bind ${HOST})`);
-  console.log(`Provider policy: OAuth only (API key hard-disabled). OAuth proxy port ${OAUTH_PORT}.`);
+  console.log(
+    "Provider policy: OAuth/Responses only. " +
+    `OAuth endpoint port ${OAUTH_PORT}.`,
+  );
+  console.log(`Generation queue concurrency: ${GENERATION_QUEUE_CONCURRENCY}`);
   __advertise();
   try {
     const s = ensureDefaultSession(LEGACY_OWNER);
@@ -3744,5 +4330,12 @@ app.listen(PORT, HOST, () => {
     if (purged > 0) console.log(`[inflight] purged ${purged} stale job(s) at startup`);
   } catch (err) {
     console.error("[inflight] startup purge failed:", err.message);
+  }
+  try {
+    const recovered = await recoverQueuedGenerationJobs();
+    if (recovered > 0) console.log(`[generation_queue] recovered ${recovered} running job(s) to queued`);
+    kickGenerationQueue();
+  } catch (err) {
+    console.error("[generation_queue] startup failed:", err.message);
   }
 });

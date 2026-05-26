@@ -52,11 +52,15 @@ export type InflightJob = {
   kind: string;
   prompt: string;
   startedAt: number;
+  status?: "queued" | "running" | "succeeded" | "failed" | "canceled";
+  queueStatus?: "queued" | "running" | "succeeded" | "failed" | "canceled";
   phase?: string;
   phaseAt?: number;
   attempt?: number;
   maxAttempts?: number;
   meta?: Record<string, unknown>;
+  filename?: string | null;
+  errorMessage?: string | null;
 };
 
 export function getInflight(params?: {
@@ -98,6 +102,20 @@ export function postGenerate(payload: GenerateRequest): Promise<GenerateResponse
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(GENERATE_REQUEST_TIMEOUT_MS),
+  });
+}
+
+export type GenerateQueueResponse = {
+  queued: true;
+  requestId: string;
+  status: "queued";
+};
+
+export function postGenerateQueued(payload: GenerateRequest): Promise<GenerateQueueResponse> {
+  return jsonFetch<GenerateQueueResponse>("/api/generate/queue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, n: 1 }),
   });
 }
 
@@ -162,11 +180,18 @@ export type HistoryItem = {
   originalPrompt?: string | null;
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
+  promptRuntime?: import("../types").PromptRuntime | null;
   quality: string | null;
   size: string | null;
+  width?: number | null;
+  height?: number | null;
+  resolution?: string | null;
   moderation?: string | null;
   format: string;
   provider: string;
+  imageRoute?: string | null;
+  imageModel?: string | null;
+  responsesModel?: string | null;
   codexAccount?: string | null;
   usage: Record<string, unknown> | null;
   webSearchCalls: number;

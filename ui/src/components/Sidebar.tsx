@@ -8,6 +8,7 @@ import { HistoryStrip } from "./HistoryStrip";
 import { SessionPicker } from "./SessionPicker";
 import { OAuthIndicator } from "./OAuthIndicator";
 import { UserMenu } from "./UserMenu";
+import { PanelResizeHandle } from "./PanelResizeHandle";
 import { useAppStore } from "../store/useAppStore";
 import { useOAuthStatus } from "../hooks/useOAuthStatus";
 import { ENABLE_NODE_MODE } from "../lib/devMode";
@@ -115,6 +116,7 @@ export function Sidebar() {
         )}
       </div>
       <HistoryStrip />
+      <PanelResizeHandle target="sidebar" />
     </aside>
   );
 }

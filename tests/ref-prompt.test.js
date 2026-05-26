@@ -45,6 +45,18 @@ describe("reference-mode prompt boosting", () => {
     assert.match(boostRefPrompt("change outfit to casual jeans"), /Keep the face IDENTICAL/);
   });
 
+  it("does not face-lock transform-only attached-image requests", () => {
+    const prompt = "첨부 사진을 2184×1968 해상도로";
+    assert.equal(shouldBoostRefPrompt(prompt), false);
+    assert.equal(boostRefPrompt(prompt), prompt);
+  });
+
+  it("does not face-lock wallpaper or resize requests unless human variation is explicit", () => {
+    assert.equal(shouldBoostRefPrompt("폰 바탕화면 만들어줘"), false);
+    assert.equal(shouldBoostRefPrompt("resize attached image to phone wallpaper"), false);
+    assert.equal(shouldBoostRefPrompt("이 사람을 폰 바탕화면으로, 포즈 변경"), true);
+  });
+
   it("returns the prompt unchanged for empty/non-string input", () => {
     assert.equal(boostRefPrompt(""), "");
     assert.equal(boostRefPrompt(null), null);

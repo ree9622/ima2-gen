@@ -70,31 +70,33 @@ ima2 serve
 - Filename collisions avoided via `${Date.now()}_${randomBytes(4).hex}_${idx}` (commit `7a0e2f5`). Keep the random token when adding new write paths.
 - Tests live in `tests/*.test.js` using Node's built-in test runner (`node --test`). `scripts/run-tests.mjs` handles cross-platform invocation; CI matrix is Ubuntu/macOS/Windows × Node 20/22.
 
-## Workspace (asrock 단일 호스트, BLOCKING)
+## Workspace and git source of truth (BLOCKING)
 
-이 레포는 **asrock 한 곳에서만** 운용한다. **PC에는 클론 없음.** 검토·편집·운영 모두 asrock SSH로.
+이 레포의 source of truth는 **GitHub `ree9622/ima2-gen` main**이다. 운영은 asrock 한 곳에서 실행하지만, 운영 서버 파일만 바뀐 상태는 완료가 아니다.
 
 | Location | Role |
 | -------- | ---- |
-| **asrock** `/home/ko/apps/ima2-gen/` | 운영 + 편집 + 단일 source of truth |
-| **GitHub** `ree9622/ima2-gen` (origin) | 백업 + 원격 검토 |
+| **GitHub** `ree9622/ima2-gen` (origin) | canonical source of truth |
+| **asrock** `/home/ko/apps/ima2-gen/` | 운영 checkout. git main을 따라가야 함 |
+| local clean clone/worktree | 검토, 회수, PR 작업용 |
 
-ima2-router는 반대로 PC가 source of truth (PC→asrock scp). 헷갈리면 한 줄: *"router는 PC→asrock, gen은 asrock 단독"*.
+ima2-router도 이제 GitHub `ree9622/ima2-router`가 source of truth다. 두 서비스 모두 운영 서버 직접 수정분은 git으로 회수해야 한다.
 
 ### 왜 이 정책인가
 
-2026-05-03 1차 정책: "PC = 검토, asrock = 편집" 양쪽 운용. 하지만 PC 클론이 며칠씩 stale 상태에 빠지고, 다른 세션이 PC 코드를 보고 잘못된 추정을 하는 사례가 잦았다. PC는 검토 전용이고 asrock SSH로 충분 → 같은 날 PC 클론 자체를 제거하는 단일 호스트 정책으로 전환 (2026-05-03 KST 16시).
+2026-05-03 1차 정책: "PC = 검토, asrock = 편집" 양쪽 운용. 하지만 PC 클론이 며칠씩 stale 상태에 빠지고, 다른 세션이 PC 코드를 보고 잘못된 추정을 하는 사례가 잦았다. 이후 asrock 단일 호스트 정책을 썼지만, 2026-05-26 운영 dirty 변경이 git으로 회수되지 않는 문제가 확인되어 정책을 갱신했다.
 
-직전 사고: asrock에서 직접 수정한 11파일 +523/-94 가 git 미커밋으로 며칠 누적, asrock 디스크 사고 시 통째 손실 위험. → "편집 즉시 commit + push" 가드는 단일 호스트 정책에서도 그대로 유지.
+현재 원칙: 운영에 먼저 반영된 emergency hotpatch라도 종료 조건은 git commit/PR/merge와 live checkout 동기화다.
 
-### asrock 편집 절차 (모든 코드 변경)
+### 변경 절차 (모든 코드 변경)
 
-1. 편집 전 자동 백업: `cp <file> <file>.bak.$(date +%Y%m%d-%H%M%S)` (이 패턴은 `.gitignore` 처리됨)
-2. 편집 (vim/nano/Edit)
-3. JS 파일이면 syntax 검증: `/home/ko/.nvm/versions/node/v24.15.0/bin/node --check <file>`
-4. UI 변경이면 build: `cd ui && export PATH=/home/ko/.nvm/versions/node/v24.15.0/bin:$PATH && npm run build`
-5. 서비스 재시작 + 동작 확인 (curl 또는 브라우저)
-6. **즉시 `git add -A && git commit` + `git push origin main`** ← 30분 내. "내일 커밋하자"는 asrock 디스크 사고 = 통째 손실로 직결.
+1. `git fetch origin` 후 clean branch/worktree를 만든다.
+2. source 변경만 편집하거나, 이미 운영 서버에 있는 hotpatch를 clean branch로 회수한다.
+3. JS 파일이면 `node --check`, UI 변경이면 `npm run build`, 관련 테스트는 `npm test`로 검증한다.
+4. `git add` + `git commit` + `git push` + PR.
+5. PR merge 후 asrock `/home/ko/apps/ima2-gen`에서 `git fetch origin && git pull --ff-only origin main` 또는 `git reset --mixed origin/main`으로 HEAD를 맞춘다.
+6. 서비스 재시작 + health 확인.
+7. 완료 보고에는 repo/PR/commit/live HEAD/`git status --short`/health check를 포함한다.
 
 ### 세션 시작 시 sync 선점검
 
@@ -107,7 +109,7 @@ ssh asrock "cd /home/ko/apps/ima2-gen && git fetch origin && git status && git l
 - HEAD가 origin/main과 같은가?
 - uncommitted 변경이 있는가? (있으면 그 정리부터 — 다른 작업 시작 금지)
 
-차이를 발견하면 **그 정리가 모든 다른 작업보다 우선**.
+차이를 발견하면 **그 정리가 모든 다른 작업보다 우선**. dirty source가 있으면 `git pull`, `git reset --hard`, `git checkout -- <file>`로 덮지 말고 clean branch로 회수한다.
 
 ### Hand-edit 백업 정리
 

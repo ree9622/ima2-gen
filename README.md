@@ -93,6 +93,10 @@ Use Classic when you want one strong result quickly.
 4. Generate one image, or enable multimode to fan out several candidate slots from the same prompt.
 5. Copy, download, continue from the result, or send it into Canvas Mode.
 
+For a control-by-control guide to Prompt Studio, multimode recipes, Direct mode,
+reasoning effort, and gallery favorite behavior, see the
+[Prompt Studio manual](docs/PROMPT_STUDIO.md).
+
 ![Multimode sequence with four candidate slots generating from one prompt and active job history in the sidebar.](assets/screenshots/multimode-sequence.png)
 
 ### Node Mode
@@ -217,6 +221,7 @@ Useful references:
 
 - [CLI Reference](docs/CLI.md)
 - [API Reference](docs/API.md)
+- [Prompt Studio manual](docs/PROMPT_STUDIO.md)
 - [FAQ](docs/FAQ.md)
 - [Recover old images](docs/RECOVER_OLD_IMAGES.md)
 - [Korean README](docs/README.ko.md)

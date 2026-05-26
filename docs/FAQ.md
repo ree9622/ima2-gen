@@ -1,6 +1,6 @@
 # ima2-gen FAQ
 
-Last reviewed: 2026-05-25
+Last reviewed: 2026-05-26
 
 This FAQ collects the questions that tend to come up after installing or updating `ima2-gen`. The README stays short; this page is the place for practical details and recovery steps.
 
@@ -16,6 +16,7 @@ For Korean, see [FAQ.ko.md](FAQ.ko.md).
 | Old gallery images look missing | Run `ima2 doctor`, then see [Recover Old Generated Images](RECOVER_OLD_IMAGES.md). |
 | `gpt-5.5` fails | Update Codex CLI first, then try `gpt-5.4` as the stable fallback. |
 | Reference upload fails | Use JPEG/PNG, lower the resolution, and keep references to 5 images or fewer. |
+| Prompt Studio controls are unclear | Read the [Prompt Studio manual](PROMPT_STUDIO.md) for multimode, Direct, reasoning, and gallery behavior. |
 | Image generation returns `EMPTY_RESPONSE` or no image data | Run `ima2 doctor image-probe --json`, then collect the safe support bundle below. |
 | Windows reports OAuth/proxy failures around port `10531` | Run `ima2 doctor`; if needed start with `IMA2_OAUTH_PROXY_PORT=11531 ima2 serve`. |
 | `fetch failed` repeats on a proxy/VPN network | Enable proxy TUN/TURN-style mode, or set `HTTP_PROXY` / `HTTPS_PROXY` in the same terminal. |
@@ -124,6 +125,37 @@ Start with `gpt-5.4` for the safest balanced workflow.
 ### How many images can Plus or Pro generate?
 
 Do not treat any community number as a guarantee. OAuth generation can be limited by account, backend capability, traffic, and policy changes. `ima2-gen` does not publish a fixed Plus/Pro image count because that number is not stable enough to document as a promise.
+
+## Prompt Studio and multimode
+
+### Is there a detailed Prompt Studio manual?
+
+Yes. See the [Prompt Studio manual](PROMPT_STUDIO.md). It explains the composer,
+multimode slots, 1:1 Direct, model/reasoning quick settings, recent history,
+gallery favorites, and which actions intentionally import prompt text.
+
+### Why did multimode images look unrelated?
+
+Multimode starts several separate image requests from the same prompt. The slots
+are candidate outputs, not panels inside one shared canvas and not a guaranteed
+story sequence. To get related alternatives, write the common subject first and
+then name the allowed variations. To get one multi-panel image, use a normal
+single-image request and ask for a two-panel, collage, or contact-sheet layout.
+
+### Should selecting a gallery image change my current prompt?
+
+Passive image selection is view-only. It should focus the selected image without
+rewriting the composer. Prompt Library insert, "continue from this image", and
+other explicit reuse actions are the actions that intentionally change prompt
+text.
+
+### What changed for issue #75?
+
+The Prompt Studio closeout fixed navigation and state-coupling regressions:
+keyboard movement now follows the visible recent history domain, the gallery
+entry remains reachable, long prompts no longer starve the image viewer,
+Direct and Multimode states are visible together, gallery favorites preserve the
+browsing viewport, and passive image selection does not refill the composer.
 
 ## Gallery and generated files
 

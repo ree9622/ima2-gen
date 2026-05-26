@@ -82,6 +82,10 @@ API 키가 env/config에 있으면 생성 엔드포인트에서 `provider: "api"
 4. 한 장을 만들거나, multimode를 켜서 같은 프롬프트에서 여러 후보 슬롯을 만듭니다.
 5. 생성 후 복사, 다운로드, 이어서 작업, Canvas Mode 정리를 선택합니다.
 
+Prompt Studio의 각 컨트롤, 멀티모드 작성법, 1:1 Direct, 추론 강도, 갤러리
+즐겨찾기 동작은 [Prompt Studio 사용 설명서](PROMPT_STUDIO.ko.md)에 정리되어
+있습니다.
+
 ![하나의 프롬프트에서 네 후보 슬롯이 생성 중이고 sidebar에 active job history가 보이는 multimode sequence 화면](../assets/screenshots/multimode-sequence.png)
 
 ### Node mode
@@ -186,7 +190,10 @@ environment variables > ~/.ima2/config.json > built-in defaults
 
 엔드포인트 목록은 [API Reference](API.md)로 분리했습니다.
 
-자주 묻는 질문은 [FAQ](FAQ.ko.md)에 정리했습니다. 업데이트 후 예전 이미지가 안 보이면 [예전 이미지 복구 안내](RECOVER_OLD_IMAGES.md)를 먼저 확인하세요.
+자주 묻는 질문은 [FAQ](FAQ.ko.md)에 정리했습니다. Prompt Studio 기능은
+[Prompt Studio 사용 설명서](PROMPT_STUDIO.ko.md)를 확인하세요. 업데이트 후
+예전 이미지가 안 보이면 [예전 이미지 복구 안내](RECOVER_OLD_IMAGES.md)를
+먼저 확인하세요.
 
 ## 문제 해결
 

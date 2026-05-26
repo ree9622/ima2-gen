@@ -1646,7 +1646,11 @@ body {
 .image-model-select__trigger {
   min-width: 34px;
   height: 28px;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 3px;
   border: 0;
   color: var(--text-dim);
   background: transparent;
@@ -1658,6 +1662,15 @@ body {
 .image-model-select__trigger:hover,
 .image-model-select__trigger:focus-visible {
   color: var(--accent-bright);
+}
+
+.image-model-select__trigger-separator {
+  color: var(--text-faint);
+}
+
+.image-model-select__trigger-effort {
+  color: var(--green);
+  font-size: 10px;
 }
 
 .image-model-select--settings select {
@@ -1673,18 +1686,39 @@ body {
   top: calc(100% + 7px);
   right: 0;
   z-index: 40;
-  min-width: 150px;
+  display: grid;
+  gap: 6px;
+  min-width: 218px;
+  max-width: min(280px, calc(100vw - 24px));
   padding: 6px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--surface);
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.32);
+}
+
+.image-model-select__section {
+  display: grid;
+  gap: 2px;
+}
+
+.image-model-select__section + .image-model-select__section {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.image-model-select__section-title {
+  padding: 4px 8px 2px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 .image-model-select__item {
   width: 100%;
   display: grid;
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 44px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   padding: 8px 9px;
@@ -1707,6 +1741,8 @@ body {
   color: var(--text-faint);
   font-family: var(--font);
   font-size: 11px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .image-model-select--settings select {
@@ -3560,6 +3596,10 @@ body {
       width: 40px;
       min-width: 40px;
       min-height: 40px;
+    }
+    .image-model-select__trigger-separator,
+    .image-model-select__trigger-effort {
+      display: none;
     }
     .mobile-app-bar__generate {
       min-height: 40px;

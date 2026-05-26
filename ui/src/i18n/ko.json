@@ -785,6 +785,9 @@
     "appName": "이미지 생성기",
     "imageModelLabel": "모델",
     "imageModelAria": "이미지 모델 선택",
+    "quickSettingsAria": "모델과 추론 강도 선택. 현재 모델 {model}, 추론 {effort}",
+    "quickSettingsMenu": "모델 및 추론 빠른 설정",
+    "reasoningLabel": "추론",
     "nodeModeHint": "노드 모드에서는 노드를 눌러 프롬프트를 수정한 뒤 생성하세요. 오른쪽 패널의 설정 (품질/크기)은 새로 만드는 모든 결과에 적용됩니다."
   },
   "settings": {

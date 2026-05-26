@@ -785,6 +785,9 @@
     "appName": "Image Generator",
     "imageModelLabel": "Model",
     "imageModelAria": "Choose image model",
+    "quickSettingsAria": "Choose model and reasoning effort. Current model {model}, reasoning {effort}",
+    "quickSettingsMenu": "Model and reasoning quick settings",
+    "reasoningLabel": "Reasoning",
     "nodeModeHint": "In node mode, click a node to edit its prompt and generate. Settings on the right panel (quality/size) apply to every new result."
   },
   "settings": {

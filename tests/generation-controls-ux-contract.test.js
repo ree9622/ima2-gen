@@ -109,6 +109,34 @@ describe("generation controls custom plus UX contract", () => {
     assert.match(store, /saveGenerationDefaultsPatch\(\{ insertedPrompts \}\);/);
   });
 
+  it("exposes reasoning effort in the sidebar model quick menu", () => {
+    const menu = readSource("ui/src/components/ImageModelSelect.tsx");
+    const css = readSource("ui/src/index.css");
+    const en = readSource("ui/src/i18n/en.json");
+    const ko = readSource("ui/src/i18n/ko.json");
+
+    assert.match(menu, /REASONING_EFFORT_OPTIONS/);
+    assert.match(menu, /const reasoningEffort = useAppStore\(\(s\) => s\.reasoningEffort\)/);
+    assert.match(menu, /const setReasoningEffort = useAppStore\(\(s\) => s\.setReasoningEffort\)/);
+    assert.match(menu, /const menuItemRefs = useRef<Array<HTMLButtonElement \| null>>\(\[\]\)/);
+    assert.match(menu, /KeyboardEvent as ReactKeyboardEvent/);
+    assert.match(menu, /const handleMenuKeyDown = \(event: ReactKeyboardEvent<HTMLDivElement>\) =>/);
+    assert.match(menu, /event\.key === "ArrowDown" \|\| event\.key === "ArrowRight"/);
+    assert.match(menu, /event\.key === "Home"/);
+    assert.match(menu, /triggerRef\.current\?\.focus\(\)/);
+    assert.match(menu, /aria-haspopup="menu"/);
+    assert.match(menu, /onKeyDown=\{handleMenuKeyDown\}/);
+    assert.match(menu, /role="menuitemradio"/);
+    assert.match(menu, /aria-checked=\{option\.value === reasoningEffort\}/);
+    assert.match(menu, /tabIndex=\{-1\}/);
+    assert.match(menu, /setReasoningEffort\(option\.value as ReasoningEffort\)/);
+    assert.match(css, /\.image-model-select__section-title/);
+    assert.match(css, /\.image-model-select__trigger-effort/);
+    assert.match(css, /@media \(max-width: 430px\) \{[\s\S]*?\.image-model-select__trigger-effort\s*\{[\s\S]*?display:\s*none/);
+    assert.match(en, /"quickSettingsMenu":\s*"Model and reasoning quick settings"/);
+    assert.match(ko, /"quickSettingsMenu":\s*"모델 및 추론 빠른 설정"/);
+  });
+
   it("generation defaults survive reload simulation", () => {
     const src = readSource("ui/src/store/useAppStore.ts");
 

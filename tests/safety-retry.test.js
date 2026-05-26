@@ -191,6 +191,27 @@ describe("hasRefs hint (reference-image safety guard)", () => {
     assert.equal(seq[2], plain);
   });
 
+  it("does not wrap transform-only ref prompts such as resize or wallpaper", () => {
+    const resize = "첨부 사진을 2184×1968 해상도로";
+    assert.deepEqual(buildPromptAttempts(resize, { hasRefs: true }), [resize]);
+    assert.equal(hasCompliantRetry(resize, { hasRefs: true }), false);
+
+    const wallpaper = "폰 바탕화면 만들어줘";
+    assert.deepEqual(buildAttemptSequence(wallpaper, 4, { hasRefs: true }), [
+      wallpaper,
+      wallpaper,
+      wallpaper,
+      wallpaper,
+    ]);
+  });
+
+  it("still wraps ref prompts when a wallpaper request also asks for human variation", () => {
+    const prompt = "이 사람을 폰 바탕화면으로, 포즈 변경";
+    const seq = buildPromptAttempts(prompt, { hasRefs: true });
+    assert.ok(seq.length > 1);
+    assert.match(seq[0], /Korean fashion portrait/);
+  });
+
   it("does not force the wrapper when prompt has explicit/minor cues", () => {
     // Even with refs, hard blockers must still bail (no rewrite path).
     assert.equal(buildPromptAttempts("nude photo", { hasRefs: true }).length, 1);
@@ -618,6 +639,7 @@ describe("expanded body-emphasis triggers (production gap fix)", () => {
     assert.match(v4, /casual skirt/);
     assert.doesNotMatch(v4, /미니\s*스커트/);
   });
+
 });
 
 describe("buildAttemptSequence (max retry count)", () => {
@@ -670,6 +692,31 @@ describe("buildAttemptSequence (max retry count)", () => {
 
   it("floors non-integer counts", () => {
     assert.equal(buildAttemptSequence("x", 3.7).length, 3);
+  });
+
+  it("keeps safety variants enabled for production swimwear character sheets", () => {
+    const prompt = [
+      "[인물]",
+      "  - 짱구 엄마 캐릭터, 일러스트",
+      "",
+      "[체형]",
+      "  - 글래머러스, 볼륨감, 잘록한 허리, 긴 다리, 모래시계 실루엣",
+      "",
+      "[의상]",
+      "  - 마이크로 비키니 (타이트한 핏, 최소한의 커버리지)",
+      "",
+      "[신체 강조]",
+      "  - 가슴 볼륨, 허리 라인, 골반 라인, 다리 라인, 엉덩이",
+    ].join("\n");
+    const seq = buildAttemptSequence(prompt, 5);
+    assert.equal(seq.length, 5);
+    assert.ok(seq.some((p) => p !== prompt), "must not repeat raw prompt only");
+    const strong = seq.find((p) => /AI-generated synthetic character/.test(p));
+    assert.ok(strong, "strong compliant variant must fit within five attempts");
+    assert.doesNotMatch(strong, /마이크로\s*비키니/);
+    assert.doesNotMatch(strong, /최소한의\s*커버리지/);
+    assert.doesNotMatch(strong, /신체 강조/);
+    assert.doesNotMatch(strong, /가슴 볼륨|골반 라인|엉덩이/);
   });
 });
 

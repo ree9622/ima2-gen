@@ -154,6 +154,28 @@ describe("sanitizeEnhancedText", () => {
     assert.equal(sanitizeEnhancedText(undefined), undefined);
     assert.equal(sanitizeEnhancedText(""), "");
   });
+
+  it("normalizes generation-risky body emphasis from enhanced prompts", () => {
+    const input = [
+      "[인물]",
+      "  - 짱구 엄마 캐릭터, 일러스트",
+      "",
+      "[체형]",
+      "  - 글래머러스, 볼륨감, 모래시계 실루엣",
+      "",
+      "[의상]",
+      "  - 마이크로 비키니 (타이트한 핏, 최소한의 커버리지)",
+      "",
+      "[신체 강조]",
+      "  - 가슴 볼륨, 허리 라인, 골반 라인, 배꼽 라인, 치골 라인, 엉덩이",
+    ].join("\n");
+    const out = sanitizeEnhancedText(input);
+    assert.doesNotMatch(out, /\[신체 강조\]/);
+    assert.doesNotMatch(out, /마이크로\s*비키니|최소한의\s*커버리지/);
+    assert.doesNotMatch(out, /가슴 볼륨|골반 라인|치골 라인|엉덩이/);
+    assert.match(out, /비키니/);
+    assert.match(out, /적당한 커버리지/);
+  });
 });
 
 describe("extractEnhancedText", () => {

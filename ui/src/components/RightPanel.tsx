@@ -6,6 +6,7 @@ import { SizePicker } from "./SizePicker";
 import { CostEstimate } from "./CostEstimate";
 import { ViewControls } from "./ViewControls";
 import { PresetManager } from "./PresetManager";
+import { PanelResizeHandle } from "./PanelResizeHandle";
 import type { Count, Format, Quality } from "../types";
 
 const QUALITY_ITEMS = [
@@ -106,6 +107,7 @@ export function RightPanel() {
             </svg>
           )}
         </button>
+        {!isMobile && open ? <PanelResizeHandle target="right-panel" /> : null}
         <div
           id="right-panel-body"
           className="right-panel-body"

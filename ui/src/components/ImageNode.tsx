@@ -202,7 +202,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             multiple
             style={{ display: "none" }}
             onChange={onRefSelected}

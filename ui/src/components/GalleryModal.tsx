@@ -124,6 +124,9 @@ export function GalleryModal() {
           systemPrompt: h.systemPrompt ?? undefined,
           systemPromptEnabled: h.systemPromptEnabled === true,
           size: h.size ?? undefined,
+          width: h.width ?? undefined,
+          height: h.height ?? undefined,
+          resolution: h.resolution ?? undefined,
           quality: h.quality ?? undefined,
           provider: h.provider,
           createdAt: h.createdAt,
@@ -323,6 +326,18 @@ export function GalleryModal() {
 
   const renderTile = (item: GenerateItem, keyPrefix: string, idx: number) => {
     const active = currentImage?.image === item.image;
+    const resolution = item.resolution || (
+      item.width && item.height ? `${item.width}x${item.height}` : item.size
+    );
+    const tileMeta = [resolution, item.quality].filter(Boolean).join(" · ");
+    const prompt = item.prompt?.trim() || "";
+    const originalPrompt = item.originalPrompt?.trim() || "";
+    const titleText = [
+      tileMeta,
+      prompt ? `수정됨 프롬프트:\n${prompt}` : null,
+      originalPrompt && originalPrompt !== prompt ? `원본 프롬프트:\n${originalPrompt}` : null,
+      "더블클릭: 전체 보기",
+    ].filter(Boolean).join("\n\n");
     return (
       <div
         key={`${keyPrefix}-${idx}-${item.filename ?? idx}`}
@@ -342,7 +357,7 @@ export function GalleryModal() {
             close();
             openLightbox(item.filename ?? null);
           }}
-          title={`${item.prompt ?? ""}${item.prompt ? "\n" : ""}${item.systemPrompt ? `기본 프롬프트:\n${item.systemPrompt}\n` : ""}더블클릭: 전체 보기`}
+          title={titleText}
         >
           <img
             src={item.thumb || item.image}
@@ -356,9 +371,10 @@ export function GalleryModal() {
               el.src = item.url || item.image;
             }}
           />
-          {item.prompt && (
+          {(tileMeta || prompt) && (
             <div className="gallery__caption">
-              <span className="gallery__caption-text">{item.prompt}</span>
+              {tileMeta ? <span className="gallery__caption-meta">{tileMeta}</span> : null}
+              {prompt ? <span className="gallery__caption-text">{prompt}</span> : null}
             </div>
           )}
         </button>

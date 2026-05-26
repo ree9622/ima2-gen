@@ -43,11 +43,18 @@ export type GenerateItem = {
   originalPrompt?: string;
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
+  promptRuntime?: PromptRuntime | null;
   elapsed?: number;
   provider?: string;
+  imageRoute?: string | null;
+  imageModel?: string | null;
+  responsesModel?: string | null;
   codexAccount?: string | null;
   quality?: string;
   size?: string;
+  width?: number | null;
+  height?: number | null;
+  resolution?: string | null;
   moderation?: string;
   usage?: { total_tokens?: number } & Record<string, unknown>;
   thumb?: string;
@@ -62,6 +69,22 @@ export type GenerateItem = {
   clientNodeId?: string | null;
   kind?: string | null;
   references?: ReferenceImageRef[];
+};
+
+export type PromptRuntime = {
+  prompt?: string | null;
+  userPrompt?: string | null;
+  developerPrompt?: string | null;
+  systemPrompt?: string | null;
+  systemPromptEnabled?: boolean;
+  promptMutationDisabled?: boolean;
+  userPromptMutated?: boolean;
+  hasRefs?: boolean;
+  toolNames?: string[];
+  route?: string | null;
+  model?: string | null;
+  imageModel?: string | null;
+  reasoningEffort?: string | null;
 };
 
 // Hint sent to the server alongside `references` so it can label each
@@ -79,11 +102,18 @@ export type GenerateSingleResponse = {
   filename: string;
   usage?: GenerateItem["usage"];
   provider: string;
+  imageRoute?: string | null;
+  imageModel?: string | null;
+  responsesModel?: string | null;
   quality?: string;
   size?: string;
+  width?: number | null;
+  height?: number | null;
+  resolution?: string | null;
   moderation?: string;
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
+  promptRuntime?: PromptRuntime | null;
 };
 
 export type GenerateMultiResponse = {
@@ -92,11 +122,18 @@ export type GenerateMultiResponse = {
   count: number;
   usage?: GenerateItem["usage"];
   provider: string;
+  imageRoute?: string | null;
+  imageModel?: string | null;
+  responsesModel?: string | null;
   quality?: string;
   size?: string;
+  width?: number | null;
+  height?: number | null;
+  resolution?: string | null;
   moderation?: string;
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
+  promptRuntime?: PromptRuntime | null;
 };
 
 export type GenerateResponse = GenerateSingleResponse | GenerateMultiResponse;
@@ -159,6 +196,7 @@ export type AttemptLog = {
   errorCode: string | null;
   durationMs: number;
   startedAt: number;
+  promptRuntime?: PromptRuntime | null;
 };
 
 export type GenerationLogItem = {
@@ -170,6 +208,10 @@ export type GenerationLogItem = {
   originalPrompt?: string | null;
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
+  promptRuntime?: PromptRuntime | null;
+  imageRoute?: string | null;
+  imageModel?: string | null;
+  responsesModel?: string | null;
   quality: string | null;
   size: string | null;
   format: string | null;

@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import { readFileSync } from "node:fs";
 
 import {
   DEFAULT_PROMPT_INJECTION,
@@ -16,18 +17,21 @@ describe("Default prompt injection", () => {
     assert.ok(merged.endsWith("Base image instruction."));
   });
 
-  it("declares all human subjects as fictional AI personas (per user request 2026-04-26)", () => {
+  it("preserves named celebrity and public-figure visual references", () => {
     assert.ok(
-      /fictional AI-generated virtual personas/i.test(DEFAULT_PROMPT_INJECTION),
-      "default prompt must classify all human figures as AI-generated personas",
+      /public figure or celebrity as a visual reference/i.test(DEFAULT_PROMPT_INJECTION),
+      "default prompt must honor named public-figure and celebrity visual references",
     );
     assert.ok(
-      /not depictions of real, identifiable individuals/i.test(DEFAULT_PROMPT_INJECTION),
-      "default prompt must explicitly say outputs are not real people",
+      /recognizable public-facing facial features and styling cues/i.test(DEFAULT_PROMPT_INJECTION),
+      "default prompt must preserve recognizable public-facing visual cues when requested",
     );
-    assert.ok(
-      /do not surface[^.]{0,80}as visible text/i.test(DEFAULT_PROMPT_INJECTION),
-      "the cue must stay internal — not rendered into the image",
+    assert.equal(
+      /fictional AI-generated virtual personas|not depictions of real, identifiable individuals/i.test(
+        DEFAULT_PROMPT_INJECTION,
+      ),
+      false,
+      "default prompt must not globally recast named people as generic fictional personas",
     );
   });
 
@@ -78,6 +82,14 @@ describe("Default prompt injection", () => {
 
   it("falls back to the default prompt when no per-request value is sent", () => {
     assert.equal(resolveSystemPrompt({}), DEFAULT_PROMPT_INJECTION);
+  });
+
+  it("migrates browsers that persisted the old fictional-persona default", () => {
+    const storeSource = readFileSync("ui/src/store/useAppStore.ts", "utf8");
+
+    assert.match(storeSource, /version:\s*2\b/);
+    assert.match(storeSource, /fictional AI-generated virtual personas/);
+    assert.match(storeSource, /state\.systemPrompt\s*=\s*DEFAULT_SYSTEM_PROMPT/);
   });
 
 });

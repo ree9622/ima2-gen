@@ -30,7 +30,7 @@ export function Canvas() {
     showToast(
       showingOriginal
         ? "원본 프롬프트를 복사했습니다"
-        : "프롬프트를 복사했습니다",
+        : "수정됨 프롬프트를 복사했습니다",
     );
   };
   const copySystemPrompt = () => {
@@ -40,7 +40,11 @@ export function Canvas() {
   };
 
   const displayQuality = currentImage?.quality ?? quality;
-  const displaySize = currentImage?.size ?? getResolvedSize();
+  const displaySize =
+    currentImage?.resolution ||
+    (currentImage?.width && currentImage?.height
+      ? `${currentImage.width}x${currentImage.height}`
+      : currentImage?.size ?? getResolvedSize());
 
   const isGenerating = activeGenerations > 0;
   const showSkeleton = !currentImage && isGenerating;
@@ -136,6 +140,7 @@ export function Canvas() {
             }}
             style={{ cursor: "zoom-in" }}
           />
+          {displaySize ? <div className="result-size-pill">{displaySize}</div> : null}
           {visiblePrompt ? (
             <div
               className={`result-prompt${showingOriginal ? " result-prompt--original" : ""}`}
@@ -155,7 +160,7 @@ export function Canvas() {
                     className={`result-prompt__tab${!showingOriginal ? " is-active" : ""}`}
                     onClick={() => setPromptView("enhanced")}
                   >
-                    다듬은
+                    수정됨
                   </button>
                   <button
                     type="button"
@@ -169,7 +174,7 @@ export function Canvas() {
                 </div>
               ) : null}
               <div className="result-prompt__label">
-                {showingOriginal ? "원본 입력 프롬프트" : "입력 프롬프트"}
+                {showingOriginal ? "원본 프롬프트" : "수정됨 프롬프트"}
               </div>
               <div className="result-prompt__text">{visiblePrompt}</div>
             </div>

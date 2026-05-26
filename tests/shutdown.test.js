@@ -6,11 +6,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const platformPath = join(__dirname, "..", "bin", "lib", "platform.js");
+const platformUrl = pathToFileURL(join(__dirname, "..", "bin", "lib", "platform.js")).href;
 
 function runOnShutdownChild(handlerSource, signalDelayMs = 50, timeoutMs = 5000) {
   // Build a tiny program that:
@@ -20,7 +20,7 @@ function runOnShutdownChild(handlerSource, signalDelayMs = 50, timeoutMs = 5000)
   //   4. process.exit happens inside onShutdown — we capture stdout via the
   //      child's piped output
   const code = `
-import { onShutdown } from ${JSON.stringify(platformPath)};
+import { onShutdown } from ${JSON.stringify(platformUrl)};
 
 const start = Date.now();
 onShutdown(async (sig) => {
@@ -53,7 +53,7 @@ setTimeout(() => {
   };
 }
 
-describe("onShutdown (async-aware)", () => {
+describe("onShutdown (async-aware)", { skip: process.platform === "win32" }, () => {
   it("awaits async handler before process.exit", () => {
     // Handler sleeps 200ms before completing. If onShutdown didn't await,
     // HANDLER_END would never appear (process.exit fires first).
@@ -98,7 +98,7 @@ describe("onShutdown (async-aware)", () => {
     // Handler waits 1500ms but we send a second signal at 200ms after the
     // first. Re-entrant path should bail with exit(1).
     const code = `
-import { onShutdown } from ${JSON.stringify(platformPath)};
+import { onShutdown } from ${JSON.stringify(platformUrl)};
 const start = Date.now();
 onShutdown(async () => {
   console.log("HANDLER_BEGIN " + (Date.now() - start));

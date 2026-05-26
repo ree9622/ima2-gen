@@ -23,6 +23,8 @@
   --amber: #f59e0b;
   --red: #ef4444;
   --radius: 10px;
+  --sidebar-width: 260px;
+  --right-panel-width: 280px;
   --font: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
   --mono: "Geist Mono", ui-monospace, monospace;
@@ -95,13 +97,14 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: 260px 1fr auto;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
   height: 100dvh;
   overflow: hidden;
 }
 
 /* ── Sidebar ── */
 .sidebar {
+  position: relative;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -109,6 +112,55 @@ body {
   height: 100dvh;
   overflow: hidden;
   min-height: 0;
+}
+
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 3;
+}
+.panel-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+.panel-resize-handle:hover::after,
+.panel-resize-handle:focus-visible::after,
+.panel-resize-handle:active::after {
+  background: color-mix(in srgb, var(--text-dim) 72%, transparent);
+  box-shadow: 0 0 0 3px rgba(127, 127, 127, 0.12);
+}
+.panel-resize-handle:focus-visible {
+  outline: none;
+}
+.panel-resize-handle--sidebar {
+  right: 0;
+}
+.panel-resize-handle--sidebar::after {
+  right: 2px;
+}
+.panel-resize-handle--right-panel {
+  left: -6px;
+}
+.panel-resize-handle--right-panel::after {
+  left: 5px;
+}
+.panel-resizing,
+.panel-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+.panel-resizing .right-panel {
+  transition: none;
 }
 .sidebar__scroll {
   flex: 1 1 auto;
@@ -355,7 +407,7 @@ body {
   position: relative;
   background: var(--surface);
   border-left: 1px solid var(--border);
-  width: 280px;
+  width: var(--right-panel-width);
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -734,6 +786,18 @@ body {
   color: var(--text-dim);
   display: flex;
   gap: 20px;
+}
+
+.result-size-pill {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
 }
 
 .result-actions {
@@ -1275,9 +1339,12 @@ body {
   font-size: 11px;
   line-height: 1.3;
   text-align: left;
-  opacity: 0;
+  opacity: 0.92;
   transition: opacity 0.15s ease;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .gallery__tile:hover .gallery__caption {
   opacity: 1;
@@ -1287,6 +1354,12 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.gallery__caption-meta {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.86);
 }
 .gallery__empty {
   text-align: center;
@@ -1904,6 +1977,9 @@ body {
     grid-template-rows: auto 1fr;
     height: auto;
     overflow: visible;
+  }
+  .panel-resize-handle {
+    display: none;
   }
   .sidebar {
     border-right: none;
@@ -3208,7 +3284,7 @@ body {
    matching the desktop layout but with a slim sidebar. */
 @media (max-width: 800px) and (orientation: landscape) and (max-height: 540px) {
   .app {
-    grid-template-columns: 220px 1fr auto;
+    grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(0, 1fr) auto;
     grid-template-rows: 100dvh;
     height: 100dvh;
     overflow: hidden;
@@ -3461,6 +3537,23 @@ body {
   z-index: 2;
   backdrop-filter: blur(6px);
   scrollbar-width: thin;
+}
+
+.lightbox__meta {
+  position: absolute;
+  left: 50%;
+  top: max(58px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(20, 20, 20, 0.72);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+  z-index: 2;
+  backdrop-filter: blur(6px);
 }
 .lightbox__caption-group + .lightbox__caption-group {
   margin-top: 8px;

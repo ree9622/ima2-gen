@@ -261,7 +261,38 @@ export function Lightbox() {
 
   const originalSrc = currentImage.url || currentImage.image;
   const src = webVariant(currentImage.url ?? null) ?? originalSrc;
+  const prompt = currentImage.prompt?.trim() || "";
+  const originalPrompt = currentImage.originalPrompt?.trim() || "";
   const systemPrompt = currentImage.systemPrompt?.trim() || "";
+  const promptRuntime = currentImage.promptRuntime;
+  const runtimeDeveloperPrompt = promptRuntime?.developerPrompt?.trim() || "";
+  const runtimeTools = promptRuntime?.toolNames?.join(", ") || "";
+  const runtimeRoute = (currentImage.imageRoute || promptRuntime?.route || "").trim();
+  const runtimeModel = (currentImage.imageModel || promptRuntime?.imageModel || promptRuntime?.model || currentImage.responsesModel || "").trim();
+  const runtimeResponsesModel = (currentImage.responsesModel || promptRuntime?.model || "").trim();
+  const runtimeRouteText = [
+    runtimeRoute ? `경로: ${runtimeRoute}` : null,
+    runtimeModel ? `이미지 모델: ${runtimeModel}` : null,
+    runtimeResponsesModel && runtimeResponsesModel !== runtimeModel ? `호출 모델: ${runtimeResponsesModel}` : null,
+    promptRuntime?.reasoningEffort ? `reasoning: ${promptRuntime.reasoningEffort}` : null,
+  ].filter(Boolean).join(" · ");
+  const hasRuntimePrompt =
+    !!runtimeDeveloperPrompt ||
+    !!runtimeTools ||
+    !!runtimeRouteText;
+  const hasPromptInfo =
+    !!prompt ||
+    (!!originalPrompt && originalPrompt !== prompt);
+  const displaySize =
+    currentImage.resolution?.trim() ||
+    (currentImage.width && currentImage.height
+      ? `${currentImage.width}x${currentImage.height}`
+      : currentImage.size?.trim() || "");
+  const displayMeta = [
+    displaySize,
+    currentImage.quality,
+    currentImage.provider,
+  ].filter(Boolean).join(" · ");
   const idx = history.findIndex(
     (h) =>
       (currentImage.filename && h.filename === currentImage.filename) ||
@@ -475,8 +506,6 @@ export function Lightbox() {
       <div
         className="lightbox__stage"
         onClick={(e) => {
-          // Image click jumps to the originating session; clicks on empty
-          // stage area still bubble to the backdrop and close.
           if ((e.target as HTMLElement).tagName === "IMG") {
             e.stopPropagation();
             void jumpToImageSession();
@@ -489,9 +518,15 @@ export function Lightbox() {
           onError={fallbackTo(originalSrc)}
           alt={currentImage.prompt ?? "전체 보기"}
           draggable={false}
-          title="클릭: 이 이미지로 재작업 (프롬프트·옵션 가져오기) · Space: 100%/맞춤"
+          title="클릭: 해당 이미지로 이동 · Space: 100%/맞춤"
         />
       </div>
+
+      {displayMeta ? (
+        <div className="lightbox__meta" onClick={(e) => e.stopPropagation()}>
+          {displayMeta}
+        </div>
+      ) : null}
 
       {currentImage.codexAccount ? (
         <div className="lightbox__account" title="이 이미지를 만든 codex 계정"
@@ -499,18 +534,42 @@ export function Lightbox() {
                      background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,letterSpacing:0,
                      pointerEvents:"none"}}>acc: {currentImage.codexAccount}</div>
       ) : null}
-      {(currentImage.prompt || systemPrompt) && showCaption ? (
+      {(hasPromptInfo || systemPrompt || hasRuntimePrompt) && showCaption ? (
         <div className="lightbox__caption" onClick={(e) => e.stopPropagation()}>
-          {currentImage.prompt ? (
+          {prompt ? (
             <div className="lightbox__caption-group">
-              <span className="lightbox__caption-label">입력 프롬프트</span>
-              <span className="lightbox__caption-text">{currentImage.prompt}</span>
+              <span className="lightbox__caption-label">수정됨 프롬프트</span>
+              <span className="lightbox__caption-text">{prompt}</span>
+            </div>
+          ) : null}
+          {originalPrompt && originalPrompt !== prompt ? (
+            <div className="lightbox__caption-group">
+              <span className="lightbox__caption-label">원본 프롬프트</span>
+              <span className="lightbox__caption-text">{originalPrompt}</span>
             </div>
           ) : null}
           {systemPrompt ? (
             <div className="lightbox__caption-group">
               <span className="lightbox__caption-label">기본 프롬프트</span>
               <span className="lightbox__caption-text">{systemPrompt}</span>
+            </div>
+          ) : null}
+          {runtimeDeveloperPrompt ? (
+            <div className="lightbox__caption-group">
+              <span className="lightbox__caption-label">Developer 프롬프트</span>
+              <span className="lightbox__caption-text">{runtimeDeveloperPrompt}</span>
+            </div>
+          ) : null}
+          {runtimeTools ? (
+            <div className="lightbox__caption-group">
+              <span className="lightbox__caption-label">도구</span>
+              <span className="lightbox__caption-text">{runtimeTools}</span>
+            </div>
+          ) : null}
+          {runtimeRouteText ? (
+            <div className="lightbox__caption-group">
+              <span className="lightbox__caption-label">호출 경로/모델</span>
+              <span className="lightbox__caption-text">{runtimeRouteText}</span>
             </div>
           ) : null}
         </div>

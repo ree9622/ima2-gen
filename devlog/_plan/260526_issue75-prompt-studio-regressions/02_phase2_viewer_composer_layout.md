@@ -22,6 +22,23 @@ so users cannot easily inspect the remaining image area when it first appears.
 - Keep metadata/actions secondary in Prompt Studio so they do not compete with
   the image canvas.
 - Confirm pan/zoom controls remain reachable and obvious at default fit.
+- Preserve separate visual affordances when Multimode and 1:1 Direct are both
+  active. Multimode remains the sequence state, while Direct must still be
+  visible through the composer class, badge, and active toolbar state.
+- Make Prompt Studio bottom composer badge rows wrap instead of clipping the
+  Korean/English status labels.
+
+## Implementation Contract
+
+- `PromptComposer` must clamp its autosized textarea to the computed CSS
+  `max-height`, so inline `height = scrollHeight` cannot bypass the Prompt
+  Studio cap.
+- `.composer--bottom` owns a smaller textarea cap than the sidebar composer and
+  keeps prompt chips scrollable inside the composer.
+- `.composer--direct` must be present even when `.composer--multimode` is also
+  present; combined styling handles the two-state border/background.
+- The Prompt Studio stage keeps `min-height: 0`, hidden overflow, and
+  `object-fit: contain`/`max-height: 100%` image containment.
 
 ## Acceptance
 

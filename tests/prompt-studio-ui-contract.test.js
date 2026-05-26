@@ -153,6 +153,21 @@ describe("prompt studio UI contract", () => {
     assert.ok(lineCount("ui/src/styles/classic-workspace.css") < 500);
   });
 
+  it("caps prompt studio bottom composer before it can starve the image viewer", () => {
+    const promptComposer = readSource("ui/src/components/PromptComposer.tsx");
+    const css = readSource("ui/src/styles/classic-workspace.css");
+
+    assert.match(promptComposer, /parseCssPixelValue/);
+    assert.match(promptComposer, /window\.getComputedStyle\(el\)\.maxHeight/);
+    assert.match(promptComposer, /Math\.min\(el\.scrollHeight, maxHeight\)/);
+    assert.match(css, /grid-template-rows:\s*minmax\(280px, 1fr\) auto/);
+    assert.match(css, /\.classic-workspace__dock\s*\{[\s\S]*?max-height:\s*min\(34dvh, 260px\)/);
+    assert.match(css, /\.classic-workspace__dock\s*\{[\s\S]*?overflow:\s*hidden/);
+    assert.match(css, /\.composer--bottom\s*\{[\s\S]*?--composer-textarea-max-height:\s*148px/);
+    assert.match(css, /\.composer--bottom \.composer__prompt-chips\s*\{[\s\S]*?max-height:\s*min\(10dvh, 82px\)/);
+    assert.match(css, /\.classic-workspace__stage \.result-img\s*\{[\s\S]*?max-height:\s*100%/);
+  });
+
   it("extracts classic viewer zoom and pan controls into hook, component, and CSS", () => {
     const main = readSource("ui/src/main.tsx");
     const canvas = readSource("ui/src/components/Canvas.tsx");

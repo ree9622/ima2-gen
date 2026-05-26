@@ -25,7 +25,7 @@
   min-height: 0;
   height: 100dvh;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(280px, 1fr) auto;
   overflow: hidden;
   background: var(--bg);
 }
@@ -82,17 +82,23 @@
 
 .classic-workspace__dock {
   min-width: 0;
+  min-height: 0;
   width: min(1480px, 100%);
+  max-height: min(34dvh, 260px);
   margin: 0 auto;
   padding: 0 24px 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: stretch;
   gap: 10px;
+  overflow: hidden;
 }
 
 .composer--bottom {
+  --composer-textarea-min-height: 86px;
+  --composer-textarea-max-height: 148px;
   width: 100%;
+  max-height: 100%;
   margin: 0;
   padding: 12px;
   border-radius: 8px;
@@ -102,15 +108,23 @@
 }
 
 .composer--bottom .composer__textarea {
-  min-height: clamp(116px, 18dvh, 220px);
-  max-height: clamp(150px, 24dvh, 280px);
+  flex: 0 1 auto;
+  min-height: var(--composer-textarea-min-height);
+  max-height: var(--composer-textarea-max-height);
   padding: 6px 4px;
   font-size: 14px;
   line-height: 1.6;
 }
 
+.composer--bottom .composer__header,
+.composer--bottom .composer__chips,
+.composer--bottom .composer__toolbar {
+  flex: 0 0 auto;
+}
+
 .composer--bottom .composer__prompt-chips {
-  max-height: min(22dvh, 180px);
+  flex: 0 1 auto;
+  max-height: min(10dvh, 82px);
   overflow-y: auto;
 }
 

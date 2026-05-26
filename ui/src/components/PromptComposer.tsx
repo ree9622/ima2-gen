@@ -10,6 +10,11 @@ type PromptComposerProps = {
   variant?: "sidebar" | "bottom";
 };
 
+function parseCssPixelValue(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
@@ -105,8 +110,10 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [prompt]);
+    const maxHeight = parseCssPixelValue(window.getComputedStyle(el).maxHeight);
+    const nextHeight = maxHeight ? Math.min(el.scrollHeight, maxHeight) : el.scrollHeight;
+    el.style.height = `${nextHeight}px`;
+  }, [prompt, variant]);
 
   useEffect(() => {
     const handler = (e: globalThis.ClipboardEvent) => {
@@ -171,7 +178,7 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
 
   return (
     <div
-      className={`composer composer--${variant}${dragOver ? " composer--drag" : ""}${isDirectMode && !multimode ? " composer--direct" : ""}${multimode ? " composer--multimode" : ""}`}
+      className={`composer composer--${variant}${dragOver ? " composer--drag" : ""}${isDirectMode ? " composer--direct" : ""}${multimode ? " composer--multimode" : ""}${isDirectMode && multimode ? " composer--combined-modes" : ""}`}
       role="group"
       aria-label={
         multimode

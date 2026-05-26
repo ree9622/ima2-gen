@@ -2301,6 +2301,8 @@ body {
 /* ── Prompt composer (chat-style w/ inline references) ── */
 .composer {
   position: relative;
+  --composer-textarea-min-height: 80px;
+  --composer-textarea-max-height: 218px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2328,6 +2330,16 @@ body {
     var(--surface);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
+.composer--combined-modes {
+  border-color: color-mix(in srgb, var(--green) 54%, var(--accent));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 58%, transparent), transparent 70%),
+    linear-gradient(90deg, color-mix(in srgb, var(--green) 13%, transparent), transparent 42%),
+    var(--surface);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent),
+    inset 4px 0 0 color-mix(in srgb, var(--green) 74%, var(--border));
+}
 .composer--multimode .composer__textarea {
   color: var(--text);
 }
@@ -2336,55 +2348,56 @@ body {
 }
 .composer__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .composer__label {
   margin: 0;
 }
 .composer__header-meta {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 8px;
+  flex: 1 1 220px;
+  flex-wrap: wrap;
   min-width: 0;
 }
 .composer__mode-badge {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
-  max-width: 170px;
-  padding: 3px 7px;
+  max-width: 100%;
+  padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--border));
-  border-radius: 999px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface));
   color: var(--accent-bright);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .composer__direct-badge {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
-  max-width: 150px;
-  padding: 3px 7px;
+  max-width: 100%;
+  padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--green) 58%, var(--border));
-  border-radius: 999px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--green) 14%, var(--surface));
   color: var(--green);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .composer__count {
   font-family: var(--mono);
@@ -2498,8 +2511,8 @@ body {
   border: none;
   padding: 4px 2px;
   background: transparent;
-  min-height: 80px;
-  max-height: 218px;
+  min-height: var(--composer-textarea-min-height);
+  max-height: var(--composer-textarea-max-height);
   line-height: 1.5;
   resize: none;
   overflow-y: auto;
@@ -3356,14 +3369,14 @@ body {
     color: var(--text);
     font-size: 15px;
     font-weight: 720;
-    line-height: 1;
+    line-height: 1.15;
     white-space: nowrap;
   }
   .mobile-app-bar__mode {
     color: var(--text-dim);
     font-family: var(--mono);
     font-size: 10px;
-    line-height: 1;
+    line-height: 1.2;
     text-transform: uppercase;
   }
   .mobile-app-bar__actions {

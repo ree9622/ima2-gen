@@ -14,8 +14,9 @@ describe("direct mode visual contract", () => {
     const composer = readSource("ui/src/components/PromptComposer.tsx");
 
     assert.match(composer, /const isDirectMode = promptMode === "direct"/);
-    assert.match(composer, /isDirectMode && !multimode \? " composer--direct" : ""/);
+    assert.match(composer, /isDirectMode \? " composer--direct" : ""/);
     assert.match(composer, /multimode \? " composer--multimode" : ""/);
+    assert.match(composer, /isDirectMode && multimode \? " composer--combined-modes" : ""/);
     assert.match(composer, /className="composer__direct-badge"/);
     assert.match(composer, /t\("prompt\.directModeActive"\)/);
     assert.match(composer, /aria-pressed=\{isDirectMode\}/);
@@ -27,7 +28,9 @@ describe("direct mode visual contract", () => {
     assert.match(css, /\.composer--direct\s*\{/);
     assert.match(css, /\.composer__direct-badge\s*\{/);
     assert.match(css, /\.composer--multimode\s*\{/);
+    assert.match(css, /\.composer--combined-modes\s*\{/);
     assert.match(css, /\.composer__mode-badge\s*\{/);
+    assert.match(css, /\.composer__header-meta\s*\{[\s\S]*?flex-wrap:\s*wrap/);
     assert.match(css, /\.composer__tool--on\s*\{/);
   });
 

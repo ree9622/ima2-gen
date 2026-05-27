@@ -1,6 +1,7 @@
 import { useI18n } from "../../i18n";
 import type { GenerateItem } from "../../types";
 import { ResultActions } from "../ResultActions";
+import { ResultPromptSummary } from "../ResultPromptSummary";
 
 interface CanvasModeResultDetailsProps {
   currentImage: GenerateItem;
@@ -45,7 +46,7 @@ export function CanvasModeResultDetails({
         onAfterDeleteFocus={onAfterDeleteFocus}
       />
       {currentImage.prompt ? (
-        <div className="result-prompt" onClick={onCopyPrompt}>{currentImage.prompt}</div>
+        <ResultPromptSummary prompt={currentImage.prompt} onCopy={onCopyPrompt} />
       ) : null}
     </>
   );

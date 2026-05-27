@@ -55,7 +55,7 @@
   gap: 0;
 }
 
-.classic-workspace__stage .canvas-annotation-frame {
+.classic-workspace__stage .result-preview-frame {
   min-width: 0;
   min-height: 0;
   width: 100%;

@@ -21,7 +21,7 @@
   background-size: 14px 14px, auto, auto;
 }
 
-.result-container > .canvas-annotation-frame {
+.result-container > .result-preview-frame {
   position: relative;
   overflow: hidden;
   border-radius: 8px;

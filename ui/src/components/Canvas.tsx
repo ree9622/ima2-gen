@@ -11,6 +11,7 @@ import {
 import { useAppStore } from "../store/useAppStore";
 import { useCreateBlankCanvas } from "../hooks/useCreateBlankCanvas";
 import { ResultActions } from "./ResultActions";
+import { ResultPromptSummary } from "./ResultPromptSummary";
 import { MultimodeSequencePreview } from "./MultimodeSequencePreview";
 import { ViewerControls } from "./viewer/ViewerControls";
 import { useI18n } from "../i18n";
@@ -187,7 +188,7 @@ export function Canvas() {
           aria-label={t("canvas.imageViewerAria")}
         >
           <div
-            className={`canvas-annotation-frame${viewer.zoom > VIEWER_MIN_ZOOM ? " canvas-annotation-frame--zoomed" : ""}`}
+            className={`result-preview-frame canvas-annotation-frame${viewer.zoom > VIEWER_MIN_ZOOM ? " canvas-annotation-frame--zoomed" : ""}`}
             onWheel={viewer.handleWheel}
             onDoubleClick={viewer.handleDoubleClick}
             onPointerDown={viewer.handlePointerDown}
@@ -239,9 +240,7 @@ export function Canvas() {
           </div>
           <ResultActions onAfterDeleteFocus={restoreResultFocus} />
           {currentImage.prompt ? (
-            <div className="result-prompt" onClick={copyPrompt}>
-              {currentImage.prompt}
-            </div>
+            <ResultPromptSummary prompt={currentImage.prompt} onCopy={copyPrompt} />
           ) : null}
         </div>
       ) : !currentImage ? (

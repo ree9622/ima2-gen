@@ -11,6 +11,7 @@ import "./styles/prompt-builder-messages.css";
 import "./styles/sidebar-history.css";
 import "./styles/settings-controls.css";
 import "./styles/viewer-workflow.css";
+import "./styles/result-preview.css";
 import "./styles/agent-workspace.css";
 import "./styles/agent-workspace-panels.css";
 import "./styles/agent-workspace-image.css";

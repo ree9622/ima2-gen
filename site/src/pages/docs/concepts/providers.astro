@@ -1,0 +1,80 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+---
+
+<DocsLayout
+  lang="en"
+  active="concepts/providers"
+  title="Providers & Models"
+  description="Choose between the OAuth and API-key provider paths, pick a model, and set quality, moderation, and reasoning defaults."
+>
+  <p class="docs-eyebrow">Concepts</p>
+  <h1>Providers &amp; Models</h1>
+  <p class="lead">
+    Image generation runs through one of two provider paths: your local Codex/ChatGPT OAuth login,
+    or a configured OpenAI API key.
+  </p>
+
+  <h2>Provider paths</h2>
+  <ul>
+    <li><code>provider: "oauth"</code> — uses the local Codex OAuth proxy. The default path; no API key needed.</li>
+    <li><code>provider: "api"</code> — calls the OpenAI Responses API with the hosted <code>image_generation</code> tool. Requires <code>OPENAI_API_KEY</code>.</li>
+  </ul>
+  <p>API-key generation supports classic generate, edit, mask-guided edit, multimode, and node generation.</p>
+
+  <h2>Per-request override</h2>
+  <p>Generation commands accept <code>--provider &lt;auto|oauth|api&gt;</code>:</p>
+  <table>
+    <thead><tr><th>Value</th><th>Behavior</th></tr></thead>
+    <tbody>
+      <tr><td><code>auto</code></td><td>Preserve route default behavior; currently resolves to OAuth.</td></tr>
+      <tr><td><code>oauth</code></td><td>Force the local OAuth proxy path.</td></tr>
+      <tr><td><code>api</code></td><td>Force the API-key Responses path; requires a configured key.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Models</h2>
+  <p>
+    The app defaults to <code>gpt-5.4-mini</code> for fast local iteration. Switch to
+    <code>gpt-5.4</code> for the safest balanced workflow.
+  </p>
+  <table>
+    <thead><tr><th>Model</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><code>gpt-5.4-mini</code></td><td>Current default. Faster draft model.</td></tr>
+      <tr><td><code>gpt-5.4</code></td><td>Recommended balanced choice.</td></tr>
+      <tr><td><code>gpt-5.5</code></td><td>Strongest quality when your Codex CLI/OAuth backend supports it. May use more quota or need an updated Codex CLI.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The app also exposes quality (<code>low</code>, <code>medium</code>, <code>high</code>) and
+    moderation (<code>auto</code>, <code>low</code>) controls. Reasoning effort accepts none, low,
+    medium, high, and xhigh.
+  </p>
+  <div class="docs-callout docs-callout-info">
+    <strong>Persisted defaults.</strong> <code>ima2 defaults set model gpt-5.5</code> and
+    <code>ima2 defaults set reasoning high</code> write both OAuth and API-provider default keys, so
+    your "default model" stays one concept across provider paths.
+  </div>
+
+  <h2>API-provider defaults</h2>
+  <p>When the API path is used without explicit options, these defaults apply:</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th></tr></thead>
+    <tbody>
+      <tr><td><code>IMA2_API_IMAGE_MODEL_DEFAULT</code></td><td><code>gpt-5.4-mini</code></td></tr>
+      <tr><td><code>IMA2_API_REASONING_EFFORT</code></td><td><code>low</code></td></tr>
+      <tr><td><code>IMA2_API_IMAGE_SIZE</code></td><td><code>1024x1024</code></td></tr>
+      <tr><td><code>IMA2_API_ALLOW_WEB_SEARCH</code></td><td><code>true</code></td></tr>
+    </tbody>
+  </table>
+  <p>See <a href={d('reference/config')}>Configuration</a> for the full environment table.</p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('concepts/modes')}>Generation Modes</a>
+    <a class="next" href={d('reference/cli')}>CLI Commands</a>
+  </div>
+</DocsLayout>

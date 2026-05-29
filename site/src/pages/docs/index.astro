@@ -1,0 +1,68 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { docsPath } from '../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+---
+
+<DocsLayout
+  lang="en"
+  active=""
+  title="Overview"
+  description="Developer documentation for ima2-gen — a local image studio with Classic, Node, Multimode, and Canvas modes, a dual OAuth/API provider path, and a full CLI."
+>
+  <p class="docs-eyebrow">Developer Documentation</p>
+  <h1>ima2-gen Developer Docs</h1>
+  <p class="lead">
+    ima2-gen is a local image-generation studio you run with <code>npx</code>. Generate in
+    Classic, branch in a Node graph, fan out Multimode batches, and clean up the winning frame in
+    Canvas Mode — all on your machine, using your existing Codex/ChatGPT login.
+  </p>
+
+  <div class="docs-install">
+    <code>npx ima2-gen serve</code>
+    <code># then open http://localhost:3333</code>
+  </div>
+
+  <h2>Start here</h2>
+  <div class="docs-cards">
+    <a class="docs-card" href={d('quickstart')}>
+      <div class="card-h">Quickstart →</div>
+      <div class="card-b">Install, sign in with Codex, and run your first generation.</div>
+    </a>
+    <a class="docs-card" href={d('concepts/architecture')}>
+      <div class="card-h">Architecture →</div>
+      <div class="card-b">How the CLI, server, route modules, and UI fit together.</div>
+    </a>
+    <a class="docs-card" href={d('reference/cli')}>
+      <div class="card-h">CLI Reference →</div>
+      <div class="card-b">Every server route has a CLI wrapper. Browse the commands.</div>
+    </a>
+  </div>
+
+  <h2>What it does</h2>
+  <ul>
+    <li><strong>Classic mode</strong> — one prompt, one strong frame; generate, edit, and continue from any result.</li>
+    <li><strong>Node mode</strong> — lock a parent image and fan out children (palette, framing, copy) in a graph.</li>
+    <li><strong>Multimode</strong> — launch several Classic candidates from one prompt with slot-by-slot progress.</li>
+    <li><strong>Canvas Mode</strong> — zoom, annotate, clean backgrounds, and export alpha or matte-backed versions.</li>
+    <li><strong>Prompt library</strong> — import prompt packs from files, GitHub folders, and curated sources, indexed locally.</li>
+  </ul>
+  <p>See <a href={d('concepts/modes')}>Generation Modes</a> for when to reach for each.</p>
+
+  <h2>Local &amp; open by design</h2>
+  <p>
+    Image generation runs through your local Codex/ChatGPT OAuth login or a configured OpenAI API
+    key. Generated frames and session logs live in your user-data folder (<code>~/.ima2</code>) —
+    not on a remote store. ima2-gen is MIT licensed.
+  </p>
+  <p>
+    Read more in <a href={d('concepts/providers')}>Providers &amp; Models</a> and
+    <a href={d('reference/config')}>Configuration</a>.
+  </p>
+
+  <div class="docs-pagenav">
+    <span class="spacer"></span>
+    <a class="next" href={d('quickstart')}>Quickstart</a>
+  </div>
+</DocsLayout>

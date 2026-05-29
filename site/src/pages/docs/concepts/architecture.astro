@@ -1,0 +1,73 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+const gh = 'https://github.com/lidge-jun/ima2-gen/blob/main';
+---
+
+<DocsLayout
+  lang="en"
+  active="concepts/architecture"
+  title="Architecture"
+  description="How ima2-gen fits together — CLI and web UI call a local Express server that delegates to route modules, a local OAuth proxy, SQLite, and the generated-image directory."
+>
+  <p class="docs-eyebrow">Concepts</p>
+  <h1>Architecture</h1>
+  <p class="lead">
+    ima2-gen is a combined image-generation CLI and web UI. Both call <code>/api/*</code> endpoints
+    on a local Express server that delegates to route modules, a local OAuth proxy, SQLite, and your
+    generated-image directory.
+  </p>
+
+  <h2>Runtime flow</h2>
+  <pre><code>CLI (bin/ima2.ts, bin/commands/*) ──┐
+Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/*
+                                    │                     │
+                                    │           lib/*  (storage, sessions, inflight, metadata)
+                                    │           openai-oauth  (local proxy)
+                                    │           ~/.ima2/generated  (images + sidecars)
+                                    └────────── better-sqlite3  (sessions + graph)</code></pre>
+  <p>
+    The runtime path is intentionally direct. CLI commands and the browser call the same endpoints;
+    the server sends image requests through the OAuth proxy (or the API-key Responses path), saves
+    files under the configured generated directory, and persists graph sessions in SQLite.
+  </p>
+
+  <h2>Module map</h2>
+  <table>
+    <thead><tr><th>Area</th><th>Owns</th></tr></thead>
+    <tbody>
+      <tr><td><code>server.ts</code></td><td>Express bootstrap; registers routes. Paired runtime artifact <code>server.js</code>.</td></tr>
+      <tr><td><code>routes/*</code></td><td>API surfaces: generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, and dev-gated cardNews.</td></tr>
+      <tr><td><code>lib/*</code></td><td>Storage, OAuth proxy, logging, sessions, inflight state, image metadata embed/restore, prompt-library SQLite, reference compression, canvas-version store, soft-delete trash.</td></tr>
+      <tr><td><code>bin/*</code></td><td>CLI dispatcher and client commands — near-complete parity with the server API.</td></tr>
+      <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node mode, Canvas Mode, mobile shell, prompt-library panel.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="docs-callout docs-callout-info">
+    <strong>Source of truth.</strong> Route, lib, server, and bin source files are <code>*.ts</code>.
+    The paired <code>*.js</code> files are committed build artifacts — edit them only through the
+    build, never by hand.
+  </div>
+
+  <h2>Where data lives</h2>
+  <ul>
+    <li><code>~/.ima2/config.json</code> — file-layer config (see <a href={d('reference/config')}>Configuration</a>).</li>
+    <li><code>~/.ima2/generated</code> — generated images and metadata sidecars.</li>
+    <li><code>~/.ima2/server.json</code> — runtime discovery (the actual bound port).</li>
+    <li>SQLite — sessions and node-graph snapshots.</li>
+  </ul>
+
+  <p>
+    The full internal architecture set lives under
+    <a href={`${gh}/structure/00-structure-hub.md`}>structure/</a>. For request and response
+    contracts, see the <a href={d('reference/api')}>Server API</a>.
+  </p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('quickstart')}>Quickstart</a>
+    <a class="next" href={d('concepts/modes')}>Generation Modes</a>
+  </div>
+</DocsLayout>

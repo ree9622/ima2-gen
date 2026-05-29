@@ -1,0 +1,80 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
+---
+
+<DocsLayout
+  lang="en"
+  active="reference/config"
+  title="Configuration"
+  description="Environment variables, the ~/.ima2/config.json file layer, writable keys, and logging modes for ima2-gen."
+>
+  <p class="docs-eyebrow">Reference</p>
+  <h1>Configuration</h1>
+  <p class="lead">
+    Effective values follow a three-layer order: environment variables override
+    <code>~/.ima2/config.json</code>, which overrides built-in defaults.
+  </p>
+
+  <h2>Environment variables</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>IMA2_PORT</code> / <code>PORT</code></td><td><code>3333</code></td><td>Web server port.</td></tr>
+      <tr><td><code>IMA2_HOST</code></td><td><code>127.0.0.1</code></td><td>Web server bind host.</td></tr>
+      <tr><td><code>IMA2_OAUTH_PROXY_PORT</code> / <code>OAUTH_PORT</code></td><td><code>10531</code></td><td>OAuth proxy port.</td></tr>
+      <tr><td><code>IMA2_SERVER</code></td><td>—</td><td>CLI target override.</td></tr>
+      <tr><td><code>IMA2_CONFIG_DIR</code></td><td><code>~/.ima2</code></td><td>Config and SQLite location.</td></tr>
+      <tr><td><code>IMA2_ADVERTISE_FILE</code></td><td><code>~/.ima2/server.json</code></td><td>Runtime discovery file.</td></tr>
+      <tr><td><code>IMA2_GENERATED_DIR</code></td><td><code>~/.ima2/generated</code></td><td>Generated image directory.</td></tr>
+      <tr><td><code>IMA2_IMAGE_MODEL_DEFAULT</code></td><td><code>gpt-5.4-mini</code></td><td>Server fallback image model.</td></tr>
+      <tr><td><code>IMA2_NO_OAUTH_PROXY</code></td><td>—</td><td>Set <code>1</code> to disable the auto-started OAuth proxy.</td></tr>
+      <tr><td><code>IMA2_LOG_LEVEL</code></td><td><code>warn</code></td><td>serve defaults to warn, dev to debug; accepts debug, info, warn, error, silent.</td></tr>
+      <tr><td><code>IMA2_INFLIGHT_TERMINAL_TTL_MS</code></td><td><code>30000</code></td><td>Recent terminal job retention for debug views.</td></tr>
+      <tr><td><code>OPENAI_API_KEY</code></td><td>—</td><td>API key for the API-provider Responses path and auxiliary features.</td></tr>
+      <tr><td><code>IMA2_API_IMAGE_MODEL_DEFAULT</code></td><td><code>gpt-5.4-mini</code></td><td>Default image model for the API path.</td></tr>
+      <tr><td><code>IMA2_API_REASONING_EFFORT</code></td><td><code>low</code></td><td>Default reasoning effort for the API path.</td></tr>
+      <tr><td><code>IMA2_API_IMAGE_SIZE</code></td><td><code>1024x1024</code></td><td>Default size for the API path.</td></tr>
+      <tr><td><code>IMA2_API_ALLOW_WEB_SEARCH</code></td><td><code>true</code></td><td>Toggle web search for the API path.</td></tr>
+      <tr><td><code>IMA2_OAUTH_MASKED_EDIT_ENABLED</code></td><td><code>false</code></td><td>Opt-in masked-edit flag on the OAuth path (#31, groundwork only).</td></tr>
+    </tbody>
+  </table>
+
+  <h2>The config file</h2>
+  <p>
+    <code>ima2 config</code> reads and writes <code>~/.ima2/config.json</code> (the file layer). It
+    rejects unknown keys, refuses auth keys (<code>provider</code>, <code>apiKey</code>), and warns
+    when an env var is overriding the same key. Change auth with <code>ima2 setup</code> or
+    <code>ima2 login</code> instead.
+  </p>
+  <h4>Common writable keys</h4>
+  <pre><code>imageModels.default              imageModels.reasoningEffort
+apiProvider.defaultImageModel    apiProvider.defaultReasoningEffort
+log.level                        features.cardNews
+server.port  server.host  server.bodyLimit
+oauth.proxyPort  limits.maxRefCount  limits.maxParallel
+history.defaultPageSize  history.maxPageCap  storage.generatedDir</code></pre>
+  <p>Run <code>ima2 config keys</code> for the authoritative list, or <code>ima2 config ls --effective</code> to see merged values.</p>
+
+  <h2>Logging modes</h2>
+  <p>
+    <code>ima2 serve</code> stays intentionally quiet: startup URLs, warnings, and errors are
+    visible, while request/node/OAuth structured logs are hidden by default. Use
+    <code>ima2 serve --dev</code>, <code>npm run dev</code>, or
+    <code>IMA2_LOG_LEVEL=debug ima2 serve</code> when you need request IDs, node phases, OAuth
+    stream diagnostics, or inflight transitions.
+  </p>
+
+  <div class="docs-callout docs-callout-info">
+    Full <code>config</code> and <code>defaults</code> command tables live in
+    <a href={cliMd}>CLI.md</a>.
+  </div>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('reference/cli')}>CLI Commands</a>
+    <a class="next" href={d('reference/api')}>Server API</a>
+  </div>
+</DocsLayout>

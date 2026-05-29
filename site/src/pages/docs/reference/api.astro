@@ -1,0 +1,126 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+const apiMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/API.md';
+
+// Rendered as a literal string so the JSON braces are not parsed as Astro expressions.
+const genBody = `{
+  "prompt": "a shiba in space",
+  "quality": "medium",
+  "size": "1024x1024",
+  "format": "png",
+  "moderation": "low",
+  "provider": "oauth",
+  "model": "gpt-5.4",
+  "references": [],
+  "requestId": "optional-client-id"
+}`;
+---
+
+<DocsLayout
+  lang="en"
+  active="reference/api"
+  title="Server API"
+  description="Endpoint groups for the local ima2-gen server: generation, history, sessions and graphs, storage, jobs, and common error codes."
+>
+  <p class="docs-eyebrow">Reference</p>
+  <h1>Server API</h1>
+  <p class="lead">
+    The CLI is a thin shell over the local server — every <code>/api/*</code> route has a CLI
+    wrapper. This page maps the endpoint groups; for full request and response shapes, see
+    <a href={apiMd}>API.md</a>.
+  </p>
+
+  <h2>Base URL</h2>
+  <p>
+    All endpoints are served locally. The default base is <code>http://localhost:3333</code>; the
+    actual bound port is advertised in <code>~/.ima2/server.json</code> (prefer
+    <code>backend.url</code>).
+  </p>
+
+  <h2>Generation</h2>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/generate</code></td><td>Text-to-image and reference-guided root generation.</td></tr>
+      <tr><td><code>POST /api/edit</code></td><td>Image edit / image-to-image generation.</td></tr>
+      <tr><td><code>POST /api/generate/multi</code> (SSE)</td><td>Multimode batch.</td></tr>
+      <tr><td><code>POST /api/node/generate</code> (SSE)</td><td>Node-mode generation and child edits.</td></tr>
+      <tr><td><code>GET /api/node/:nodeId</code></td><td>Fetch stored node metadata and asset URL.</td></tr>
+    </tbody>
+  </table>
+  <h4>POST /api/generate — request body</h4>
+  <pre><code>{genBody}</code></pre>
+  <p>
+    Quality: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api. Recommended model
+    <code>gpt-5.4</code>; app default <code>gpt-5.4-mini</code>. SSE routes emit <code>phase</code>,
+    <code>partial</code>, <code>done</code>, and <code>error</code> when the client sends
+    <code>Accept: text/event-stream</code>.
+  </p>
+
+  <h2>History</h2>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/history</code></td><td>List generated assets; <code>?groupBy=session</code> groups by session title.</td></tr>
+      <tr><td><code>DELETE /api/history/:filename</code></td><td>Tombstone a generated asset.</td></tr>
+      <tr><td><code>POST /api/history/:filename/restore</code></td><td>Restore a recently deleted asset.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Sessions &amp; graphs</h2>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/sessions</code> · <code>POST /api/sessions</code></td><td>List or create graph sessions.</td></tr>
+      <tr><td><code>GET /api/sessions/:id</code></td><td>Load a session and its graph.</td></tr>
+      <tr><td><code>PATCH /api/sessions/:id</code> · <code>DELETE /api/sessions/:id</code></td><td>Rename or delete a session.</td></tr>
+      <tr><td><code>PUT /api/sessions/:id/graph</code></td><td>Save a graph snapshot.</td></tr>
+    </tbody>
+  </table>
+  <div class="docs-callout docs-callout-warn">
+    <strong>Optimistic concurrency.</strong> Graph saves require an <code>If-Match</code> header with
+    the current version. A stale version returns <code>GRAPH_VERSION_CONFLICT</code> plus the current
+    version — it only means you saved against a stale snapshot, not that another tab changed the graph.
+  </div>
+
+  <h2>Health, storage &amp; jobs</h2>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/health</code></td><td>Health check (<code>ima2 ping</code>).</td></tr>
+      <tr><td><code>GET /api/storage/status</code></td><td>Storage inspection.</td></tr>
+      <tr><td><code>POST /api/storage/open-generated-dir</code></td><td>Open the generated directory in the OS file manager.</td></tr>
+      <tr><td><code>GET /api/inflight</code> · <code>DELETE /api/inflight/:id</code></td><td>List or force-remove in-flight jobs.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Common error codes</h2>
+  <table>
+    <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>API_KEY_REQUIRED</code></td><td>API path requested without a configured key.</td></tr>
+      <tr><td><code>INVALID_IMAGE_MODEL</code></td><td>Model name is unknown or unsupported.</td></tr>
+      <tr><td><code>IMAGE_MODEL_UNSUPPORTED</code></td><td>Model exists but cannot use image generation.</td></tr>
+      <tr><td><code>SAFETY_REFUSAL</code> · <code>MODERATION_REFUSED</code></td><td>Upstream safety / moderation refusal.</td></tr>
+      <tr><td><code>AUTH_CHATGPT_EXPIRED</code></td><td>Codex/ChatGPT OAuth session expired.</td></tr>
+      <tr><td><code>AUTH_API_KEY_INVALID</code></td><td>API key is invalid, revoked, or out of quota.</td></tr>
+      <tr><td><code>NETWORK_FAILED</code></td><td>Network, proxy, VPN, or firewall failure.</td></tr>
+      <tr><td><code>OAUTH_UNAVAILABLE</code></td><td>Local OAuth proxy is not available.</td></tr>
+      <tr><td><code>GRAPH_VERSION_CONFLICT</code></td><td>Save made against a stale graph version.</td></tr>
+      <tr><td><code>NODE_NOT_FOUND</code></td><td>Node metadata was not found.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="docs-callout docs-callout-info">
+    The full endpoint → CLI mapping, reference-image error codes, and style-sheet routes are in
+    <a href={apiMd}>API.md</a>.
+  </div>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('reference/config')}>Configuration</a>
+    <span class="spacer"></span>
+  </div>
+</DocsLayout>

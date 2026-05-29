@@ -1,0 +1,112 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
+---
+
+<DocsLayout
+  lang="en"
+  active="reference/cli"
+  title="CLI Commands"
+  description="The ima2 CLI is a thin shell over the local server: server, generation, history, observability, and config commands."
+>
+  <p class="docs-eyebrow">Reference</p>
+  <h1>CLI Commands</h1>
+  <p class="lead">
+    The <code>ima2</code> CLI is a thin shell over the local server, so most commands need a running
+    <code>ima2 serve</code>. The exceptions — <code>serve</code>, <code>setup</code>,
+    <code>doctor</code>, <code>status</code>, <code>open</code>, <code>reset</code>,
+    <code>config</code>, <code>skill</code>, <code>capabilities</code>, and local
+    <code>defaults</code> — work without a live server.
+  </p>
+
+  <h2>Server</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 serve [--dev]</code></td><td>Start the local web server; <code>--dev</code> enables verbose diagnostics.</td></tr>
+      <tr><td><code>ima2 setup</code> / <code>ima2 login</code></td><td>Reconfigure saved auth (interactive).</td></tr>
+      <tr><td><code>ima2 status</code></td><td>Show config and OAuth status.</td></tr>
+      <tr><td><code>ima2 doctor</code></td><td>Diagnose Node, package, config, and auth.</td></tr>
+      <tr><td><code>ima2 doctor image-probe [--json]</code></td><td>Live sanitized Responses image probes for no-image support bundles.</td></tr>
+      <tr><td><code>ima2 open</code></td><td>Open the web UI in a browser.</td></tr>
+      <tr><td><code>ima2 reset</code></td><td>Remove saved config.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Generation</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 gen &lt;prompt&gt;</code></td><td>Generate from the CLI.</td></tr>
+      <tr><td><code>ima2 edit &lt;file&gt; --prompt &lt;text&gt;</code></td><td>Edit an existing image.</td></tr>
+      <tr><td><code>ima2 multimode &lt;prompt&gt;</code></td><td>Multi-image SSE generation (streams <code>phase</code> / <code>partial</code> / <code>image</code>).</td></tr>
+      <tr><td><code>ima2 node generate</code></td><td>Node-mode generate (SSE; supports <code>--no-stream</code>).</td></tr>
+      <tr><td><code>ima2 node show &lt;nodeId&gt;</code></td><td>Read node metadata.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Generation flags include <code>--provider &lt;auto|oauth|api&gt;</code>,
+    <code>--reasoning-effort</code> (none, low, medium, high, xhigh), <code>--web-search</code> /
+    <code>--no-web-search</code>, <code>--model</code>, <code>--mode</code>,
+    <code>--moderation</code>, <code>--ref &lt;file&gt;</code> (repeatable, up to 5),
+    <code>-q low|medium|high</code>, <code>-n &lt;count&gt;</code>, and <code>-o &lt;file&gt;</code>.
+  </p>
+  <pre><code>ima2 gen "a poster of a samurai cat" --model gpt-5.4 --provider api --reasoning-effort high
+ima2 edit input.png --prompt "make it rainy" --provider oauth --web-search
+ima2 multimode "two cats playing" --max-images 2 --ref cat.png --mode direct</code></pre>
+
+  <h2>Agent discovery</h2>
+  <p>Agents should start from the packaged skill and capability commands instead of guessing from scattered help text.</p>
+  <table>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 skill [--json]</code></td><td>Print the packaged Markdown skill (or a JSON wrapper).</td></tr>
+      <tr><td><code>ima2 capabilities --json</code></td><td>Supported commands, model/quality/reasoning values, advisory limits.</td></tr>
+      <tr><td><code>ima2 defaults --json</code></td><td>Effective model/reasoning defaults (server, falling back to local config).</td></tr>
+    </tbody>
+  </table>
+  <div class="docs-callout docs-callout-info">
+    Use only <code>valid.imageModels.supported</code> from <code>capabilities --json</code> for
+    generation/default choices. <code>limits.maxParallel</code> is advisory queue guidance, not a
+    server-side concurrency semaphore.
+  </div>
+
+  <h2>History &amp; observability</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 ls [--session &lt;id&gt;] [--favorites]</code></td><td>List recent history; <code>--favorites</code> filters server-side.</td></tr>
+      <tr><td><code>ima2 show &lt;name&gt; [--metadata]</code></td><td>Reveal a generated asset, optionally with embedded metadata.</td></tr>
+      <tr><td><code>ima2 metadata &lt;file&gt;</code></td><td>Read embedded metadata from a local image.</td></tr>
+      <tr><td><code>ima2 inflight ls [--terminal]</code></td><td>List active (and optionally terminal) jobs with phase / model / prompt.</td></tr>
+      <tr><td><code>ima2 ps</code> / <code>ima2 cancel &lt;id&gt;</code></td><td>Aliases for <code>inflight ls</code> / <code>inflight rm</code>.</td></tr>
+      <tr><td><code>ima2 ping</code></td><td>Health-check the running server.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Config &amp; defaults</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 config get &lt;key&gt;</code></td><td>Read a dotted key from the effective config (secrets redacted).</td></tr>
+      <tr><td><code>ima2 config set &lt;key&gt; &lt;value&gt;</code></td><td>Write to the file layer; rejects unknown and auth keys.</td></tr>
+      <tr><td><code>ima2 config keys [--json]</code></td><td>List writable keys and the env vars that override them.</td></tr>
+      <tr><td><code>ima2 defaults set model &lt;model&gt;</code></td><td>Persist the default image model across both provider paths.</td></tr>
+      <tr><td><code>ima2 defaults set reasoning &lt;effort&gt;</code></td><td>Persist the default reasoning effort across both provider paths.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="docs-callout docs-callout-info">
+    <strong>Full reference.</strong> Every server route has a CLI wrapper — including sessions,
+    graphs, annotations, canvas versions, the prompt library, imports, and Card News. See the
+    complete <a href={cliMd}>CLI.md</a>.
+  </div>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('concepts/providers')}>Providers &amp; Models</a>
+    <a class="next" href={d('reference/config')}>Configuration</a>
+  </div>
+</DocsLayout>

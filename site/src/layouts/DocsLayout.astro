@@ -1,0 +1,192 @@
+---
+import '../styles/global.css';
+import '../styles/docs.css';
+import { type Lang } from '../i18n/strings';
+import { DOCS_NAV, docsT } from '../i18n/docs';
+
+interface Props {
+  lang?: Lang;
+  /** Active docs page slug relative to the docs root. '' = Overview. */
+  active?: string;
+  /** Page title (site suffix is appended automatically). */
+  title: string;
+  description: string;
+}
+
+const { lang = 'en', active = '', title, description } = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, ''); // '/ima2-gen'
+const siteRoot = 'https://lidge-jun.github.io/ima2-gen/';
+const langBase = lang === 'ko' ? `${base}/ko` : base; // '/ima2-gen' | '/ima2-gen/ko'
+const docsRoot = `${langBase}/docs`;
+
+const docsHref = (slug: string): string => (slug ? `${docsRoot}/${slug}` : docsRoot);
+const siteHref = (path: string): string => (path ? `${langBase}/${path}` : `${langBase}/`);
+
+// Counterpart-language URLs preserve the current page slug.
+const slugSuffix = active ? `/${active}` : '';
+const enUrl = `${base}/docs${slugSuffix}`;
+const koUrl = `${base}/ko/docs${slugSuffix}`;
+
+const fullTitle = `${title} · ${docsT(lang, 'meta.suffix')}`;
+const repoUrl = 'https://github.com/lidge-jun/ima2-gen';
+const faviconHref = `${base}/favicon.svg`;
+const canonical = `${siteRoot}${lang === 'ko' ? 'ko/' : ''}docs${slugSuffix}`;
+const enAlt = `${siteRoot}docs${slugSuffix}`;
+const koAlt = `${siteRoot}ko/docs${slugSuffix}`;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang="en" href={enAlt} />
+    <link rel="alternate" hreflang="ko" href={koAlt} />
+    <link rel="alternate" hreflang="x-default" href={enAlt} />
+
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content={canonical} />
+
+    <link rel="icon" type="image/svg+xml" href={faviconHref} />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+  </head>
+  <body>
+    <button class="docs-menu-toggle" aria-label="Toggle navigation" data-docs-toggle>☰</button>
+    <div class="docs-backdrop" data-docs-backdrop></div>
+
+    <div class="docs-layout">
+      <nav class="docs-sidebar" aria-label="Documentation navigation">
+        <a class="docs-brand" href={siteHref('')}>
+          <span class="dot" aria-hidden="true"></span>
+          <span>ima2-gen</span>
+          <span class="tag">{docsT(lang, 'brand.tag')}</span>
+        </a>
+
+        <div class="docs-search">
+          <input
+            class="docs-search-input"
+            type="text"
+            placeholder={docsT(lang, 'search.placeholder')}
+            aria-label={docsT(lang, 'search.placeholder')}
+            data-docs-search
+          />
+        </div>
+
+        <div class="docs-nav" data-docs-navroot>
+          {
+            DOCS_NAV.map((section) => (
+              <div class="docs-nav-section">
+                <div class="docs-nav-title">{lang === 'ko' ? section.ko : section.en}</div>
+                {section.links.map((link) => {
+                  const label = lang === 'ko' ? link.ko : link.en;
+                  if (link.external) {
+                    return (
+                      <a class="docs-nav-link" href={link.external} target="_blank" rel="noopener">
+                        {label}
+                        <span class="ext" aria-hidden="true">↗</span>
+                      </a>
+                    );
+                  }
+                  if (link.site) {
+                    return (
+                      <a class="docs-nav-link" href={siteHref(link.site)}>
+                        {label}
+                      </a>
+                    );
+                  }
+                  const slug = link.slug ?? '';
+                  const isActive = slug === active;
+                  return (
+                    <a
+                      class:list={['docs-nav-link', { active: isActive }]}
+                      href={docsHref(slug)}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      {label}
+                    </a>
+                  );
+                })}
+              </div>
+            ))
+          }
+          <div class="docs-search-empty" data-docs-empty>{docsT(lang, 'search.empty')}</div>
+        </div>
+
+        <div class="docs-lang">
+          <a class:list={[{ active: lang === 'en' }]} href={enUrl}>EN</a>
+          <a class:list={[{ active: lang === 'ko' }]} href={koUrl}>한국어</a>
+        </div>
+
+        <div class="docs-nav-footer">
+          <a href={repoUrl} target="_blank" rel="noopener">{docsT(lang, 'nav.github')}</a>
+          <a href={siteHref('')}>{docsT(lang, 'nav.home')}</a>
+        </div>
+      </nav>
+
+      <main class="docs-main">
+        <article class="docs-article">
+          <slot />
+        </article>
+      </main>
+    </div>
+
+    <script is:inline>
+      (function () {
+        var toggle = document.querySelector('[data-docs-toggle]');
+        var sidebar = document.querySelector('.docs-sidebar');
+        var backdrop = document.querySelector('[data-docs-backdrop]');
+        function closeNav() {
+          if (sidebar) sidebar.classList.remove('is-open');
+          if (backdrop) backdrop.classList.remove('is-open');
+        }
+        if (toggle && sidebar && backdrop) {
+          toggle.addEventListener('click', function () {
+            sidebar.classList.toggle('is-open');
+            backdrop.classList.toggle('is-open');
+          });
+          backdrop.addEventListener('click', closeNav);
+        }
+
+        // Lightweight client-side search: filter sidebar links + sections by query.
+        var search = document.querySelector('[data-docs-search]');
+        var root = document.querySelector('[data-docs-navroot]');
+        var empty = document.querySelector('[data-docs-empty]');
+        if (search && root) {
+          search.addEventListener('input', function () {
+            var q = search.value.trim().toLowerCase();
+            var sections = root.querySelectorAll('.docs-nav-section');
+            var anyMatch = false;
+            sections.forEach(function (sec) {
+              var links = sec.querySelectorAll('.docs-nav-link');
+              var sectionVisible = false;
+              links.forEach(function (a) {
+                var text = (a.textContent || '').toLowerCase();
+                var match = !q || text.indexOf(q) !== -1;
+                a.classList.toggle('hidden-by-search', !match);
+                if (match) sectionVisible = true;
+              });
+              sec.classList.toggle('hidden-by-search', !sectionVisible);
+              if (sectionVisible) anyMatch = true;
+            });
+            if (empty) empty.classList.toggle('is-visible', !!q && !anyMatch);
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,61 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
+---
+
+<DocsLayout
+  lang="en"
+  active="concepts/modes"
+  title="Generation Modes"
+  description="When to use Classic, Node, Multimode, and Canvas modes in ima2-gen, plus the prompt library."
+>
+  <p class="docs-eyebrow">Concepts</p>
+  <h1>Generation Modes</h1>
+  <p class="lead">ima2-gen gives you four ways to make and refine an image. Pick by how you iterate.</p>
+
+  <h2>Classic</h2>
+  <p>
+    One prompt, one strong frame. Write a prompt, attach up to five references, pick model, quality,
+    size, format, and moderation, then generate. Copy, download, continue from the result, or send
+    it into Canvas Mode.
+  </p>
+
+  <h2>Node</h2>
+  <p>
+    One frame, ten directions. Lock a parent image and fan out children — palette, framing, copy.
+    Each node keeps its own prompt and result; root nodes attach local references while child nodes
+    use the parent image as their source. Completed jobs match back to nodes by request ID, so
+    reloads and graph-version conflicts can recover finished results.
+  </p>
+
+  <h2>Multimode</h2>
+  <p>
+    Several candidates from one prompt. Run a sequence from Classic mode, watch each slot progress,
+    cancel when needed, and continue from the strongest result. From the CLI this streams
+    <code>phase</code>, <code>partial</code>, and <code>image</code> events.
+  </p>
+
+  <h2>Canvas Mode</h2>
+  <p>
+    Clean up the winning frame. Pan a zoomed image separately from selection, annotate target areas,
+    clean backgrounds with a previewed mask, and export transparent (alpha) or matte-backed
+    versions. Saved canvas versions stay hidden from the gallery but can be reused as the next
+    reference.
+  </p>
+
+  <h2>Prompt library &amp; imports</h2>
+  <p>
+    Fill the prompt library from local files, GitHub folders, curated sources, and GPT-image hint
+    packs. Imported prompts are indexed locally so search and ranking work without re-importing
+    every session. See the
+    <a href="https://github.com/lidge-jun/ima2-gen/blob/main/docs/PROMPT_STUDIO.md">Prompt Studio manual</a>
+    for control-by-control detail.
+  </p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('concepts/architecture')}>Architecture</a>
+    <a class="next" href={d('concepts/providers')}>Providers &amp; Models</a>
+  </div>
+</DocsLayout>

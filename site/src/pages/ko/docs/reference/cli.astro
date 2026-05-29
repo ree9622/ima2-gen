@@ -1,0 +1,111 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
+---
+
+<DocsLayout
+  lang="ko"
+  active="reference/cli"
+  title="CLI 명령어"
+  description="ima2 CLI는 로컬 서버 위의 얇은 셸입니다: 서버·생성·히스토리·관측·설정 명령."
+>
+  <p class="docs-eyebrow">레퍼런스</p>
+  <h1>CLI 명령어</h1>
+  <p class="lead">
+    <code>ima2</code> CLI는 로컬 서버 위의 얇은 셸이라 대부분의 명령은 실행 중인
+    <code>ima2 serve</code>가 필요합니다. 예외 — <code>serve</code>, <code>setup</code>,
+    <code>doctor</code>, <code>status</code>, <code>open</code>, <code>reset</code>,
+    <code>config</code>, <code>skill</code>, <code>capabilities</code>, 로컬 <code>defaults</code> —
+    는 서버 없이도 동작합니다.
+  </p>
+
+  <h2>서버</h2>
+  <table>
+    <thead><tr><th>명령</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 serve [--dev]</code></td><td>로컬 웹 서버 시작; <code>--dev</code>는 상세 진단을 켭니다.</td></tr>
+      <tr><td><code>ima2 setup</code> / <code>ima2 login</code></td><td>저장된 인증 재설정(대화형).</td></tr>
+      <tr><td><code>ima2 status</code></td><td>설정과 OAuth 상태 표시.</td></tr>
+      <tr><td><code>ima2 doctor</code></td><td>Node·패키지·설정·인증 진단.</td></tr>
+      <tr><td><code>ima2 doctor image-probe [--json]</code></td><td>no-image 지원 번들용 라이브 sanitized Responses 이미지 프로브.</td></tr>
+      <tr><td><code>ima2 open</code></td><td>브라우저에서 웹 UI 열기.</td></tr>
+      <tr><td><code>ima2 reset</code></td><td>저장된 설정 제거.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>생성</h2>
+  <table>
+    <thead><tr><th>명령</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 gen &lt;prompt&gt;</code></td><td>CLI에서 생성.</td></tr>
+      <tr><td><code>ima2 edit &lt;file&gt; --prompt &lt;text&gt;</code></td><td>기존 이미지 편집.</td></tr>
+      <tr><td><code>ima2 multimode &lt;prompt&gt;</code></td><td>멀티 이미지 SSE 생성 (<code>phase</code> / <code>partial</code> / <code>image</code> 스트리밍).</td></tr>
+      <tr><td><code>ima2 node generate</code></td><td>Node 모드 생성 (SSE; <code>--no-stream</code> 지원).</td></tr>
+      <tr><td><code>ima2 node show &lt;nodeId&gt;</code></td><td>노드 메타데이터 읽기.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    생성 플래그: <code>--provider &lt;auto|oauth|api&gt;</code>, <code>--reasoning-effort</code>
+    (none, low, medium, high, xhigh), <code>--web-search</code> / <code>--no-web-search</code>,
+    <code>--model</code>, <code>--mode</code>, <code>--moderation</code>,
+    <code>--ref &lt;file&gt;</code> (반복 가능, 최대 5), <code>-q low|medium|high</code>,
+    <code>-n &lt;count&gt;</code>, <code>-o &lt;file&gt;</code>.
+  </p>
+  <pre><code>ima2 gen "a poster of a samurai cat" --model gpt-5.4 --provider api --reasoning-effort high
+ima2 edit input.png --prompt "make it rainy" --provider oauth --web-search
+ima2 multimode "two cats playing" --max-images 2 --ref cat.png --mode direct</code></pre>
+
+  <h2>에이전트 디스커버리</h2>
+  <p>에이전트는 흩어진 도움말을 추측하지 말고 패키징된 skill·capability 명령에서 시작해야 합니다.</p>
+  <table>
+    <thead><tr><th>명령</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 skill [--json]</code></td><td>패키징된 Markdown skill 출력(또는 JSON 래퍼).</td></tr>
+      <tr><td><code>ima2 capabilities --json</code></td><td>지원 명령, 모델/품질/reasoning 값, 권고 한도.</td></tr>
+      <tr><td><code>ima2 defaults --json</code></td><td>유효 모델/reasoning 기본값(서버 우선, 로컬 설정 폴백).</td></tr>
+    </tbody>
+  </table>
+  <div class="docs-callout docs-callout-info">
+    생성/기본값 선택에는 <code>capabilities --json</code>의 <code>valid.imageModels.supported</code>만
+    쓰세요. <code>limits.maxParallel</code>은 권고 큐 가이드이지 서버측 동시성 세마포어가 아닙니다.
+  </div>
+
+  <h2>히스토리 &amp; 관측</h2>
+  <table>
+    <thead><tr><th>명령</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 ls [--session &lt;id&gt;] [--favorites]</code></td><td>최근 히스토리 목록; <code>--favorites</code>는 서버측 필터.</td></tr>
+      <tr><td><code>ima2 show &lt;name&gt; [--metadata]</code></td><td>생성 에셋 표시, 선택적으로 임베드 메타데이터.</td></tr>
+      <tr><td><code>ima2 metadata &lt;file&gt;</code></td><td>로컬 이미지의 임베드 메타데이터 읽기.</td></tr>
+      <tr><td><code>ima2 inflight ls [--terminal]</code></td><td>활성(선택적으로 종료) 작업을 phase / 모델 / 프롬프트와 함께 목록.</td></tr>
+      <tr><td><code>ima2 ps</code> / <code>ima2 cancel &lt;id&gt;</code></td><td><code>inflight ls</code> / <code>inflight rm</code>의 별칭.</td></tr>
+      <tr><td><code>ima2 ping</code></td><td>실행 중인 서버 헬스 체크.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>설정 &amp; 기본값</h2>
+  <table>
+    <thead><tr><th>명령</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>ima2 config get &lt;key&gt;</code></td><td>유효 설정에서 점 표기 키 읽기(시크릿 마스킹).</td></tr>
+      <tr><td><code>ima2 config set &lt;key&gt; &lt;value&gt;</code></td><td>파일 레이어에 기록; 알 수 없는 키와 인증 키 거부.</td></tr>
+      <tr><td><code>ima2 config keys [--json]</code></td><td>쓰기 가능 키와 이를 오버라이드하는 env 변수 목록.</td></tr>
+      <tr><td><code>ima2 defaults set model &lt;model&gt;</code></td><td>두 프로바이더 경로 모두에 기본 이미지 모델 영속화.</td></tr>
+      <tr><td><code>ima2 defaults set reasoning &lt;effort&gt;</code></td><td>두 프로바이더 경로 모두에 기본 reasoning effort 영속화.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="docs-callout docs-callout-info">
+    <strong>전체 레퍼런스.</strong> 모든 서버 라우트에 CLI 래퍼가 있습니다 — 세션, 그래프, 주석,
+    canvas 버전, 프롬프트 라이브러리, 가져오기, Card News 포함. 전체는 <a href={cliMd}>CLI.md</a>를
+    보세요.
+  </div>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('concepts/providers')}>프로바이더 &amp; 모델</a>
+    <a class="next" href={d('reference/config')}>설정</a>
+  </div>
+</DocsLayout>

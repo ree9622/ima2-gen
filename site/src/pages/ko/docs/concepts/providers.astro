@@ -1,0 +1,79 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+---
+
+<DocsLayout
+  lang="ko"
+  active="concepts/providers"
+  title="프로바이더 & 모델"
+  description="OAuth와 API key 프로바이더 경로 선택, 모델 선택, 품질·moderation·reasoning 기본값 설정."
+>
+  <p class="docs-eyebrow">핵심 개념</p>
+  <h1>프로바이더 &amp; 모델</h1>
+  <p class="lead">
+    이미지 생성은 두 프로바이더 경로 중 하나로 실행됩니다: 로컬 Codex/ChatGPT OAuth 로그인, 또는
+    설정된 OpenAI API key.
+  </p>
+
+  <h2>프로바이더 경로</h2>
+  <ul>
+    <li><code>provider: "oauth"</code> — 로컬 Codex OAuth 프록시를 사용합니다. 기본 경로이며 API key가 필요 없습니다.</li>
+    <li><code>provider: "api"</code> — 호스티드 <code>image_generation</code> 도구로 OpenAI Responses API를 호출합니다. <code>OPENAI_API_KEY</code>가 필요합니다.</li>
+  </ul>
+  <p>API key 생성은 classic generate, edit, mask-guided edit, multimode, node generation을 지원합니다.</p>
+
+  <h2>요청 단위 오버라이드</h2>
+  <p>생성 명령은 <code>--provider &lt;auto|oauth|api&gt;</code>를 받습니다:</p>
+  <table>
+    <thead><tr><th>값</th><th>동작</th></tr></thead>
+    <tbody>
+      <tr><td><code>auto</code></td><td>라우트 기본 동작 유지; 현재는 OAuth로 해석됩니다.</td></tr>
+      <tr><td><code>oauth</code></td><td>로컬 OAuth 프록시 경로 강제.</td></tr>
+      <tr><td><code>api</code></td><td>API key Responses 경로 강제; 설정된 key가 필요합니다.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>모델</h2>
+  <p>
+    앱은 빠른 로컬 반복을 위해 <code>gpt-5.4-mini</code>를 기본값으로 씁니다. 가장 안전한 균형
+    워크플로에는 <code>gpt-5.4</code>로 전환하세요.
+  </p>
+  <table>
+    <thead><tr><th>모델</th><th>용도</th></tr></thead>
+    <tbody>
+      <tr><td><code>gpt-5.4-mini</code></td><td>현재 기본값. 더 빠른 초안 모델.</td></tr>
+      <tr><td><code>gpt-5.4</code></td><td>권장 균형 선택지.</td></tr>
+      <tr><td><code>gpt-5.5</code></td><td>Codex CLI/OAuth 백엔드가 지원할 때 가장 강한 품질. 할당량을 더 쓰거나 Codex CLI 업데이트가 필요할 수 있습니다.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    앱은 품질(<code>low</code>, <code>medium</code>, <code>high</code>)과 moderation(<code>auto</code>,
+    <code>low</code>) 컨트롤도 제공합니다. reasoning effort는 none, low, medium, high, xhigh를 받습니다.
+  </p>
+  <div class="docs-callout docs-callout-info">
+    <strong>영속 기본값.</strong> <code>ima2 defaults set model gpt-5.5</code>와
+    <code>ima2 defaults set reasoning high</code>는 OAuth와 API 프로바이더 기본 키를 모두 기록해,
+    "기본 모델"이 두 경로에서 하나의 개념으로 유지됩니다.
+  </div>
+
+  <h2>API 프로바이더 기본값</h2>
+  <p>API 경로를 명시적 옵션 없이 사용하면 다음 기본값이 적용됩니다:</p>
+  <table>
+    <thead><tr><th>변수</th><th>기본값</th></tr></thead>
+    <tbody>
+      <tr><td><code>IMA2_API_IMAGE_MODEL_DEFAULT</code></td><td><code>gpt-5.4-mini</code></td></tr>
+      <tr><td><code>IMA2_API_REASONING_EFFORT</code></td><td><code>low</code></td></tr>
+      <tr><td><code>IMA2_API_IMAGE_SIZE</code></td><td><code>1024x1024</code></td></tr>
+      <tr><td><code>IMA2_API_ALLOW_WEB_SEARCH</code></td><td><code>true</code></td></tr>
+    </tbody>
+  </table>
+  <p>전체 환경 변수 표는 <a href={d('reference/config')}>설정</a>을 보세요.</p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('concepts/modes')}>생성 모드</a>
+    <a class="next" href={d('reference/cli')}>CLI 명령어</a>
+  </div>
+</DocsLayout>

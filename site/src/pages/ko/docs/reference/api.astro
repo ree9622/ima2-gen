@@ -1,0 +1,124 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+const apiMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/API.md';
+
+// JSON 중괄호가 Astro 표현식으로 파싱되지 않도록 리터럴 문자열로 렌더링.
+const genBody = `{
+  "prompt": "a shiba in space",
+  "quality": "medium",
+  "size": "1024x1024",
+  "format": "png",
+  "moderation": "low",
+  "provider": "oauth",
+  "model": "gpt-5.4",
+  "references": [],
+  "requestId": "optional-client-id"
+}`;
+---
+
+<DocsLayout
+  lang="ko"
+  active="reference/api"
+  title="서버 API"
+  description="로컬 ima2-gen 서버의 엔드포인트 그룹: 생성, 히스토리, 세션·그래프, 스토리지, 작업, 공통 에러 코드."
+>
+  <p class="docs-eyebrow">레퍼런스</p>
+  <h1>서버 API</h1>
+  <p class="lead">
+    CLI는 로컬 서버 위의 얇은 셸 — 모든 <code>/api/*</code> 라우트에 CLI 래퍼가 있습니다. 이 페이지는
+    엔드포인트 그룹을 정리합니다; 전체 요청/응답 형태는 <a href={apiMd}>API.md</a>를 보세요.
+  </p>
+
+  <h2>베이스 URL</h2>
+  <p>
+    모든 엔드포인트는 로컬에서 제공됩니다. 기본 베이스는 <code>http://localhost:3333</code>이고, 실제
+    바인딩 포트는 <code>~/.ima2/server.json</code>에 광고됩니다(<code>backend.url</code> 권장).
+  </p>
+
+  <h2>생성</h2>
+  <table>
+    <thead><tr><th>엔드포인트</th><th>용도</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/generate</code></td><td>텍스트-이미지 및 레퍼런스 기반 루트 생성.</td></tr>
+      <tr><td><code>POST /api/edit</code></td><td>이미지 편집 / image-to-image 생성.</td></tr>
+      <tr><td><code>POST /api/generate/multi</code> (SSE)</td><td>Multimode 배치.</td></tr>
+      <tr><td><code>POST /api/node/generate</code> (SSE)</td><td>Node 모드 생성 및 자식 편집.</td></tr>
+      <tr><td><code>GET /api/node/:nodeId</code></td><td>저장된 노드 메타데이터와 에셋 URL 조회.</td></tr>
+    </tbody>
+  </table>
+  <h4>POST /api/generate — 요청 바디</h4>
+  <pre><code>{genBody}</code></pre>
+  <p>
+    품질: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api. 권장 모델
+    <code>gpt-5.4</code>; 앱 기본값 <code>gpt-5.4-mini</code>. SSE 라우트는 클라이언트가
+    <code>Accept: text/event-stream</code>을 보내면 <code>phase</code>, <code>partial</code>,
+    <code>done</code>, <code>error</code> 이벤트를 보냅니다.
+  </p>
+
+  <h2>히스토리</h2>
+  <table>
+    <thead><tr><th>엔드포인트</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/history</code></td><td>생성 에셋 목록; <code>?groupBy=session</code>은 세션 제목별 그룹.</td></tr>
+      <tr><td><code>DELETE /api/history/:filename</code></td><td>생성 에셋 톰스톤(소프트 삭제).</td></tr>
+      <tr><td><code>POST /api/history/:filename/restore</code></td><td>최근 삭제된 에셋 복원.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>세션 &amp; 그래프</h2>
+  <table>
+    <thead><tr><th>엔드포인트</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/sessions</code> · <code>POST /api/sessions</code></td><td>그래프 세션 목록 또는 생성.</td></tr>
+      <tr><td><code>GET /api/sessions/:id</code></td><td>세션과 그래프 로드.</td></tr>
+      <tr><td><code>PATCH /api/sessions/:id</code> · <code>DELETE /api/sessions/:id</code></td><td>세션 이름 변경 또는 삭제.</td></tr>
+      <tr><td><code>PUT /api/sessions/:id/graph</code></td><td>그래프 스냅샷 저장.</td></tr>
+    </tbody>
+  </table>
+  <div class="docs-callout docs-callout-warn">
+    <strong>낙관적 동시성.</strong> 그래프 저장은 현재 버전이 담긴 <code>If-Match</code> 헤더가
+    필요합니다. 버전이 stale하면 <code>GRAPH_VERSION_CONFLICT</code>와 현재 버전을 반환합니다 — 다른
+    탭이 그래프를 바꿨다는 증거가 아니라, stale 스냅샷에 대해 저장했다는 뜻입니다.
+  </div>
+
+  <h2>헬스 · 스토리지 · 작업</h2>
+  <table>
+    <thead><tr><th>엔드포인트</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/health</code></td><td>헬스 체크 (<code>ima2 ping</code>).</td></tr>
+      <tr><td><code>GET /api/storage/status</code></td><td>스토리지 점검.</td></tr>
+      <tr><td><code>POST /api/storage/open-generated-dir</code></td><td>OS 파일 매니저에서 생성 디렉터리 열기.</td></tr>
+      <tr><td><code>GET /api/inflight</code> · <code>DELETE /api/inflight/:id</code></td><td>진행 중 작업 목록 또는 강제 제거.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>공통 에러 코드</h2>
+  <table>
+    <thead><tr><th>코드</th><th>의미</th></tr></thead>
+    <tbody>
+      <tr><td><code>API_KEY_REQUIRED</code></td><td>설정된 key 없이 API 경로 요청.</td></tr>
+      <tr><td><code>INVALID_IMAGE_MODEL</code></td><td>모델 이름이 알 수 없거나 미지원.</td></tr>
+      <tr><td><code>IMAGE_MODEL_UNSUPPORTED</code></td><td>모델은 있으나 이미지 생성 불가.</td></tr>
+      <tr><td><code>SAFETY_REFUSAL</code> · <code>MODERATION_REFUSED</code></td><td>업스트림 안전/모더레이션 거부.</td></tr>
+      <tr><td><code>AUTH_CHATGPT_EXPIRED</code></td><td>Codex/ChatGPT OAuth 세션 만료.</td></tr>
+      <tr><td><code>AUTH_API_KEY_INVALID</code></td><td>API key가 무효·취소·할당량 초과.</td></tr>
+      <tr><td><code>NETWORK_FAILED</code></td><td>네트워크·프록시·VPN·방화벽 실패.</td></tr>
+      <tr><td><code>OAUTH_UNAVAILABLE</code></td><td>로컬 OAuth 프록시 사용 불가.</td></tr>
+      <tr><td><code>GRAPH_VERSION_CONFLICT</code></td><td>stale 그래프 버전에 대한 저장.</td></tr>
+      <tr><td><code>NODE_NOT_FOUND</code></td><td>노드 메타데이터를 찾을 수 없음.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="docs-callout docs-callout-info">
+    전체 엔드포인트 → CLI 매핑, 레퍼런스 이미지 에러 코드, 스타일 시트 라우트는
+    <a href={apiMd}>API.md</a>에 있습니다.
+  </div>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('reference/config')}>설정</a>
+    <span class="spacer"></span>
+  </div>
+</DocsLayout>

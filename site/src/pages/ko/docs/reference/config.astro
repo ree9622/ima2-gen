@@ -1,0 +1,77 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
+---
+
+<DocsLayout
+  lang="ko"
+  active="reference/config"
+  title="설정"
+  description="ima2-gen의 환경 변수, ~/.ima2/config.json 파일 레이어, 쓰기 가능 키, 로깅 모드."
+>
+  <p class="docs-eyebrow">레퍼런스</p>
+  <h1>설정</h1>
+  <p class="lead">
+    유효 값은 3계층 순서를 따릅니다: 환경 변수가 <code>~/.ima2/config.json</code>을 덮어쓰고, 그것이
+    내장 기본값을 덮어씁니다.
+  </p>
+
+  <h2>환경 변수</h2>
+  <table>
+    <thead><tr><th>변수</th><th>기본값</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>IMA2_PORT</code> / <code>PORT</code></td><td><code>3333</code></td><td>웹 서버 포트.</td></tr>
+      <tr><td><code>IMA2_HOST</code></td><td><code>127.0.0.1</code></td><td>웹 서버 바인드 호스트.</td></tr>
+      <tr><td><code>IMA2_OAUTH_PROXY_PORT</code> / <code>OAUTH_PORT</code></td><td><code>10531</code></td><td>OAuth 프록시 포트.</td></tr>
+      <tr><td><code>IMA2_SERVER</code></td><td>—</td><td>CLI 타깃 오버라이드.</td></tr>
+      <tr><td><code>IMA2_CONFIG_DIR</code></td><td><code>~/.ima2</code></td><td>설정과 SQLite 위치.</td></tr>
+      <tr><td><code>IMA2_ADVERTISE_FILE</code></td><td><code>~/.ima2/server.json</code></td><td>런타임 탐색 파일.</td></tr>
+      <tr><td><code>IMA2_GENERATED_DIR</code></td><td><code>~/.ima2/generated</code></td><td>생성 이미지 디렉터리.</td></tr>
+      <tr><td><code>IMA2_IMAGE_MODEL_DEFAULT</code></td><td><code>gpt-5.4-mini</code></td><td>서버 폴백 이미지 모델.</td></tr>
+      <tr><td><code>IMA2_NO_OAUTH_PROXY</code></td><td>—</td><td><code>1</code>로 설정하면 자동 시작 OAuth 프록시 비활성화.</td></tr>
+      <tr><td><code>IMA2_LOG_LEVEL</code></td><td><code>warn</code></td><td>serve는 warn, dev는 debug 기본; debug·info·warn·error·silent 지원.</td></tr>
+      <tr><td><code>IMA2_INFLIGHT_TERMINAL_TTL_MS</code></td><td><code>30000</code></td><td>디버그 뷰용 최근 종료 작업 보존 시간.</td></tr>
+      <tr><td><code>OPENAI_API_KEY</code></td><td>—</td><td>API 프로바이더 Responses 경로 및 보조 기능용 API key.</td></tr>
+      <tr><td><code>IMA2_API_IMAGE_MODEL_DEFAULT</code></td><td><code>gpt-5.4-mini</code></td><td>API 경로의 기본 이미지 모델.</td></tr>
+      <tr><td><code>IMA2_API_REASONING_EFFORT</code></td><td><code>low</code></td><td>API 경로의 기본 reasoning effort.</td></tr>
+      <tr><td><code>IMA2_API_IMAGE_SIZE</code></td><td><code>1024x1024</code></td><td>API 경로의 기본 크기.</td></tr>
+      <tr><td><code>IMA2_API_ALLOW_WEB_SEARCH</code></td><td><code>true</code></td><td>API 경로의 웹 검색 토글.</td></tr>
+      <tr><td><code>IMA2_OAUTH_MASKED_EDIT_ENABLED</code></td><td><code>false</code></td><td>OAuth 경로의 masked-edit 옵트인 플래그 (#31, 기반 작업만).</td></tr>
+    </tbody>
+  </table>
+
+  <h2>설정 파일</h2>
+  <p>
+    <code>ima2 config</code>는 <code>~/.ima2/config.json</code>(파일 레이어)을 읽고 씁니다. 알 수 없는
+    키를 거부하고, 인증 키(<code>provider</code>, <code>apiKey</code>)를 막고, env 변수가 같은 키를
+    덮어쓰면 경고합니다. 인증은 <code>ima2 setup</code> 또는 <code>ima2 login</code>으로 바꾸세요.
+  </p>
+  <h4>주요 쓰기 가능 키</h4>
+  <pre><code>imageModels.default              imageModels.reasoningEffort
+apiProvider.defaultImageModel    apiProvider.defaultReasoningEffort
+log.level                        features.cardNews
+server.port  server.host  server.bodyLimit
+oauth.proxyPort  limits.maxRefCount  limits.maxParallel
+history.defaultPageSize  history.maxPageCap  storage.generatedDir</code></pre>
+  <p>권위 있는 전체 목록은 <code>ima2 config keys</code>, 병합된 값은 <code>ima2 config ls --effective</code>를 실행하세요.</p>
+
+  <h2>로깅 모드</h2>
+  <p>
+    <code>ima2 serve</code>는 의도적으로 조용합니다: 시작 URL·경고·에러는 보이고, 요청/node/OAuth
+    구조화 로그는 기본 숨김입니다. 요청 ID, node phase, OAuth 스트림 진단, inflight 전이가 필요하면
+    <code>ima2 serve --dev</code>, <code>npm run dev</code>, 또는
+    <code>IMA2_LOG_LEVEL=debug ima2 serve</code>를 쓰세요.
+  </p>
+
+  <div class="docs-callout docs-callout-info">
+    전체 <code>config</code>·<code>defaults</code> 명령 표는 <a href={cliMd}>CLI.md</a>에 있습니다.
+  </div>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('reference/cli')}>CLI 명령어</a>
+    <a class="next" href={d('reference/api')}>서버 API</a>
+  </div>
+</DocsLayout>

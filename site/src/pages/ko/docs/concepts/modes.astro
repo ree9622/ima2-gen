@@ -1,0 +1,60 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+---
+
+<DocsLayout
+  lang="ko"
+  active="concepts/modes"
+  title="생성 모드"
+  description="ima2-gen의 Classic·Node·Multimode·Canvas 모드를 언제 쓰는지, 그리고 프롬프트 라이브러리."
+>
+  <p class="docs-eyebrow">핵심 개념</p>
+  <h1>생성 모드</h1>
+  <p class="lead">ima2-gen은 이미지를 만들고 다듬는 네 가지 방식을 제공합니다. 작업 흐름에 맞게 고르세요.</p>
+
+  <h2>Classic</h2>
+  <p>
+    한 프롬프트, 한 장의 강한 프레임. 프롬프트를 쓰고, 레퍼런스를 다섯 장까지 붙이고,
+    모델·품질·크기·포맷·moderation을 고른 뒤 생성합니다. 복사·다운로드하거나, 결과에서 이어가거나,
+    Canvas Mode로 보냅니다.
+  </p>
+
+  <h2>Node</h2>
+  <p>
+    한 프레임, 열 갈래. 기준 이미지를 고정하고 색감·구도·카피로 자식을 펼칩니다. 각 노드는 자기
+    프롬프트와 결과를 가집니다; 루트 노드는 로컬 레퍼런스를 붙이고 자식 노드는 부모 이미지를 소스로
+    씁니다. 완료된 작업은 request ID로 노드에 다시 매칭되므로, 새로고침이나 그래프 버전 충돌에서도
+    완료 결과를 복구할 수 있습니다.
+  </p>
+
+  <h2>Multimode</h2>
+  <p>
+    하나의 프롬프트에서 여러 후보. Classic 모드에서 시퀀스를 실행하고, 슬롯별 진행을 보면서 필요할
+    때 취소하고, 가장 강한 결과에서 이어갑니다. CLI에서는 <code>phase</code>, <code>partial</code>,
+    <code>image</code> 이벤트를 스트리밍합니다.
+  </p>
+
+  <h2>Canvas Mode</h2>
+  <p>
+    마음에 든 프레임 정리하기. 확대된 이미지를 선택과 분리해 이동하고, 수정 지점을 표시하고,
+    미리보기 마스크로 배경을 정리한 뒤 투명(alpha) 또는 matte 버전으로 export합니다. 저장된 canvas
+    버전은 갤러리에서 숨겨지지만 다음 레퍼런스로 다시 쓸 수 있습니다.
+  </p>
+
+  <h2>프롬프트 라이브러리 &amp; 가져오기</h2>
+  <p>
+    프롬프트 라이브러리를 로컬 파일, GitHub 폴더, 추천 소스, GPT-image hint pack에서 채웁니다.
+    가져온 프롬프트는 로컬에 인덱싱되어 매 세션 다시 가져오지 않아도 검색·랭킹이 동작합니다. 컨트롤
+    단위 설명은
+    <a href="https://github.com/lidge-jun/ima2-gen/blob/main/docs/PROMPT_STUDIO.md">Prompt Studio 매뉴얼</a>을
+    보세요.
+  </p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('concepts/architecture')}>아키텍처</a>
+    <a class="next" href={d('concepts/providers')}>프로바이더 &amp; 모델</a>
+  </div>
+</DocsLayout>

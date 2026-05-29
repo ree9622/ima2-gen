@@ -1,0 +1,71 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+const gh = 'https://github.com/lidge-jun/ima2-gen/blob/main';
+---
+
+<DocsLayout
+  lang="ko"
+  active="concepts/architecture"
+  title="아키텍처"
+  description="ima2-gen의 구성 — CLI와 웹 UI가 로컬 Express 서버를 호출하고, 서버가 라우트 모듈·OAuth 프록시·SQLite·생성 이미지 디렉터리로 위임합니다."
+>
+  <p class="docs-eyebrow">핵심 개념</p>
+  <h1>아키텍처</h1>
+  <p class="lead">
+    ima2-gen은 이미지 생성 CLI와 웹 UI가 결합된 앱입니다. 둘 다 로컬 Express 서버의
+    <code>/api/*</code> 엔드포인트를 호출하고, 서버는 라우트 모듈·로컬 OAuth 프록시·SQLite·생성
+    이미지 디렉터리로 위임합니다.
+  </p>
+
+  <h2>런타임 흐름</h2>
+  <pre><code>CLI (bin/ima2.ts, bin/commands/*) ──┐
+Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/*
+                                    │                     │
+                                    │           lib/*  (storage, sessions, inflight, metadata)
+                                    │           openai-oauth  (local proxy)
+                                    │           ~/.ima2/generated  (images + sidecars)
+                                    └────────── better-sqlite3  (sessions + graph)</code></pre>
+  <p>
+    런타임 경로는 의도적으로 단순합니다. CLI 명령과 브라우저가 같은 엔드포인트를 호출하고, 서버는
+    OAuth 프록시(또는 API key Responses 경로)로 이미지 요청을 보내고, 설정된 생성 디렉터리에 파일을
+    저장하고, 그래프 세션을 SQLite에 보존합니다.
+  </p>
+
+  <h2>모듈 맵</h2>
+  <table>
+    <thead><tr><th>영역</th><th>책임</th></tr></thead>
+    <tbody>
+      <tr><td><code>server.ts</code></td><td>Express 부트스트랩, 라우트 등록. 짝 런타임 산출물 <code>server.js</code>.</td></tr>
+      <tr><td><code>routes/*</code></td><td>API 표면: generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, dev 게이트된 cardNews.</td></tr>
+      <tr><td><code>lib/*</code></td><td>스토리지, OAuth 프록시, 로깅, 세션, inflight 상태, 이미지 메타데이터 임베드/복원, 프롬프트 라이브러리 SQLite, 레퍼런스 압축, canvas 버전 저장소, soft-delete 휴지통.</td></tr>
+      <tr><td><code>bin/*</code></td><td>CLI 디스패처와 클라이언트 명령 — 서버 API와 거의 완전한 패리티.</td></tr>
+      <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node 모드, Canvas Mode, 모바일 셸, 프롬프트 라이브러리 패널.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="docs-callout docs-callout-info">
+    <strong>원본(Source of truth).</strong> 라우트·lib·서버·bin 소스 파일은 <code>*.ts</code>입니다.
+    짝이 되는 <code>*.js</code>는 커밋된 빌드 산출물 — 손이 아니라 빌드로만 편집하세요.
+  </div>
+
+  <h2>데이터 위치</h2>
+  <ul>
+    <li><code>~/.ima2/config.json</code> — 파일 레이어 설정 (<a href={d('reference/config')}>설정</a> 참고).</li>
+    <li><code>~/.ima2/generated</code> — 생성 이미지와 메타데이터 사이드카.</li>
+    <li><code>~/.ima2/server.json</code> — 런타임 탐색(실제 바인딩 포트).</li>
+    <li>SQLite — 세션과 node 그래프 스냅샷.</li>
+  </ul>
+
+  <p>
+    전체 내부 아키텍처 문서는 <a href={`${gh}/structure/00-structure-hub.md`}>structure/</a>에
+    있습니다. 요청/응답 계약은 <a href={d('reference/api')}>서버 API</a>를 보세요.
+  </p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('quickstart')}>빠른 시작</a>
+    <a class="next" href={d('concepts/modes')}>생성 모드</a>
+  </div>
+</DocsLayout>

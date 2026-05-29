@@ -1,0 +1,64 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import { docsPath } from '../../../i18n/docs';
+
+const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
+---
+
+<DocsLayout
+  lang="ko"
+  active="quickstart"
+  title="빠른 시작"
+  description="ima2-gen 설치, Codex 로그인, 로컬 서버 실행, 그리고 개발용 체크아웃 설정."
+>
+  <p class="docs-eyebrow">시작하기</p>
+  <h1>빠른 시작</h1>
+  <p class="lead">
+    <code>npx</code>로 실행하고, Codex로 한 번 로그인하면 바로 생성을 시작할 수 있습니다. 기본
+    경로에는 OpenAI API key가 필요 없습니다.
+  </p>
+
+  <h2>실행</h2>
+  <pre><code>npx ima2-gen serve</code></pre>
+  <p>그다음 <code>http://localhost:3333</code>을 엽니다.</p>
+
+  <div class="docs-callout docs-callout-info">
+    <strong>포트 탐색.</strong> <code>3333</code>이 사용 중이면 ima2-gen이 다음 빈 포트에 바인딩하고
+    실제 URL을 <code>~/.ima2/server.json</code>에 기록합니다. 포트를 추측하지 말고
+    <code>ima2 open</code> 또는 터미널에 출력된 URL을 쓰세요.
+  </div>
+
+  <h2>Codex로 로그인</h2>
+  <p>아직 Codex에 로그인하지 않았다면:</p>
+  <pre><code>npx @openai/codex login
+npx ima2-gen serve</code></pre>
+
+  <h2>전역 설치</h2>
+  <pre><code>npm install -g ima2-gen
+ima2 serve</code></pre>
+  <div class="docs-callout docs-callout-warn">
+    <strong>Windows 업데이트 주의.</strong> 전역 설치를 업데이트하기 전에 실행 중인
+    <code>ima2 serve</code>를 종료하세요. npm이 <code>EBUSY</code> 또는
+    <code>resource busy or locked</code>를 보고하면 ima2 터미널을 닫고, 남은
+    <code>node.exe</code> 프로세스를 종료한 뒤 다시 시도하세요.
+  </div>
+
+  <h2>소스에서 개발</h2>
+  <pre><code>git clone https://github.com/lidge-jun/ima2-gen.git
+cd ima2-gen
+npm install
+npm run dev          # UI 빌드 + TS 서버를 --watch와 진단 로그로 실행
+npm run typecheck
+npm test
+npm run build</code></pre>
+  <p>
+    <code>npm run dev</code>는 UI를 빌드하고 TypeScript 서버 엔트리를 <code>--watch</code>로
+    실행합니다. <code>.ts</code> 파일을 원본으로 다루세요; 짝이 되는 <code>.js</code> 산출물은
+    빌드로 생성되며 손으로 편집하지 않습니다.
+  </p>
+
+  <div class="docs-pagenav">
+    <a class="prev" href={d('')}>개요</a>
+    <a class="next" href={d('concepts/architecture')}>아키텍처</a>
+  </div>
+</DocsLayout>

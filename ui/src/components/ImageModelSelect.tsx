@@ -1,6 +1,7 @@
 import type { ImageModel } from "../types";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { IMAGE_MODEL_OPTIONS, UNSUPPORTED_IMAGE_MODELS } from "../lib/imageModels";
 import { REASONING_EFFORT_OPTIONS, type ReasoningEffort } from "../lib/reasoning";
 import { useAppStore } from "../store/useAppStore";
@@ -15,7 +16,9 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const menuItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const imageModel = useAppStore((s) => s.imageModel);
   const setImageModel = useAppStore((s) => s.setImageModel);
   const reasoningEffort = useAppStore((s) => s.reasoningEffort);
@@ -86,6 +89,7 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (rootRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
       setOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -97,6 +101,28 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
       document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open, variant]);
+
+  // Portal the sidebar menu to document.body to escape the sidebar's overflow clipping.
+  // Position it under the trigger; close on scroll/resize so the fixed menu never detaches
+  // from the (independently scrollable) sidebar trigger.
+  useLayoutEffect(() => {
+    if (variant !== "sidebar" || !open) return;
+    const measure = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setMenuPos({ top: rect.bottom + 7, right: window.innerWidth - rect.right });
+    };
+    measure();
+    const close = () => setOpen(false);
+    const scroller = document.querySelector(".sidebar__scroll");
+    scroller?.addEventListener("scroll", close, { passive: true });
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      scroller?.removeEventListener("scroll", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
     };
   }, [open, variant]);
 
@@ -131,12 +157,14 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
           <span className="image-model-select__trigger-separator" aria-hidden="true">·</span>
           <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
         </button>
-        {open ? (
+        {open ? createPortal(
           <div
+            ref={menuRef}
             className="image-model-select__menu"
             role="menu"
             aria-label={t("sidebar.quickSettingsMenu")}
             onKeyDown={handleMenuKeyDown}
+            style={{ position: "fixed", top: menuPos.top, right: menuPos.right, zIndex: 160 }}
           >
             <div className="image-model-select__section" role="group" aria-label={t("sidebar.imageModelLabel")}>
               <div className="image-model-select__section-title">{t("sidebar.imageModelLabel")}</div>
@@ -184,7 +212,8 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
                 </button>
               ))}
             </div>
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
     );

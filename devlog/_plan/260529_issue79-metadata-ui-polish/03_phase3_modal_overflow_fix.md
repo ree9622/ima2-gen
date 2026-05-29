@@ -61,29 +61,37 @@ Overview에서 `max-height: 280px` 부족이 원인이라고 했으나, **실제
 ```typescript
 import { createPortal } from "react-dom";
 
-// 메뉴 열릴 때 트리거 버튼의 위치 계산
-const triggerRef = useRef<HTMLDivElement>(null);
+const isSidebar = variant === "sidebar";              // ⚠️ prop은 variant: "settings"|"sidebar" (isSidebar 아님)
+const triggerRef = useRef<HTMLButtonElement>(null);   // trigger는 <button> (:117-133)
+const menuRef = useRef<HTMLDivElement>(null);         // outside-click에서 rootRef+menuRef 둘 다 체크
 const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
 
+// 위치 측정 + 사이드바/페이지 스크롤·리사이즈 시 닫기 (detach 방지 — audit F1)
 useEffect(() => {
-  if (open && triggerRef.current) {
-    const rect = triggerRef.current.getBoundingClientRect();
-    setMenuPos({
-      top: rect.bottom + 7,
-      right: window.innerWidth - rect.right,
-    });
-  }
-}, [open]);
+  if (!open || !isSidebar) return;
+  const rect = triggerRef.current?.getBoundingClientRect();
+  if (rect) setMenuPos({ top: rect.bottom + 7, right: window.innerWidth - rect.right });
+  const close = () => setOpen(false);
+  const scroller = document.querySelector(".sidebar__scroll");      // clipping 조상
+  scroller?.addEventListener("scroll", close, { passive: true });
+  window.addEventListener("scroll", close, { passive: true, capture: true });
+  window.addEventListener("resize", close);
+  return () => {
+    scroller?.removeEventListener("scroll", close);
+    window.removeEventListener("scroll", close, true);
+    window.removeEventListener("resize", close);
+  };
+}, [open, isSidebar]);
 
-// 사이드바 variant일 때만 Portal
 const menuElement = (
   <div
+    ref={menuRef}
     className="image-model-select__menu"
     style={isSidebar ? {
       position: "fixed",
       top: menuPos.top,
       right: menuPos.right,
-      zIndex: 70,
+      zIndex: 160,                                    // ⚠️ mobile-app-bar 150 위 / compose-backdrop 170 아래 (audit F2)
       maxHeight: "min(400px, calc(100dvh - 80px))",
       overflowY: "auto",
     } : undefined}
@@ -94,11 +102,8 @@ const menuElement = (
 
 return (
   <>
-    <div ref={triggerRef} onClick={toggle}>...</div>
-    {open && (isSidebar
-      ? createPortal(menuElement, document.body)
-      : menuElement
-    )}
+    <button ref={triggerRef} onClick={toggle}>...</button>
+    {open && (isSidebar ? createPortal(menuElement, document.body) : menuElement)}
   </>
 );
 ```
@@ -167,3 +172,17 @@ npm test
 
 + 직원 Computer Use smoke: 사이드바에서 모델 드롭다운 열기 → 전체 목록 표시 확인
 + 모바일 뷰포트(375px)에서도 확인
+
+---
+
+## 🔍 검증 정정 (audit 2026-05-29, post-#78)
+
+### CSS 줄 번호 — 전부 정확 (drift 없음)
+`.sidebar` overflow:hidden = `index.css:561` ✅ / `.sidebar__scroll` overflow-y:auto = `:567` ✅ / `.image-model-select__menu` = `:1684-1698` ✅ (`max-width: min(280px, calc(100vw-24px))` @1692, **max-height 없음** ✅). `AgentModelSheet` 정상(position:fixed 오버레이) = 수정 불필요 ✅.
+
+### ⚠️ 계획이 놓친 함정
+
+1. **clipping 조상이 둘.** `.sidebar`(overflow:hidden)뿐 아니라 `.sidebar__scroll`(overflow-y:auto, `:567`)도 자름. Portal→`document.body`는 둘 다 탈출하므로 수정 방향 자체는 유효.
+2. **`position:fixed` 포털 + 사이드바 독립 스크롤 = 트리거에서 detach.** 계획은 open 시 `getBoundingClientRect`를 한 번만 측정 → 사이드바 스크롤하면 메뉴가 고정 좌표에 붕 뜸. **스크롤 시 닫기 또는 좌표 재계산** 필요.
+3. **프롭 이름 정정:** `isSidebar`(boolean) ❌ → 실제는 `variant: "settings" | "sidebar"`. trigger는 `<button>`(`:117-133`), outside-click은 `rootRef.current?.contains`(`:82-100`), `menuRef`·`createPortal` 아직 없음 → 둘 다 추가 필요.
+4. **모바일.** 같은 `ImageModelSelect variant="sidebar"`가 `MobileAppBar`에서도 사용됨. `.mobile-app-bar`는 `backdrop-filter`로 stacking context 생성 + 메뉴 z-index `40` vs 모바일바 `150` → 모바일 stacking 별도 확인 필요.

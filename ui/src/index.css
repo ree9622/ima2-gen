@@ -1695,6 +1695,8 @@ body {
   border-radius: 12px;
   background: var(--surface);
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.32);
+  max-height: min(400px, calc(100dvh - 80px));
+  overflow-y: auto;
 }
 
 .image-model-select__section {

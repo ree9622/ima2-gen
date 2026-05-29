@@ -39,10 +39,10 @@ Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/
     <thead><tr><th>Area</th><th>Owns</th></tr></thead>
     <tbody>
       <tr><td><code>server.ts</code></td><td>Express bootstrap; registers routes. Paired runtime artifact <code>server.js</code>.</td></tr>
-      <tr><td><code>routes/*</code></td><td>API surfaces: generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, and dev-gated cardNews.</td></tr>
+      <tr><td><code>routes/*</code></td><td>API surfaces: capabilities, generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, the always-on agent (Agent Mode) and promptBuilder routes, and dev-gated cardNews.</td></tr>
       <tr><td><code>lib/*</code></td><td>Storage, OAuth proxy, logging, sessions, inflight state, image metadata embed/restore, prompt-library SQLite, reference compression, canvas-version store, soft-delete trash.</td></tr>
       <tr><td><code>bin/*</code></td><td>CLI dispatcher and client commands — near-complete parity with the server API.</td></tr>
-      <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node mode, Canvas Mode, mobile shell, prompt-library panel.</td></tr>
+      <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node mode, Canvas Mode, the Agent Mode workspace (<code>components/agent/*</code>), mobile shell, prompt-library panel.</td></tr>
     </tbody>
   </table>
 

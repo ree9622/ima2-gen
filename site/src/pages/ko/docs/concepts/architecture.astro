@@ -39,10 +39,10 @@ Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/
     <thead><tr><th>영역</th><th>책임</th></tr></thead>
     <tbody>
       <tr><td><code>server.ts</code></td><td>Express 부트스트랩, 라우트 등록. 짝 런타임 산출물 <code>server.js</code>.</td></tr>
-      <tr><td><code>routes/*</code></td><td>API 표면: generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, dev 게이트된 cardNews.</td></tr>
+      <tr><td><code>routes/*</code></td><td>API 표면: capabilities, generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, 항상 등록되는 agent(Agent 모드)·promptBuilder 라우트, dev 게이트된 cardNews.</td></tr>
       <tr><td><code>lib/*</code></td><td>스토리지, OAuth 프록시, 로깅, 세션, inflight 상태, 이미지 메타데이터 임베드/복원, 프롬프트 라이브러리 SQLite, 레퍼런스 압축, canvas 버전 저장소, soft-delete 휴지통.</td></tr>
       <tr><td><code>bin/*</code></td><td>CLI 디스패처와 클라이언트 명령 — 서버 API와 거의 완전한 패리티.</td></tr>
-      <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node 모드, Canvas Mode, 모바일 셸, 프롬프트 라이브러리 패널.</td></tr>
+      <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node 모드, Canvas Mode, Agent 모드 워크스페이스(<code>components/agent/*</code>), 모바일 셸, 프롬프트 라이브러리 패널.</td></tr>
     </tbody>
   </table>
 

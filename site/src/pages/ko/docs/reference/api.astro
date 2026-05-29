@@ -28,8 +28,9 @@ const genBody = `{
   <p class="docs-eyebrow">레퍼런스</p>
   <h1>서버 API</h1>
   <p class="lead">
-    CLI는 로컬 서버 위의 얇은 셸 — 모든 <code>/api/*</code> 라우트에 CLI 래퍼가 있습니다. 이 페이지는
-    엔드포인트 그룹을 정리합니다; 전체 요청/응답 형태는 <a href={apiMd}>API.md</a>를 보세요.
+    CLI는 로컬 서버 위의 얇은 셸 — 대부분의 <code>/api/*</code> 라우트에 CLI 래퍼가 있지만, Agent
+    모드와 prompt builder는 웹 UI 전용입니다. 이 페이지는 엔드포인트 그룹을 정리합니다; 전체
+    요청/응답 형태는 <a href={apiMd}>API.md</a>를 보세요.
   </p>
 
   <h2>베이스 URL</h2>
@@ -44,7 +45,7 @@ const genBody = `{
     <tbody>
       <tr><td><code>POST /api/generate</code></td><td>텍스트-이미지 및 레퍼런스 기반 루트 생성.</td></tr>
       <tr><td><code>POST /api/edit</code></td><td>이미지 편집 / image-to-image 생성.</td></tr>
-      <tr><td><code>POST /api/generate/multi</code> (SSE)</td><td>Multimode 배치.</td></tr>
+      <tr><td><code>POST /api/generate/multimode</code> (SSE)</td><td>Multimode 배치.</td></tr>
       <tr><td><code>POST /api/node/generate</code> (SSE)</td><td>Node 모드 생성 및 자식 편집.</td></tr>
       <tr><td><code>GET /api/node/:nodeId</code></td><td>저장된 노드 메타데이터와 에셋 URL 조회.</td></tr>
     </tbody>
@@ -83,6 +84,23 @@ const genBody = `{
     필요합니다. 버전이 stale하면 <code>GRAPH_VERSION_CONFLICT</code>와 현재 버전을 반환합니다 — 다른
     탭이 그래프를 바꿨다는 증거가 아니라, stale 스냅샷에 대해 저장했다는 뜻입니다.
   </div>
+
+  <h2>Agent 모드 &amp; 디스커버리</h2>
+  <p>
+    Agent 모드는 대화형 이미지 워크스페이스입니다(세션, 턴, durable 세션 큐). 이 라우트들은 항상
+    등록되지만 <strong>CLI 래퍼가 없습니다</strong> — Agent 모드는 웹 UI에서 사용하세요.
+  </p>
+  <table>
+    <thead><tr><th>엔드포인트</th><th>용도</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/capabilities</code></td><td>에이전트 디스커버리: 지원 모델, 유효 값, 한도, 버전 (<code>ima2 capabilities</code>).</td></tr>
+      <tr><td><code>GET · POST /api/agent/sessions</code></td><td>에이전트 세션 목록 또는 생성.</td></tr>
+      <tr><td><code>GET · PATCH · DELETE /api/agent/sessions/:id</code></td><td>세션 로드·수정·삭제.</td></tr>
+      <tr><td><code>POST /api/agent/sessions/:id/turns</code></td><td>에이전트 턴 실행; 슬래시 명령과 <code>/question</code> 지원.</td></tr>
+      <tr><td><code>GET · POST /api/agent/sessions/:id/queue</code></td><td>durable 큐 조회·적재 (<code>/api/agent/queue/:itemId/cancel</code> · <code>retry</code>로 항목 관리).</td></tr>
+      <tr><td><code>POST /api/prompt-builder/chat</code></td><td>UI 내 prompt-builder 어시스턴트 (CLI 없음).</td></tr>
+    </tbody>
+  </table>
 
   <h2>헬스 · 스토리지 · 작업</h2>
   <table>

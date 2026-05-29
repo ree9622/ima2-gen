@@ -28,9 +28,9 @@ const genBody = `{
   <p class="docs-eyebrow">Reference</p>
   <h1>Server API</h1>
   <p class="lead">
-    The CLI is a thin shell over the local server — every <code>/api/*</code> route has a CLI
-    wrapper. This page maps the endpoint groups; for full request and response shapes, see
-    <a href={apiMd}>API.md</a>.
+    The CLI is a thin shell over the local server — most <code>/api/*</code> routes have a CLI
+    wrapper, though Agent Mode and the prompt builder are web-UI only. This page maps the endpoint
+    groups; for full request and response shapes, see <a href={apiMd}>API.md</a>.
   </p>
 
   <h2>Base URL</h2>
@@ -46,7 +46,7 @@ const genBody = `{
     <tbody>
       <tr><td><code>POST /api/generate</code></td><td>Text-to-image and reference-guided root generation.</td></tr>
       <tr><td><code>POST /api/edit</code></td><td>Image edit / image-to-image generation.</td></tr>
-      <tr><td><code>POST /api/generate/multi</code> (SSE)</td><td>Multimode batch.</td></tr>
+      <tr><td><code>POST /api/generate/multimode</code> (SSE)</td><td>Multimode batch.</td></tr>
       <tr><td><code>POST /api/node/generate</code> (SSE)</td><td>Node-mode generation and child edits.</td></tr>
       <tr><td><code>GET /api/node/:nodeId</code></td><td>Fetch stored node metadata and asset URL.</td></tr>
     </tbody>
@@ -85,6 +85,24 @@ const genBody = `{
     the current version. A stale version returns <code>GRAPH_VERSION_CONFLICT</code> plus the current
     version — it only means you saved against a stale snapshot, not that another tab changed the graph.
   </div>
+
+  <h2>Agent Mode &amp; discovery</h2>
+  <p>
+    Agent Mode is a conversational image workspace (sessions, turns, and a durable per-session queue).
+    These routes are always registered but have <strong>no CLI wrapper</strong> — drive Agent Mode
+    from the web UI.
+  </p>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/capabilities</code></td><td>Agent-facing discovery: supported models, valid values, limits, version (<code>ima2 capabilities</code>).</td></tr>
+      <tr><td><code>GET · POST /api/agent/sessions</code></td><td>List or create agent sessions.</td></tr>
+      <tr><td><code>GET · PATCH · DELETE /api/agent/sessions/:id</code></td><td>Load, update, or delete a session.</td></tr>
+      <tr><td><code>POST /api/agent/sessions/:id/turns</code></td><td>Run an agent turn; supports slash commands and <code>/question</code>.</td></tr>
+      <tr><td><code>GET · POST /api/agent/sessions/:id/queue</code></td><td>Inspect or enqueue durable queue work (<code>/api/agent/queue/:itemId/cancel</code> · <code>retry</code> manage items).</td></tr>
+      <tr><td><code>POST /api/prompt-builder/chat</code></td><td>In-UI prompt-builder assistant (no CLI).</td></tr>
+    </tbody>
+  </table>
 
   <h2>Health, storage &amp; jobs</h2>
   <table>

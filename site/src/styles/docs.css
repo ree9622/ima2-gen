@@ -263,7 +263,12 @@
 .docs-backdrop { display: none; }
 
 @media (max-width: 860px) {
-  .docs-layout { grid-template-columns: 1fr; }
+  /* global.css sets `body > * { z-index: 1 }`, which turns .docs-layout into a
+     stacking context and would trap the fixed sidebar (z-index 60) below the
+     backdrop (z-index 50). Dropping it to auto lets the sidebar layer on top. */
+  .docs-layout { grid-template-columns: 1fr; z-index: auto; }
+  /* Wide reference tables scroll horizontally instead of overflowing the viewport. */
+  .docs-article table { display: block; overflow-x: auto; }
   .docs-sidebar { position: fixed; left: -300px; top: 0; width: 286px; z-index: 60; transition: left 200ms ease; }
   .docs-sidebar.is-open { left: 0; box-shadow: 6px 0 28px rgba(0, 0, 0, 0.55); }
   .docs-backdrop.is-open { display: block; position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.5); }

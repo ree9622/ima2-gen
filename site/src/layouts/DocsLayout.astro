@@ -66,7 +66,7 @@ const koAlt = `${siteRoot}ko/docs${slugSuffix}`;
     />
   </head>
   <body>
-    <button class="docs-menu-toggle" aria-label={docsT(lang, 'nav.toggle')} data-docs-toggle>☰</button>
+    <button class="docs-menu-toggle" aria-label={docsT(lang, 'nav.toggle')} aria-expanded="false" data-docs-toggle>☰</button>
     <div class="docs-backdrop" data-docs-backdrop></div>
 
     <div class="docs-layout">
@@ -124,12 +124,12 @@ const koAlt = `${siteRoot}ko/docs${slugSuffix}`;
               </div>
             ))
           }
-          <div class="docs-search-empty" data-docs-empty>{docsT(lang, 'search.empty')}</div>
+          <div class="docs-search-empty" data-docs-empty aria-live="polite">{docsT(lang, 'search.empty')}</div>
         </div>
 
         <div class="docs-lang">
-          <a class:list={[{ active: lang === 'en' }]} href={enUrl}>EN</a>
-          <a class:list={[{ active: lang === 'ko' }]} href={koUrl}>한국어</a>
+          <a class:list={[{ active: lang === 'en' }]} href={enUrl} aria-current={lang === 'en' ? 'true' : undefined}>EN</a>
+          <a class:list={[{ active: lang === 'ko' }]} href={koUrl} aria-current={lang === 'ko' ? 'true' : undefined}>한국어</a>
         </div>
 
         <div class="docs-nav-footer">
@@ -153,13 +153,18 @@ const koAlt = `${siteRoot}ko/docs${slugSuffix}`;
         function closeNav() {
           if (sidebar) sidebar.classList.remove('is-open');
           if (backdrop) backdrop.classList.remove('is-open');
+          if (toggle) toggle.setAttribute('aria-expanded', 'false');
         }
         if (toggle && sidebar && backdrop) {
           toggle.addEventListener('click', function () {
-            sidebar.classList.toggle('is-open');
-            backdrop.classList.toggle('is-open');
+            var open = sidebar.classList.toggle('is-open');
+            backdrop.classList.toggle('is-open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
           });
           backdrop.addEventListener('click', closeNav);
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeNav();
+          });
         }
 
         // Lightweight client-side search: filter sidebar links + sections by query.

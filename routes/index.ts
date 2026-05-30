@@ -19,6 +19,7 @@ import { registerImageImportRoutes } from "./imageImport.js";
 import { registerPromptBuilderRoutes } from "./promptBuilder.js";
 import { registerAgentRoutes } from "./agent.js";
 import { registerGrokRoutes } from "./grok.js";
+import { registerVideoRoutes } from "./video.js";
 import { type RouteRuntimeContext, requireRuntimeContext } from "../lib/runtimeContext.js";
 
 export function configureRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
@@ -43,4 +44,5 @@ export function configureRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
   registerPromptRoutes(app, ctx);
   registerPromptImportRoutes(app, ctx);
   registerGrokRoutes(app, ctx);
+  registerVideoRoutes(app, ctx);
 }

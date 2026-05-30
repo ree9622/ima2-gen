@@ -111,3 +111,40 @@ export function normalizeGrokVideoModel(rawModel: unknown) {
   }
   return { model: rawModel };
 }
+
+export function normalizeVideoResolution(raw: unknown) {
+  if (raw === undefined || raw === null || raw === "") return { resolution: "480p" as const };
+  if (typeof raw !== "string" || !VALID_VIDEO_RESOLUTIONS.has(raw)) {
+    return {
+      error: `resolution must be one of: ${[...VALID_VIDEO_RESOLUTIONS].join(", ")}`,
+      code: "INVALID_VIDEO_RESOLUTION" as const,
+      status: 400 as const,
+    };
+  }
+  return { resolution: raw as VideoResolution };
+}
+
+export function normalizeVideoAspectRatio(raw: unknown) {
+  if (raw === undefined || raw === null || raw === "") return { aspectRatio: "auto" as const };
+  if (typeof raw !== "string" || !VALID_VIDEO_ASPECT_RATIOS.has(raw)) {
+    return {
+      error: `aspectRatio must be one of: ${[...VALID_VIDEO_ASPECT_RATIOS].join(", ")}`,
+      code: "INVALID_VIDEO_ASPECT_RATIO" as const,
+      status: 400 as const,
+    };
+  }
+  return { aspectRatio: raw as VideoAspectRatio };
+}
+
+export function normalizeVideoDuration(raw: unknown) {
+  if (raw === undefined || raw === null || raw === "") return { duration: 5 };
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isInteger(n) || n < MIN_VIDEO_DURATION || n > MAX_VIDEO_DURATION) {
+    return {
+      error: `duration must be an integer between ${MIN_VIDEO_DURATION} and ${MAX_VIDEO_DURATION} seconds`,
+      code: "INVALID_VIDEO_DURATION" as const,
+      status: 400 as const,
+    };
+  }
+  return { duration: n };
+}

@@ -134,7 +134,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
 
       const onEvent = (ev: GrokVideoEvent) => {
         if (ev.phase === "submitted") sendSse(res, "submitted", { requestId, xaiVideoRequestId: ev.xaiVideoRequestId });
-        else if (ev.phase === "progress") sendSse(res, "progress", { requestId, progress: ev.progress ?? null, stalled: Boolean(ev.stalled) });
+        else if (ev.phase === "progress") sendSse(res, "progress", { requestId, progress: typeof ev.progress === "number" ? ev.progress / 100 : null, stalled: Boolean(ev.stalled) });
         else sendSse(res, "planning", { requestId });
       };
 

@@ -336,7 +336,8 @@ export async function pollVideoOnce(ctx: RouteRuntimeContext, requestId: string,
       const text = await res.text().catch(() => "");
       throw grokError(`Grok video poll failed: ${text || `HTTP ${res.status}`}`, res.status >= 500 ? 502 : res.status, "GROK_VIDEO_POLL_FAILED");
     }
-    return normalizeVideoPoll(await res.json());
+    const pollData = await res.json();
+    return normalizeVideoPoll(pollData);
   } catch (e: any) {
     clearTimeout(timer);
     if (e.name === "AbortError") {

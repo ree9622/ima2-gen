@@ -174,13 +174,13 @@ Body fields:
   "size": "1024x1024",
   "format": "png",
   "moderation": "low",
-  "model": "gpt-5.4",
+  "model": "grok-imagine-image",
   "references": [],
   "externalSrc": "optional-history-url",
   "sessionId": "session-id",
   "clientNodeId": "client-node-id",
   "requestId": "request-id",
-  "provider": "oauth"
+  "provider": "grok"
 }
 ```
 

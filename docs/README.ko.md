@@ -12,7 +12,7 @@
 
 `ima2-gen`은 ChatGPT/Codex OAuth 이미지 생성 흐름을 로컬 웹앱처럼 쓸 수 있게 만든 이미지 생성 스튜디오입니다.
 
-`npx`로 실행하고, Codex OAuth로 로그인한 뒤, 프롬프트를 입력하면서 히스토리, 레퍼런스, 노드 브랜치, 멀티모드 배치, Canvas Mode 정리 작업으로 계속 이어갈 수 있습니다. 기본 이미지 생성 경로에서는 OpenAI API 키가 필요하지 않습니다.
+`npx`로 실행하고, Codex OAuth로 로그인한 뒤, 프롬프트를 입력하면서 히스토리, 레퍼런스, 노드 브랜치, 멀티모드 배치, Canvas Mode 정리 작업으로 계속 이어갈 수 있습니다. 기본 이미지 생성 경로에서는 OpenAI API 키가 필요하지 않으며, 설정된 경우 OpenAI API-key 경로와 번들 Grok 경로도 사용할 수 있습니다.
 
 ![프롬프트 작성창, 생성 이미지, 모델 표시, 결과 메타데이터가 보이는 ima2-gen 클래식 생성 화면](../assets/screenshots/classic-generate-light.png)
 
@@ -52,13 +52,17 @@ ima2 serve
 - **Mobile shell**: 작은 화면에서는 app bar, compose sheet, compact settings toggle로 조작합니다.
 - **Observable jobs**: 진행 중인 작업과 최근 완료된 작업을 request ID로 추적합니다.
 
-## 이미지 생성은 OAuth와 API Key를 지원합니다
+## 이미지 생성 공급자
 
-기본 이미지 생성은 로컬 Codex/ChatGPT OAuth 경로로 실행됩니다.
+이미지 생성은 로컬 Codex/ChatGPT OAuth, OpenAI API key, 번들 Grok 공급자를 지원합니다.
 
-API 키가 env/config에 있으면 생성 엔드포인트에서 `provider: "api"`를 보내 Responses API `image_generation` 도구를 사용할 수 있습니다.
+- `provider: "oauth"`는 로컬 Codex OAuth 프록시를 사용합니다.
+- `provider: "api"`는 OpenAI Responses API의 `image_generation` 도구를 사용합니다.
+- `provider: "grok"`는 번들 `progrok`을 `127.0.0.1:18645`에서 띄우고, xAI Web Search와 `grok-4.3` planner를 거친 뒤 xAI Images API를 호출합니다.
 
-설정 화면에 **API key provider available**이 보이면, API 키가 감지됐고 생성/편집/멀티모드/노드 요청에 사용할 수 있다는 뜻입니다.
+Grok은 Classic, Node, Agent 흐름을 지원합니다. Classic 레퍼런스, Node 부모 이미지, Agent 현재 이미지가 있으면 최종 Grok 호출은 xAI image edit 경로로 전환되어 image-to-image 맥락을 유지합니다. 기본 모델은 `grok-imagine-image`이고, `quality: "high"`에서는 `grok-imagine-image-quality`를 사용합니다.
+
+설정 화면에 **API key provider available**이나 **Grok provider available**이 보이면 해당 공급자가 감지됐고 생성 요청에 사용할 수 있다는 뜻입니다.
 
 ![OAuth 활성화와 API 키 비활성 상태를 보여주는 설정 화면](../assets/screenshots/settings-oauth-generation.png)
 
@@ -178,9 +182,14 @@ environment variables > ~/.ima2/config.json > built-in defaults
 | `IMA2_GENERATED_DIR` | `~/.ima2/generated` | 생성 이미지 저장 위치 |
 | `IMA2_IMAGE_MODEL_DEFAULT` | `gpt-5.4-mini` | 서버 fallback 이미지 모델 |
 | `IMA2_NO_OAUTH_PROXY` | — | `1`이면 OAuth 프록시 자동 시작 비활성화 |
+| `IMA2_GROK_PROXY_HOST` | `127.0.0.1` | 번들 progrok 프록시 host |
+| `IMA2_GROK_PROXY_PORT` | `18645` | 번들 progrok 프록시 port |
+| `IMA2_NO_GROK_PROXY` | — | `1`이면 progrok 자동 시작 비활성화 |
+| `IMA2_GROK_PLANNER_MODEL` | `grok-4.3` | 최종 이미지 호출 전 Grok 검색/planner 모델 |
+| `IMA2_GROK_IMAGE_MODEL_DEFAULT` | `grok-imagine-image` | 기본 Grok 이미지 모델 |
 | `IMA2_LOG_LEVEL` | `warn` | 일반 `serve`는 `warn`, dev 모드는 `debug`. `debug`, `info`, `warn`, `error`, `silent` 지원 |
 | `IMA2_INFLIGHT_TERMINAL_TTL_MS` | `30000` | 디버그용 최근 작업 보존 시간 |
-| `OPENAI_API_KEY` | — | 보조 기능용 API 키. 이미지 생성용은 아님 |
+| `OPENAI_API_KEY` | — | `provider: "api"` Responses 이미지 경로와 보조 기능용 API 키 |
 
 ### 로그 모드
 

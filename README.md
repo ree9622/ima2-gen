@@ -16,7 +16,7 @@
 
 `ima2-gen` is a local image generation studio for people who want the ChatGPT/Codex image workflow in a small desktop-like web app.
 
-Run it with `npx`, sign in with Codex OAuth, type a prompt, and keep iterating with history, references, node branches, multimode batches, and Canvas Mode cleanup. No OpenAI API key is required for the default path, but API-key generation is also supported when configured.
+Run it with `npx`, sign in with Codex OAuth, type a prompt, and keep iterating with history, references, node branches, multimode batches, and Canvas Mode cleanup. No OpenAI API key is required for the default path, but API-key generation and bundled Grok generation are also supported when configured.
 
 ![ima2-gen classic generation screen with prompt composer, generated image, compact model label, and result metadata.](assets/screenshots/classic-generate-light.png)
 
@@ -63,13 +63,15 @@ persists, reboot and run the update before starting ima2 again.
 
 ## Provider Paths
 
-Image generation can run through either the local Codex/ChatGPT OAuth path or a configured OpenAI API key.
+Image generation can run through the local Codex/ChatGPT OAuth path, a configured OpenAI API key, or the bundled Grok provider.
 
 - `provider: "oauth"` uses the local Codex OAuth proxy.
 - `provider: "api"` calls the OpenAI Responses API with the hosted `image_generation` tool.
+- `provider: "grok"` starts bundled `progrok` on `127.0.0.1:18645`, runs mandatory xAI Web Search plus a `grok-4.3` planner pass, then calls xAI Images API through the local proxy.
 - API-key generation supports classic generate, edit, mask-guided edit, multimode, and node generation.
+- Grok generation supports Classic, Node, and Agent flows. If a Classic reference, Node parent image, or Agent current image is present, ima2 switches the final Grok call to xAI image edit so image-to-image context is preserved.
 
-If no provider is specified, the app keeps the current OAuth/default behavior. API-key generation defaults to `gpt-5.4-mini`, `low` reasoning, and `1024x1024` unless the request passes validated model, reasoning, size, or web-search options.
+If no provider is specified, the app keeps the current OAuth/default behavior. API-key generation defaults to `gpt-5.4-mini`, `low` reasoning, and `1024x1024` unless the request passes validated model, reasoning, size, or web-search options. Grok defaults to `grok-imagine-image`; `quality: "high"` promotes the final image call to `grok-imagine-image-quality`.
 
 ![Settings workspace showing OAuth active and API key provider available.](assets/screenshots/settings-oauth-generation.png)
 
@@ -208,6 +210,13 @@ environment variables > ~/.ima2/config.json > built-in defaults
 | `IMA2_API_REASONING_EFFORT` | `low` | Default reasoning effort for `provider: "api"` |
 | `IMA2_API_IMAGE_SIZE` | `1024x1024` | Default size for `provider: "api"` |
 | `IMA2_API_ALLOW_WEB_SEARCH` | `true` | Toggle web search for `provider: "api"` |
+| `IMA2_GROK_PROXY_HOST` | `127.0.0.1` | Host for the bundled progrok proxy |
+| `IMA2_GROK_PROXY_PORT` | `18645` | Port for the bundled progrok proxy |
+| `IMA2_NO_GROK_PROXY` | — | Set `1` to disable automatic progrok startup |
+| `IMA2_GROK_PLANNER_MODEL` | `grok-4.3` | Grok search/planner model before the final Images API call |
+| `IMA2_GROK_PLANNER_TIMEOUT_MS` | `60000` | Timeout for Grok search and planner calls |
+| `IMA2_GROK_IMAGE_MODEL_DEFAULT` | `grok-imagine-image` | Default final Grok image model |
+| `IMA2_GROK_GENERATION_TIMEOUT_MS` | `120000` | Timeout for the final Grok Images API call |
 | `IMA2_OAUTH_MASKED_EDIT_ENABLED` | `false` | Opt-in feature flag for masked-edit requests on the OAuth path (#31, groundwork only) |
 
 ### Logging modes

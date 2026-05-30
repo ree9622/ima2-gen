@@ -13,6 +13,7 @@ import { dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { onShutdown } from "./bin/lib/platform.js";
 import { ensureDefaultSession } from "./lib/sessionStore.js";
+import { startGrokProxy } from "./lib/grokProxyLauncher.js";
 import { startOAuthProxy } from "./lib/oauthLauncher.js";
 import { migrateGeneratedStorage } from "./lib/storageMigration.js";
 import { purgeStaleJobs } from "./lib/inflight.js";
@@ -216,11 +217,20 @@ export async function startServer(overrides: StartServerOverrides = {}) {
   if (overrides.oauthChild !== undefined || !ctx.config.oauth.autoStart) {
     ctx.markOAuthReady({ url: ctx.oauthUrl, port: ctx.oauthPort });
   }
+  const grokChild = ctx.config.grokProvider.autoStart
+    ? startGrokProxy({
+        host: ctx.config.grokProvider.proxyHost,
+        port: ctx.config.grokProvider.proxyPort,
+        restartDelayMs: ctx.config.grokProvider.restartDelayMs,
+      })
+    : null;
 
   onShutdown(() => {
     unadvertise(ctx);
     try { oauthChild?.stop?.(); } catch {}
     try { oauthChild?.kill?.(); } catch {}
+    try { grokChild?.stop?.(); } catch {}
+    try { grokChild?.kill?.(); } catch {}
   });
   process.on("exit", () => unadvertise(ctx));
 
@@ -234,7 +244,7 @@ export async function startServer(overrides: StartServerOverrides = {}) {
   ctx.serverActualPort = getServerPort(server) || ctx.config.server.port;
   ctx.serverUrl = `http://${runtimeHostUrl(ctx.config.server.host)}:${ctx.serverActualPort}`;
   console.log(`Image Gen running at ${ctx.serverUrl}`);
-  console.log(`Provider policy: OAuth and API-key Responses providers. OAuth proxy port ${ctx.oauthPort}.`);
+  console.log(`Provider policy: OAuth, API-key Responses, and Grok Images providers. OAuth proxy port ${ctx.oauthPort}; Grok proxy port ${ctx.config.grokProvider.proxyPort}.`);
   advertise(ctx);
   try {
     const s = ensureDefaultSession();

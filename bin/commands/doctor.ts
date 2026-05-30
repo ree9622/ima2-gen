@@ -30,7 +30,7 @@ function loadConfig() {
 }
 
 function missingRuntimeDeps() {
-  const deps = ["express", "better-sqlite3", "openai", "openai-oauth"];
+  const deps = ["express", "better-sqlite3", "openai", "openai-oauth", "progrok/package.json"];
   return deps.filter((dep) => {
     try {
       requireFromRoot.resolve(dep);
@@ -38,7 +38,7 @@ function missingRuntimeDeps() {
     } catch {
       return true;
     }
-  });
+  }).map((dep) => dep === "progrok/package.json" ? "progrok" : dep);
 }
 
 function valueAfter(args: string[], name: string) {

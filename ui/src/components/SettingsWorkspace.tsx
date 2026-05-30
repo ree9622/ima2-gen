@@ -59,6 +59,7 @@ export function SettingsWorkspace() {
   const openReadinessPopup = useAppStore((s) => s.openReadinessPopup);
   const galleryDefaultScope = useAppStore((s) => s.galleryDefaultScope);
   const setGalleryDefaultScope = useAppStore((s) => s.setGalleryDefaultScope);
+  const provider = useAppStore((s) => s.provider);
   const workspaceRef = useRef<HTMLElement | null>(null);
   const unlockTimerRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
@@ -215,24 +216,35 @@ export function SettingsWorkspace() {
                   <ImageModelSelect variant="settings" />
                 </div>
               </article>
-              <article className="settings-row">
-                <div className="settings-row__copy">
-                  <h4>{t("settings.reasoning.title")}</h4>
-                  <p>{t("settings.reasoning.body")}</p>
-                </div>
-                <div className="settings-row__control">
-                  <ReasoningEffortSelect />
-                </div>
-              </article>
-              <article className="settings-row">
-                <div className="settings-row__copy">
-                  <h4>{t("settings.webSearch.title")}</h4>
-                  <p>{t("settings.webSearch.body")}</p>
-                </div>
-                <div className="settings-row__control">
-                  <WebSearchToggle />
-                </div>
-              </article>
+              {provider === "grok" ? (
+                <article className="settings-row">
+                  <div className="settings-row__copy">
+                    <h4>{t("settings.grokCompatibility.title")}</h4>
+                    <p>{t("settings.grokCompatibility.body")}</p>
+                  </div>
+                </article>
+              ) : (
+                <>
+                  <article className="settings-row">
+                    <div className="settings-row__copy">
+                      <h4>{t("settings.reasoning.title")}</h4>
+                      <p>{t("settings.reasoning.body")}</p>
+                    </div>
+                    <div className="settings-row__control">
+                      <ReasoningEffortSelect />
+                    </div>
+                  </article>
+                  <article className="settings-row">
+                    <div className="settings-row__copy">
+                      <h4>{t("settings.webSearch.title")}</h4>
+                      <p>{t("settings.webSearch.body")}</p>
+                    </div>
+                    <div className="settings-row__control">
+                      <WebSearchToggle />
+                    </div>
+                  </article>
+                </>
+              )}
               <article className="settings-row">
                 <div className="settings-row__copy">
                   <h4>{t("settings.gallery.defaultScopeTitle")}</h4>

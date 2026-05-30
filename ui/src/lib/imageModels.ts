@@ -1,4 +1,4 @@
-import type { ImageModel, UnsupportedImageModel } from "../types";
+import type { ImageModel, OpenAIImageModel, Provider, UnsupportedImageModel } from "../types";
 
 export const DEFAULT_IMAGE_MODEL: ImageModel = "gpt-5.4-mini";
 export const IMAGE_MODEL_STORAGE_KEY = "ima2.imageModel";
@@ -11,7 +11,18 @@ export const IMAGE_MODEL_OPTIONS: Array<{
   { value: "gpt-5.4-mini", shortLabel: "5.4m", fullLabelKey: "settings.imageModel.gpt54Mini" },
   { value: "gpt-5.4", shortLabel: "5.4", fullLabelKey: "settings.imageModel.gpt54" },
   { value: "gpt-5.5", shortLabel: "5.5", fullLabelKey: "settings.imageModel.gpt55" },
+  { value: "grok-imagine-image", shortLabel: "grok", fullLabelKey: "settings.imageModel.grokImagine" },
+  { value: "grok-imagine-image-quality", shortLabel: "grok+", fullLabelKey: "settings.imageModel.grokImagineQuality" },
 ];
+
+export const OPENAI_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter(
+  (option): option is { value: OpenAIImageModel; shortLabel: string; fullLabelKey: string } =>
+    !option.value.startsWith("grok-"),
+);
+
+export const GROK_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter((option) =>
+  option.value.startsWith("grok-"),
+);
 
 export const UNSUPPORTED_IMAGE_MODELS: Array<{
   value: UnsupportedImageModel;
@@ -22,6 +33,14 @@ export const UNSUPPORTED_IMAGE_MODELS: Array<{
 
 export function isImageModel(value: unknown): value is ImageModel {
   return IMAGE_MODEL_OPTIONS.some((option) => option.value === value);
+}
+
+export function isGrokImageModel(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith("grok-");
+}
+
+export function getImageModelOptionsForProvider(provider: Provider) {
+  return provider === "grok" ? GROK_IMAGE_MODEL_OPTIONS : OPENAI_IMAGE_MODEL_OPTIONS;
 }
 
 export function getImageModelShortLabel(value: string | null | undefined): string | null {

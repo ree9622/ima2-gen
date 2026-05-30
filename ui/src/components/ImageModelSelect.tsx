@@ -2,7 +2,7 @@ import type { ImageModel } from "../types";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IMAGE_MODEL_OPTIONS, UNSUPPORTED_IMAGE_MODELS } from "../lib/imageModels";
+import { getImageModelOptionsForProvider, UNSUPPORTED_IMAGE_MODELS } from "../lib/imageModels";
 import { REASONING_EFFORT_OPTIONS, type ReasoningEffort } from "../lib/reasoning";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
@@ -21,13 +21,16 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const imageModel = useAppStore((s) => s.imageModel);
   const setImageModel = useAppStore((s) => s.setImageModel);
+  const provider = useAppStore((s) => s.provider);
   const reasoningEffort = useAppStore((s) => s.reasoningEffort);
   const setReasoningEffort = useAppStore((s) => s.setReasoningEffort);
   const id = variant === "settings" ? "settings-image-model" : "sidebar-image-model";
-  const current = IMAGE_MODEL_OPTIONS.find((option) => option.value === imageModel)
-    ?? IMAGE_MODEL_OPTIONS[0];
+  const modelOptions = getImageModelOptionsForProvider(provider);
+  const current = modelOptions.find((option) => option.value === imageModel)
+    ?? modelOptions[0];
   const currentReasoning = REASONING_EFFORT_OPTIONS.find((option) => option.value === reasoningEffort)
     ?? REASONING_EFFORT_OPTIONS[0];
+  const isGrok = provider === "grok";
 
   const onChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setImageModel(event.target.value as ImageModel);
@@ -129,13 +132,13 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   useEffect(() => {
     if (variant !== "sidebar" || !open) return;
 
-    const activeIndex = IMAGE_MODEL_OPTIONS.findIndex((option) => option.value === imageModel);
+    const activeIndex = modelOptions.findIndex((option) => option.value === imageModel);
     const frame = requestAnimationFrame(() => {
       focusMenuItem(activeIndex >= 0 ? activeIndex : 0);
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [imageModel, open, variant]);
+  }, [imageModel, modelOptions, open, variant]);
 
   if (variant === "sidebar") {
     return (
@@ -147,15 +150,21 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
           className="image-model-select__trigger"
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={t("sidebar.quickSettingsAria", {
-            model: current.shortLabel,
-            effort: currentReasoning.shortLabel,
-          })}
+          aria-label={isGrok
+            ? t("sidebar.quickSettingsModelOnlyAria", { model: current.shortLabel })
+            : t("sidebar.quickSettingsAria", {
+              model: current.shortLabel,
+              effort: currentReasoning.shortLabel,
+            })}
           onClick={() => setOpen((next) => !next)}
         >
           <span className="image-model-select__trigger-model">{current.shortLabel}</span>
-          <span className="image-model-select__trigger-separator" aria-hidden="true">·</span>
-          <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
+          {isGrok ? null : (
+            <>
+              <span className="image-model-select__trigger-separator" aria-hidden="true">·</span>
+              <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
+            </>
+          )}
         </button>
         {open ? createPortal(
           <div
@@ -168,7 +177,7 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
           >
             <div className="image-model-select__section" role="group" aria-label={t("sidebar.imageModelLabel")}>
               <div className="image-model-select__section-title">{t("sidebar.imageModelLabel")}</div>
-              {IMAGE_MODEL_OPTIONS.map((option, index) => (
+              {modelOptions.map((option, index) => (
                 <button
                   key={option.value}
                   ref={(node) => {
@@ -189,29 +198,31 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
                 </button>
               ))}
             </div>
-            <div className="image-model-select__section" role="group" aria-label={t("sidebar.reasoningLabel")}>
-              <div className="image-model-select__section-title">{t("sidebar.reasoningLabel")}</div>
-              {REASONING_EFFORT_OPTIONS.map((option, index) => (
-                <button
-                  key={option.value}
-                  ref={(node) => {
-                    menuItemRefs.current[IMAGE_MODEL_OPTIONS.length + index] = node;
-                  }}
-                  type="button"
-                  className={`image-model-select__item${option.value === reasoningEffort ? " is-active" : ""}`}
-                  role="menuitemradio"
-                  aria-checked={option.value === reasoningEffort}
-                  tabIndex={-1}
-                  onClick={() => {
-                    setReasoningEffort(option.value as ReasoningEffort);
-                    setOpen(false);
-                  }}
-                >
-                  <span>{option.shortLabel}</span>
-                  <small>{t(option.fullLabelKey)}</small>
-                </button>
-              ))}
-            </div>
+            {isGrok ? null : (
+              <div className="image-model-select__section" role="group" aria-label={t("sidebar.reasoningLabel")}>
+                <div className="image-model-select__section-title">{t("sidebar.reasoningLabel")}</div>
+                {REASONING_EFFORT_OPTIONS.map((option, index) => (
+                  <button
+                    key={option.value}
+                    ref={(node) => {
+                      menuItemRefs.current[modelOptions.length + index] = node;
+                    }}
+                    type="button"
+                    className={`image-model-select__item${option.value === reasoningEffort ? " is-active" : ""}`}
+                    role="menuitemradio"
+                    aria-checked={option.value === reasoningEffort}
+                    tabIndex={-1}
+                    onClick={() => {
+                      setReasoningEffort(option.value as ReasoningEffort);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{option.shortLabel}</span>
+                    <small>{t(option.fullLabelKey)}</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>,
           document.body,
         ) : null}
@@ -222,12 +233,12 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   return (
     <div className="image-model-select image-model-select--settings">
       <select id={id} value={imageModel} onChange={onChange}>
-        {IMAGE_MODEL_OPTIONS.map((option) => (
+        {modelOptions.map((option) => (
           <option key={option.value} value={option.value}>
             {t(option.fullLabelKey)}
           </option>
         ))}
-        {UNSUPPORTED_IMAGE_MODELS.map((option) => (
+        {provider === "grok" ? null : UNSUPPORTED_IMAGE_MODELS.map((option) => (
           <option key={option.value} value={option.value} disabled>
             {t(option.fullLabelKey)}
           </option>

@@ -252,6 +252,7 @@ function showHelp() {
     billing        API usage / quota
     providers      Configured providers
     oauth <sub>    OAuth proxy status              (ima2 oauth --help)
+    grok <sub>     Bundled progrok login/status     (ima2 grok --help)
     config <sub>   Config get/set/ls/path/rm       (ima2 config --help)
     defaults <sub> Inspect/change model defaults   (ima2 defaults --help)
     capabilities   Agent capability metadata       (ima2 capabilities --help)
@@ -294,7 +295,7 @@ if (args.includes("-v") || args.includes("--version")) {
 }
 
 if ((!command || args.includes("-h") || args.includes("--help"))
-    && !["doctor", "gen", "edit", "ls", "show", "ps", "cancel", "session", "history", "prompt", "multimode", "node", "annotate", "canvas-versions", "metadata", "comfy", "cardnews", "inflight", "storage", "billing", "providers", "oauth", "config", "defaults", "capabilities", "skill", "ping"].includes(command)) {
+    && !["doctor", "gen", "edit", "ls", "show", "ps", "cancel", "session", "history", "prompt", "multimode", "node", "annotate", "canvas-versions", "metadata", "comfy", "cardnews", "inflight", "storage", "billing", "providers", "oauth", "grok", "config", "defaults", "capabilities", "skill", "ping"].includes(command)) {
   showHelp();
   process.exit(command ? 0 : 1);
 }
@@ -355,6 +356,7 @@ switch (command) {
   case "defaults":
   case "capabilities":
   case "skill":
+  case "grok":
   case "ping": {
     const { setCliVersion } = await import("./lib/client.js");
     setCliVersion(pkg.version);

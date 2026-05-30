@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
@@ -102,6 +102,9 @@ test("packaged tarball installs, serves core status routes, and keeps Card News 
 
     const packageRoot = join(projectDir, "node_modules", "ima2-gen");
     const cliPath = join(packageRoot, "bin", "ima2.js");
+    const progrokBin = join(packageRoot, "node_modules", ".bin", process.platform === "win32" ? "progrok.cmd" : "progrok");
+    assert.equal(existsSync(progrokBin), true, "packaged install should include bundled progrok bin");
+
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, "config.json"), JSON.stringify({ provider: "oauth" }));
     const env = {
@@ -113,7 +116,14 @@ test("packaged tarball installs, serves core status routes, and keeps Card News 
       IMA2_DB_PATH: join(configDir, "sessions.db"),
       IMA2_ADVERTISE_FILE: join(configDir, "server.json"),
       IMA2_NO_OAUTH_PROXY: "1",
+      IMA2_NO_GROK_PROXY: "1",
     };
+
+    const grokHelp = run(process.execPath, [cliPath, "grok", "--help"], { cwd: projectDir, env });
+    assert.match(grokHelp.stdout, /bundled progrok runtime/);
+
+    const progrokHelp = run(progrokBin, ["--help"], { cwd: projectDir, env });
+    assert.match(progrokHelp.stdout, /Usage: progrok/);
 
     const doctor = run(process.execPath, [cliPath, "doctor"], { cwd: projectDir, env });
     assert.match(doctor.stdout, /Doctor/);

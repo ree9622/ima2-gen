@@ -66,6 +66,7 @@ import {
 } from "../lib/size";
 import {
   DEFAULT_IMAGE_MODEL,
+  isGrokImageModel,
   isImageModel,
 } from "../lib/imageModels";
 import {
@@ -2964,9 +2965,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setProvider: (provider) => {
     saveGenerationDefaultsPatch({ provider });
     const currentModel = get().imageModel;
-    if (provider === "grok" && !currentModel.startsWith("grok-")) {
-      set({ provider, imageModel: "grok-imagine-image" as any });
-    } else if (provider !== "grok" && currentModel.startsWith("grok-")) {
+    if (provider === "grok" && !isGrokImageModel(currentModel)) {
+      const grokModel = "grok-imagine-image";
+      saveImageModel(grokModel);
+      set({ provider, imageModel: grokModel });
+    } else if (provider !== "grok" && isGrokImageModel(currentModel)) {
       set({ provider, imageModel: DEFAULT_IMAGE_MODEL });
       saveImageModel(DEFAULT_IMAGE_MODEL);
     } else {

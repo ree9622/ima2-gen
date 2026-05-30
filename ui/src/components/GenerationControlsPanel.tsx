@@ -4,6 +4,7 @@ import { OptionGroup } from "./OptionGroup";
 import { SizePicker } from "./SizePicker";
 import { CountPicker } from "./CountPicker";
 import { CostEstimate } from "./CostEstimate";
+import { ProviderSelect } from "./ProviderSelect";
 import type { Format, Moderation, Quality } from "../types";
 
 const FORMAT_ITEMS = [
@@ -14,6 +15,7 @@ const FORMAT_ITEMS = [
 
 export function GenerationControlsPanel() {
   const { t } = useI18n();
+  const provider = useAppStore((s) => s.provider);
   const quality = useAppStore((s) => s.quality);
   const setQuality = useAppStore((s) => s.setQuality);
   const format = useAppStore((s) => s.format);
@@ -24,6 +26,8 @@ export function GenerationControlsPanel() {
   const setMultimode = useAppStore((s) => s.setMultimode);
   const uiMode = useAppStore((s) => s.uiMode);
   const showMultimodeControls = uiMode === "classic";
+  const grokAllowed = uiMode === "classic";
+  const isGrok = provider === "grok";
   const qualityItems = [
     { value: "low" as const, label: t("quality.lowLabel"), sub: t("quality.lowSub") },
     { value: "medium" as const, label: t("quality.mediumLabel"), sub: t("quality.mediumSub") },
@@ -41,28 +45,39 @@ export function GenerationControlsPanel() {
 
   return (
     <div className="right-panel-settings" role="tabpanel">
+      <ProviderSelect allowGrok={grokAllowed} />
+      {isGrok ? (
+        <div className="provider-compat-note" role="note">
+          <strong>{t("provider.grokCompatTitle")}</strong>
+          <span>{t("provider.grokCompatBody")}</span>
+        </div>
+      ) : null}
       <OptionGroup<Quality>
-        title={t("quality.title")}
+        title={isGrok ? t("quality.grokTitle") : t("quality.title")}
         items={qualityItems}
         value={quality}
         onChange={setQuality}
       />
-      <SizePicker />
-      <OptionGroup<Format>
-        title={t("format.title")}
-        items={FORMAT_ITEMS}
-        value={format}
-        onChange={setFormat}
-      />
-      <OptionGroup<Moderation>
-        title={t("moderation.title")}
-        items={moderationItems}
-        value={moderation}
-        onChange={setModeration}
-      />
-      <p className="option-help">
-        {t("moderation.explain")}
-      </p>
+      {isGrok ? null : (
+        <>
+          <SizePicker />
+          <OptionGroup<Format>
+            title={t("format.title")}
+            items={FORMAT_ITEMS}
+            value={format}
+            onChange={setFormat}
+          />
+          <OptionGroup<Moderation>
+            title={t("moderation.title")}
+            items={moderationItems}
+            value={moderation}
+            onChange={setModeration}
+          />
+          <p className="option-help">
+            {t("moderation.explain")}
+          </p>
+        </>
+      )}
       {showMultimodeControls && (
         <div className="option-group multimode-toggle">
           <button

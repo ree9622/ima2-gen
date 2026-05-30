@@ -120,6 +120,7 @@
   },
   "quality": {
     "title": "품질",
+    "grokTitle": "Grok 품질",
     "lowLabel": "낮음",
     "lowSub": "빠름",
     "mediumLabel": "중간",
@@ -204,6 +205,8 @@
     "model": "모델",
     "reasoning": "추론",
     "webSearch": "웹 검색",
+    "grokApi": "Grok API",
+    "grokApiBody": "Images API, JPEG 출력",
     "openAccount": "계정 설정 열기"
   },
   "generate": {
@@ -502,6 +505,11 @@
     "grokNoImageModel": "Grok 이미지 생성 모델을 찾을 수 없습니다.",
     "grokNotReady": "Grok을 사용할 수 없습니다.",
     "grokOfflineHint": "터미널에서 `progrok proxy`를 실행한 후 새로고침하세요.",
+    "grokClassicOnly": "Grok 이미지 생성은 클래식 모드에서만 사용할 수 있습니다.",
+    "grokClassicOnlyHint": "Grok을 쓰려면 클래식 모드로 전환하세요.",
+    "grokCompatTitle": "Grok 이미지 API",
+    "grokCompatBody": "크기, 출력 포맷, 모더레이션, 추론, 웹 검색은 xAI 쪽에서 처리됩니다. High 품질은 quality 이미지 모델을 사용합니다.",
+    "settingsBody": "앞으로 생성 요청에 사용할 공급자를 선택합니다.",
     "availableTitle": "{name} 사용 가능",
     "availableAria": "{name}: 사용 가능",
     "unavailableAria": "{name}: 사용 불가",
@@ -790,6 +798,7 @@
     "imageModelLabel": "모델",
     "imageModelAria": "이미지 모델 선택",
     "quickSettingsAria": "모델과 추론 강도 선택. 현재 모델 {model}, 추론 {effort}",
+    "quickSettingsModelOnlyAria": "이미지 모델 선택. 현재 모델 {model}",
     "quickSettingsMenu": "모델 및 추론 빠른 설정",
     "reasoningLabel": "추론",
     "nodeModeHint": "노드 모드에서는 노드를 눌러 프롬프트를 수정한 뒤 생성하세요. 오른쪽 패널의 설정 (품질/크기)은 새로 만드는 모든 결과에 적용됩니다."
@@ -842,16 +851,30 @@
       "apiDisabled": "사용 불가",
       "apiReady": "준비됨",
       "apiUnavailable": "사용 불가",
-      "apiUnknown": "상태 불명"
+      "apiUnknown": "상태 불명",
+      "grokEyebrow": "로컬 xAI 프록시",
+      "grokTitle": "Grok 이미지 공급자",
+      "grokBody": "설정된 로컬 포트의 progrok을 통해 xAI Images API 생성을 사용합니다.",
+      "status": {
+        "ready": "준비됨",
+        "authRequired": "로그인 필요",
+        "starting": "시작 중",
+        "offline": "오프라인",
+        "noImageModel": "이미지 모델 없음",
+        "error": "오류",
+        "checking": "확인 중"
+      }
     },
     "imageModel": {
       "title": "이미지 모델",
-      "body": "앞으로 생성 요청에 사용할 OAuth 이미지 모델을 선택합니다.",
+      "body": "앞으로 생성 요청에 사용할 이미지 모델을 선택합니다. 목록은 선택한 공급자에 맞춰 표시됩니다.",
       "gpt54Mini": "GPT-5.4 Mini",
       "gpt54": "GPT-5.4",
       "gpt55": "GPT-5.5",
+      "grokImagine": "Grok Imagine",
+      "grokImagineQuality": "Grok Imagine Quality",
       "gpt53CodexSpark": "GPT-5.3 Codex Spark — 이미지 생성 미지원",
-      "unsupportedHelp": "기본값은 GPT-5.4 Mini입니다. GPT-5.3 Codex Spark는 OAuth 모델 상태에 보일 수 있지만 image_generation 도구를 지원하지 않습니다."
+      "unsupportedHelp": "목록은 선택한 공급자에 맞춰 표시됩니다. Grok은 xAI Images API를, OAuth/API 키 공급자는 OpenAI Responses 이미지 생성을 사용합니다."
     },
     "reasoning": {
       "title": "추론 강도",
@@ -867,6 +890,10 @@
       "body": "실존 인물, 브랜드, 제품, 장소, 최신 이벤트를 생성 전에 실시간 검색해서 반영합니다.",
       "on": "검색 켬",
       "off": "검색 끔"
+    },
+    "grokCompatibility": {
+      "title": "Grok 호환성",
+      "body": "Grok 이미지 생성은 xAI Images API를 사용합니다. 추론과 웹 검색 설정은 OAuth/API 키 공급자에서만 사용됩니다."
     },
     "gallery": {
       "defaultScopeTitle": "기본 갤러리 보기",

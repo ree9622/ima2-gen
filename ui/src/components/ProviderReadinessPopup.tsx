@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n";
+import { IMAGE_MODEL_OPTIONS } from "../lib/imageModels";
 import { useAppStore } from "../store/useAppStore";
 import { useProviderAvailability } from "./ProviderSelect";
 
@@ -12,6 +13,8 @@ export function ProviderReadinessPopup() {
   const reasoningEffort = useAppStore((s) => s.reasoningEffort);
   const webSearchEnabled = useAppStore((s) => s.webSearchEnabled);
   const availability = useProviderAvailability();
+  const isGrok = provider === "grok";
+  const imageModelOption = IMAGE_MODEL_OPTIONS.find((option) => option.value === imageModel);
 
   if (!open) return null;
   const current = availability[provider];
@@ -48,16 +51,25 @@ export function ProviderReadinessPopup() {
             </div>
             <div>
               <dt>{t("readiness.model")}</dt>
-              <dd>{imageModel}</dd>
+              <dd>{imageModelOption ? t(imageModelOption.fullLabelKey) : imageModel}</dd>
             </div>
-            <div>
-              <dt>{t("readiness.reasoning")}</dt>
-              <dd>{reasoningEffort}</dd>
-            </div>
-            <div>
-              <dt>{t("readiness.webSearch")}</dt>
-              <dd>{webSearchEnabled ? t("settings.webSearch.on") : t("settings.webSearch.off")}</dd>
-            </div>
+            {isGrok ? (
+              <div>
+                <dt>{t("readiness.grokApi")}</dt>
+                <dd>{t("readiness.grokApiBody")}</dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt>{t("readiness.reasoning")}</dt>
+                  <dd>{reasoningEffort}</dd>
+                </div>
+                <div>
+                  <dt>{t("readiness.webSearch")}</dt>
+                  <dd>{webSearchEnabled ? t("settings.webSearch.on") : t("settings.webSearch.off")}</dd>
+                </div>
+              </>
+            )}
           </dl>
         </div>
         <div className="modal__actions">

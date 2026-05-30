@@ -120,6 +120,7 @@
   },
   "quality": {
     "title": "Quality",
+    "grokTitle": "Grok quality",
     "lowLabel": "Low",
     "lowSub": "Fast",
     "mediumLabel": "Medium",
@@ -204,6 +205,8 @@
     "model": "Model",
     "reasoning": "Reasoning",
     "webSearch": "Web search",
+    "grokApi": "Grok API",
+    "grokApiBody": "Images API, JPEG output",
     "openAccount": "Open account settings"
   },
   "generate": {
@@ -502,6 +505,11 @@
     "grokNoImageModel": "No Grok image generation model found.",
     "grokNotReady": "Grok is not available.",
     "grokOfflineHint": "Run `progrok proxy` in your terminal, then refresh this page.",
+    "grokClassicOnly": "Grok image generation is available in Classic mode only.",
+    "grokClassicOnlyHint": "Switch to Classic mode before using Grok.",
+    "grokCompatTitle": "Grok image API",
+    "grokCompatBody": "Size, output format, moderation, reasoning, and web search are handled by xAI. High quality uses the quality image model.",
+    "settingsBody": "Choose which provider future generation requests use.",
     "availableTitle": "{name} available",
     "availableAria": "{name}: available",
     "unavailableAria": "{name}: unavailable",
@@ -790,6 +798,7 @@
     "imageModelLabel": "Model",
     "imageModelAria": "Choose image model",
     "quickSettingsAria": "Choose model and reasoning effort. Current model {model}, reasoning {effort}",
+    "quickSettingsModelOnlyAria": "Choose image model. Current model {model}",
     "quickSettingsMenu": "Model and reasoning quick settings",
     "reasoningLabel": "Reasoning",
     "nodeModeHint": "In node mode, click a node to edit its prompt and generate. Settings on the right panel (quality/size) apply to every new result."
@@ -842,16 +851,30 @@
       "apiDisabled": "Unavailable",
       "apiReady": "Ready",
       "apiUnavailable": "Unavailable",
-      "apiUnknown": "Status unknown"
+      "apiUnknown": "Status unknown",
+      "grokEyebrow": "Local xAI proxy",
+      "grokTitle": "Grok image provider",
+      "grokBody": "Uses progrok at the configured local port for xAI Images API generation.",
+      "status": {
+        "ready": "Ready",
+        "authRequired": "Login required",
+        "starting": "Starting",
+        "offline": "Offline",
+        "noImageModel": "No image model",
+        "error": "Error",
+        "checking": "Checking"
+      }
     },
     "imageModel": {
       "title": "Image model",
-      "body": "Choose the OAuth model used for future image generations.",
+      "body": "Choose the image model used for future generations. The list follows the selected provider.",
       "gpt54Mini": "GPT-5.4 Mini",
       "gpt54": "GPT-5.4",
       "gpt55": "GPT-5.5",
+      "grokImagine": "Grok Imagine",
+      "grokImagineQuality": "Grok Imagine Quality",
       "gpt53CodexSpark": "GPT-5.3 Codex Spark — unsupported for images",
-      "unsupportedHelp": "Default is GPT-5.4 Mini. GPT-5.3 Codex Spark may appear in OAuth model status, but it does not support the image_generation tool."
+      "unsupportedHelp": "The list follows the selected provider. Grok uses xAI's Images API; OAuth and API key providers use OpenAI Responses image generation."
     },
     "reasoning": {
       "title": "Reasoning effort",
@@ -867,6 +890,10 @@
       "body": "Use live search before generation for real people, brands, products, places, and recent events.",
       "on": "Search on",
       "off": "Search off"
+    },
+    "grokCompatibility": {
+      "title": "Grok compatibility",
+      "body": "Grok image generation uses xAI's Images API. Reasoning and web search settings are only used by OAuth and API key providers."
     },
     "gallery": {
       "defaultScopeTitle": "Default gallery view",

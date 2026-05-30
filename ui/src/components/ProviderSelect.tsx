@@ -58,7 +58,11 @@ export function useProviderAvailability(): Record<Provider, ProviderAvailability
   };
 }
 
-export function ProviderSelect() {
+type ProviderSelectProps = {
+  allowGrok?: boolean;
+};
+
+export function ProviderSelect({ allowGrok = true }: ProviderSelectProps) {
   const { t } = useI18n();
   const provider = useAppStore((s) => s.provider);
   const setProvider = useAppStore((s) => s.setProvider);
@@ -71,8 +75,15 @@ export function ProviderSelect() {
     { value: "grok", label: "Grok" },
   ];
 
+  const providerAvailability = {
+    ...availability,
+    grok: allowGrok
+      ? availability.grok
+      : { ok: false, reason: t("provider.grokClassicOnly"), hint: t("provider.grokClassicOnlyHint") },
+  };
+
   const handleClick = (p: Provider) => {
-    if (availability[p].ok) {
+    if (providerAvailability[p].ok) {
       setProvider(p);
     } else {
       setBlocked(p);
@@ -80,7 +91,7 @@ export function ProviderSelect() {
   };
 
   const blockedInfo = blocked
-    ? { label: PROVIDERS.find((x) => x.value === blocked)!.label, ...availability[blocked] }
+    ? { label: PROVIDERS.find((x) => x.value === blocked)!.label, ...providerAvailability[blocked] }
     : null;
 
   return (
@@ -89,14 +100,14 @@ export function ProviderSelect() {
       <div className="provider-row">
         {PROVIDERS.map((p) => {
           const selected = provider === p.value;
-          const ok = availability[p.value].ok;
+          const ok = providerAvailability[p.value].ok;
           return (
             <button
               key={p.value}
               type="button"
               className={`provider-pill${selected ? " selected" : ""}`}
               onClick={() => handleClick(p.value)}
-              title={ok ? t("provider.availableTitle", { name: p.label }) : availability[p.value].reason}
+              title={ok ? t("provider.availableTitle", { name: p.label }) : providerAvailability[p.value].reason}
               aria-label={ok ? t("provider.availableAria", { name: p.label }) : t("provider.unavailableAria", { name: p.label })}
               aria-pressed={selected}
             >

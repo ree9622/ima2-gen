@@ -1,6 +1,6 @@
 # CLI Reference
 
-Most server routes under `/api/*` have a CLI wrapper; Agent Mode (`/api/agent/*`) and the prompt builder (`POST /api/prompt-builder/chat`) are web-UI-only and have no `ima2` subcommand. The CLI is a thin shell over the local server, so most commands require a running `ima2 serve` (the few exceptions — `serve`, `setup`, `doctor`, `status`, `open`, `reset`, `config`, `skill`, `capabilities`, and local `defaults` inspection — work without a live server).
+Most server routes under `/api/*` have a CLI wrapper; Agent Mode (`/api/agent/*`) and the prompt builder (`POST /api/prompt-builder/chat`) are web-UI-only and have no `ima2` subcommand. The CLI is a thin shell over the local server, so most commands require a running `ima2 serve` (the few exceptions — `serve`, `setup`, `doctor`, `status`, `open`, `reset`, `config`, `grok`, `skill`, `capabilities`, and local `defaults` inspection — work without a live server).
 
 For a quick start, see the [main README](../README.md). For endpoint mapping, see [API.md](API.md).
 
@@ -14,6 +14,7 @@ For a quick start, see the [main README](../README.md). For endpoint mapping, se
 | `ima2 doctor` | Diagnose Node, package, config, and auth |
 | `ima2 doctor image-probe [--json]` | Run live sanitized Responses image probes for `EMPTY_RESPONSE` support |
 | `ima2 open` | Open the web UI in a browser |
+| `ima2 grok login/status/models/proxy` | Manage the bundled progrok runtime used by the Grok provider |
 | `ima2 reset` | Remove saved config |
 
 ## Common flags
@@ -57,11 +58,18 @@ Provider override semantics:
 
 - `api` forces the API-key Responses path and requires a configured API key.
 - `oauth` forces the local OAuth proxy path.
-- `grok` uses the progrok xAI proxy (`127.0.0.1:18645`) and the `/v1/images/generations` endpoint directly. Models: `grok-imagine-image`, `grok-imagine-image-quality`. Size/reasoning/web-search are ignored.
+- `grok` uses the bundled progrok xAI proxy (`127.0.0.1:18645`) and the `/v1/images/generations` endpoint directly. Models: `grok-imagine-image`, `grok-imagine-image-quality`. Size/reasoning/web-search are ignored.
 - `auto` preserves route default behavior and currently resolves to OAuth unless server routing changes.
+
+`ima2 serve` starts the bundled Grok proxy automatically. No separate `progrok`
+install is required. Use `ima2 grok login` once to authorize xAI OAuth, or
+`ima2 grok login --device-code` on a remote shell. Set `IMA2_NO_GROK_PROXY=1`
+only if you want to manage the proxy yourself.
 
 ```bash
 ima2 gen "a poster of a samurai cat" --model gpt-5.4 --provider api --reasoning-effort high
+ima2 grok login
+ima2 gen "a cinematic neon city" --provider grok --model grok-imagine-image-quality
 ima2 edit input.png --prompt "make it rainy" --provider oauth --web-search
 ima2 multimode "two cats playing" --max-images 2 --ref cat.png --mode direct
 ima2 node generate --node n_abc --prompt "add neon lights" --no-stream

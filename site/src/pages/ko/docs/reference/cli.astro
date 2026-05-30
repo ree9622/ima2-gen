@@ -18,7 +18,7 @@ const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
     <code>ima2</code> CLI는 로컬 서버 위의 얇은 셸이라 대부분의 명령은 실행 중인
     <code>ima2 serve</code>가 필요합니다. 예외 — <code>serve</code>, <code>setup</code>,
     <code>doctor</code>, <code>status</code>, <code>open</code>, <code>reset</code>,
-    <code>config</code>, <code>skill</code>, <code>capabilities</code>, 로컬 <code>defaults</code> —
+    <code>config</code>, <code>grok</code>, <code>skill</code>, <code>capabilities</code>, 로컬 <code>defaults</code> —
     는 서버 없이도 동작합니다.
   </p>
 
@@ -32,6 +32,7 @@ const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
       <tr><td><code>ima2 doctor</code></td><td>Node·패키지·설정·인증 진단.</td></tr>
       <tr><td><code>ima2 doctor image-probe [--json]</code></td><td>no-image 지원 번들용 라이브 sanitized Responses 이미지 프로브.</td></tr>
       <tr><td><code>ima2 open</code></td><td>브라우저에서 웹 UI 열기.</td></tr>
+      <tr><td><code>ima2 grok login/status/models/proxy</code></td><td><code>provider: "grok"</code>이 쓰는 번들 progrok 런타임 인증·상태 확인.</td></tr>
       <tr><td><code>ima2 reset</code></td><td>저장된 설정 제거.</td></tr>
     </tbody>
   </table>
@@ -48,13 +49,15 @@ const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
     </tbody>
   </table>
   <p>
-    생성 플래그: <code>--provider &lt;auto|oauth|api&gt;</code>, <code>--reasoning-effort</code>
+    생성 플래그: <code>--provider &lt;auto|oauth|api|grok&gt;</code>, <code>--reasoning-effort</code>
     (none, low, medium, high, xhigh), <code>--web-search</code> / <code>--no-web-search</code>,
     <code>--model</code>, <code>--mode</code>, <code>--moderation</code>,
     <code>--ref &lt;file&gt;</code> (반복 가능, 최대 5), <code>-q low|medium|high</code>,
     <code>-n &lt;count&gt;</code>, <code>-o &lt;file&gt;</code>.
   </p>
   <pre><code>ima2 gen "a poster of a samurai cat" --model gpt-5.4 --provider api --reasoning-effort high
+ima2 grok login
+ima2 gen "a cinematic neon city" --provider grok --model grok-imagine-image-quality
 ima2 edit input.png --prompt "make it rainy" --provider oauth --web-search
 ima2 multimode "two cats playing" --max-images 2 --ref cat.png --mode direct</code></pre>
 
@@ -101,8 +104,8 @@ ima2 multimode "two cats playing" --max-images 2 --ref cat.png --mode direct</co
   <div class="docs-callout docs-callout-info">
     <strong>전체 레퍼런스.</strong> 대부분의 서버 라우트에 CLI 래퍼가 있습니다 — 세션, 그래프, 주석,
     canvas 버전, 프롬프트 라이브러리, 가져오기, Card News 모두 해당하지만, Agent 모드
-    (<code>/api/agent/*</code>)와 prompt builder는 웹 UI 전용입니다. 전체는 <a href={cliMd}>CLI.md</a>를
-    보세요.
+    (<code>/api/agent/*</code>)는 웹 UI 전용입니다. Prompt builder는 <code>ima2 prompt build</code>로
+    사용할 수 있습니다. 전체는 <a href={cliMd}>CLI.md</a>를 보세요.
   </div>
 
   <div class="docs-pagenav">

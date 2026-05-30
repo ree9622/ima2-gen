@@ -29,8 +29,8 @@ const genBody = `{
   <h1>서버 API</h1>
   <p class="lead">
     CLI는 로컬 서버 위의 얇은 셸 — 대부분의 <code>/api/*</code> 라우트에 CLI 래퍼가 있지만, Agent
-    모드와 prompt builder는 웹 UI 전용입니다. 이 페이지는 엔드포인트 그룹을 정리합니다; 전체
-    요청/응답 형태는 <a href={apiMd}>API.md</a>를 보세요.
+    모드는 웹 UI 전용입니다. Prompt builder는 <code>ima2 prompt build</code>로도 사용할 수 있습니다.
+    이 페이지는 엔드포인트 그룹을 정리합니다; 전체 요청/응답 형태는 <a href={apiMd}>API.md</a>를 보세요.
   </p>
 
   <h2>베이스 URL</h2>
@@ -53,11 +53,17 @@ const genBody = `{
   <h4>POST /api/generate — 요청 바디</h4>
   <pre><code>{genBody}</code></pre>
   <p>
-    품질: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api. 권장 모델
-    <code>gpt-5.4</code>; 앱 기본값 <code>gpt-5.4-mini</code>. SSE 라우트는 클라이언트가
+    품질: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api, grok.
+    권장 OpenAI 모델은 <code>gpt-5.4</code>; 앱 기본값은 <code>gpt-5.4-mini</code>입니다.
+    Grok 모델은 <code>grok-imagine-image</code>와 <code>grok-imagine-image-quality</code>입니다.
+    SSE 라우트는 클라이언트가
     <code>Accept: text/event-stream</code>을 보내면 <code>phase</code>, <code>partial</code>,
     <code>done</code>, <code>error</code> 이벤트를 보냅니다.
   </p>
+  <div class="docs-callout docs-callout-warn">
+    Grok video T2V/I2V는 <code>1.1.15</code>에 포함되지 않았습니다. 이 런타임에는
+    <code>/api/video</code> 라우트나 video CLI가 없습니다.
+  </div>
 
   <h2>히스토리</h2>
   <table>
@@ -98,7 +104,7 @@ const genBody = `{
       <tr><td><code>GET · PATCH · DELETE /api/agent/sessions/:id</code></td><td>세션 로드·수정·삭제.</td></tr>
       <tr><td><code>POST /api/agent/sessions/:id/turns</code></td><td>에이전트 턴 실행; 슬래시 명령과 <code>/question</code> 지원.</td></tr>
       <tr><td><code>GET · POST /api/agent/sessions/:id/queue</code></td><td>durable 큐 조회·적재 (<code>/api/agent/queue/:itemId/cancel</code> · <code>retry</code>로 항목 관리).</td></tr>
-      <tr><td><code>POST /api/prompt-builder/chat</code></td><td>UI 내 prompt-builder 어시스턴트 (CLI 없음).</td></tr>
+      <tr><td><code>POST /api/prompt-builder/chat</code></td><td>Prompt-builder 어시스턴트 (<code>ima2 prompt build</code>).</td></tr>
     </tbody>
   </table>
 
@@ -107,6 +113,9 @@ const genBody = `{
     <thead><tr><th>엔드포인트</th><th>비고</th></tr></thead>
     <tbody>
       <tr><td><code>GET /api/health</code></td><td>헬스 체크 (<code>ima2 ping</code>).</td></tr>
+      <tr><td><code>GET /api/providers</code></td><td>프로바이더 가용성과 런타임 포트 (<code>ima2 providers</code>).</td></tr>
+      <tr><td><code>GET /api/oauth/status</code></td><td>OAuth 프록시 상태 (<code>ima2 oauth status</code>).</td></tr>
+      <tr><td><code>GET /api/grok/status</code></td><td>번들 progrok 상태와 xAI 모델 probe (<code>ima2 grok status</code>).</td></tr>
       <tr><td><code>GET /api/storage/status</code></td><td>스토리지 점검.</td></tr>
       <tr><td><code>POST /api/storage/open-generated-dir</code></td><td>OS 파일 매니저에서 생성 디렉터리 열기.</td></tr>
       <tr><td><code>GET /api/inflight</code> · <code>DELETE /api/inflight/:id</code></td><td>진행 중 작업 목록 또는 강제 제거.</td></tr>
@@ -127,6 +136,11 @@ const genBody = `{
       <tr><td><code>OAUTH_UNAVAILABLE</code></td><td>로컬 OAuth 프록시 사용 불가.</td></tr>
       <tr><td><code>GRAPH_VERSION_CONFLICT</code></td><td>stale 그래프 버전에 대한 저장.</td></tr>
       <tr><td><code>NODE_NOT_FOUND</code></td><td>노드 메타데이터를 찾을 수 없음.</td></tr>
+      <tr><td><code>GROK_REF_TOO_MANY</code></td><td>Grok 요청에 총 세 장을 넘는 입력 이미지가 포함됨.</td></tr>
+      <tr><td><code>GROK_MASK_UNSUPPORTED</code></td><td>Grok edit이 mask와 함께 요청됨.</td></tr>
+      <tr><td><code>INVALID_GROK_IMAGE_MODEL</code></td><td>Grok 요청이 지원하지 않는 이미지 모델을 사용함.</td></tr>
+      <tr><td><code>GROK_RATE_LIMITED</code> · <code>GROK_AUTH_FAILED</code></td><td>progrok을 통한 xAI rate-limit 또는 auth 실패.</td></tr>
+      <tr><td><code>GROK_SEARCH_TIMEOUT</code> · <code>GROK_PLANNER_TIMEOUT</code> · <code>GROK_IMAGE_TIMEOUT</code></td><td>Grok 단계 중 하나가 timeout budget을 초과함.</td></tr>
     </tbody>
   </table>
 

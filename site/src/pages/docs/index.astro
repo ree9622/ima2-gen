@@ -9,14 +9,15 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   lang="en"
   active=""
   title="Overview"
-  description="Developer documentation for ima2-gen — a local image studio with Classic, Node, Multimode, and Canvas modes, a dual OAuth/API provider path, and a full CLI."
+  description="Developer documentation for ima2-gen — a local image studio with Classic, Node, Multimode, Canvas, OAuth/API/Grok provider paths, and CLI coverage."
 >
   <p class="docs-eyebrow">Developer Documentation</p>
   <h1>ima2-gen Developer Docs</h1>
   <p class="lead">
     ima2-gen is a local image-generation studio you run with <code>npx</code>. Generate in
     Classic, branch in a Node graph, fan out Multimode batches, and clean up the winning frame in
-    Canvas Mode — all on your machine, using your existing Codex/ChatGPT login.
+    Canvas Mode — all on your machine, using OAuth by default, API keys when configured, or bundled
+    Grok through progrok.
   </p>
 
   <div class="docs-install">
@@ -36,7 +37,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     </a>
     <a class="docs-card" href={d('reference/cli')}>
       <div class="card-h">CLI Reference →</div>
-      <div class="card-b">Every server route has a CLI wrapper. Browse the commands.</div>
+      <div class="card-b">Most route groups have CLI wrappers; Agent Mode is web-UI only.</div>
     </a>
   </div>
 
@@ -52,9 +53,9 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
 
   <h2>Local &amp; open by design</h2>
   <p>
-    Image generation runs through your local Codex/ChatGPT OAuth login or a configured OpenAI API
-    key. Generated frames and session logs live in your user-data folder (<code>~/.ima2</code>) —
-    not on a remote store. ima2-gen is MIT licensed.
+    Image generation runs through your local Codex/ChatGPT OAuth login, a configured OpenAI API
+    key, or bundled Grok/progrok for xAI image generation. Generated frames and session logs live in
+    your user-data folder (<code>~/.ima2</code>) — not on a remote store. ima2-gen is MIT licensed.
   </p>
   <p>
     Read more in <a href={d('concepts/providers')}>Providers &amp; Models</a> and

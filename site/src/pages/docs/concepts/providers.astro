@@ -9,30 +9,32 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   lang="en"
   active="concepts/providers"
   title="Providers & Models"
-  description="Choose between the OAuth and API-key provider paths, pick a model, and set quality, moderation, and reasoning defaults."
+  description="Choose between OAuth, API-key, and bundled Grok provider paths, pick a model, and set quality, moderation, and reasoning defaults."
 >
   <p class="docs-eyebrow">Concepts</p>
   <h1>Providers &amp; Models</h1>
   <p class="lead">
-    Image generation runs through one of two provider paths: your local Codex/ChatGPT OAuth login,
-    or a configured OpenAI API key.
+    Image generation runs through one of three provider paths: your local Codex/ChatGPT OAuth login,
+    a configured OpenAI API key, or the bundled Grok/progrok xAI path.
   </p>
 
   <h2>Provider paths</h2>
   <ul>
     <li><code>provider: "oauth"</code> — uses the local Codex OAuth proxy. The default path; no API key needed.</li>
     <li><code>provider: "api"</code> — calls the OpenAI Responses API with the hosted <code>image_generation</code> tool. Requires <code>OPENAI_API_KEY</code>.</li>
+    <li><code>provider: "grok"</code> — starts bundled <code>progrok</code>, runs mandatory xAI Web Search and a <code>grok-4.3</code> planner, then calls xAI Images API.</li>
   </ul>
-  <p>API-key generation supports classic generate, edit, mask-guided edit, multimode, and node generation.</p>
+  <p>OAuth, API-key, and Grok generation cover Classic, Node, and Agent Mode. Agent Mode is web-UI only; Classic and Node also have CLI commands.</p>
 
   <h2>Per-request override</h2>
-  <p>Generation commands accept <code>--provider &lt;auto|oauth|api&gt;</code>:</p>
+  <p>Generation commands accept <code>--provider &lt;auto|oauth|api|grok&gt;</code>:</p>
   <table>
     <thead><tr><th>Value</th><th>Behavior</th></tr></thead>
     <tbody>
       <tr><td><code>auto</code></td><td>Preserve route default behavior; currently resolves to OAuth.</td></tr>
       <tr><td><code>oauth</code></td><td>Force the local OAuth proxy path.</td></tr>
       <tr><td><code>api</code></td><td>Force the API-key Responses path; requires a configured key.</td></tr>
+      <tr><td><code>grok</code></td><td>Force the bundled xAI path through <code>127.0.0.1:18645</code>; run <code>ima2 grok login</code> once to authorize.</td></tr>
     </tbody>
   </table>
 
@@ -47,6 +49,8 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
       <tr><td><code>gpt-5.4-mini</code></td><td>Current default. Faster draft model.</td></tr>
       <tr><td><code>gpt-5.4</code></td><td>Recommended balanced choice.</td></tr>
       <tr><td><code>gpt-5.5</code></td><td>Strongest quality when your Codex CLI/OAuth backend supports it. May use more quota or need an updated Codex CLI.</td></tr>
+      <tr><td><code>grok-imagine-image</code></td><td>Default Grok image model.</td></tr>
+      <tr><td><code>grok-imagine-image-quality</code></td><td>Higher quality Grok image model; also selected by high-quality Grok Node requests.</td></tr>
     </tbody>
   </table>
   <p>
@@ -58,6 +62,24 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     <strong>Persisted defaults.</strong> <code>ima2 defaults set model gpt-5.5</code> and
     <code>ima2 defaults set reasoning high</code> write both OAuth and API-provider default keys, so
     your "default model" stays one concept across provider paths.
+  </div>
+
+  <h2>Grok pipeline</h2>
+  <p>
+    Grok Classic, Node, and Agent requests run a three-step pipeline: mandatory xAI Web Search,
+    <code>grok-4.3</code> planning with an English final image prompt, then xAI image creation.
+    Text-only requests use <code>/v1/images/generations</code>; requests with reference images,
+    a Node parent image, or an Agent current image use <code>/v1/images/edits</code> so image-to-image
+    context is preserved. Grok accepts up to three total input images in this path.
+  </p>
+  <p>
+    ima2 maps OpenAI-style sizes to xAI <code>aspect_ratio</code> and <code>resolution</code>
+    controls. Grok mask edit is not wired in this release and returns
+    <code>GROK_MASK_UNSUPPORTED</code>.
+  </p>
+  <div class="docs-callout docs-callout-warn">
+    <strong>Image-only in 1.1.15.</strong> Grok video T2V/I2V is research and planning only in this
+    branch. The runtime ships no <code>/api/video</code> route and no Grok video CLI.
   </div>
 
   <h2>API-provider defaults</h2>

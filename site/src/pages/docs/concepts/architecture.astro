@@ -25,13 +25,15 @@ const gh = 'https://github.com/lidge-jun/ima2-gen/blob/main';
 Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/*
                                     │                     │
                                     │           lib/*  (storage, sessions, inflight, metadata)
-                                    │           openai-oauth  (local proxy)
+                                    │           openai-oauth  (OpenAI OAuth proxy)
+                                    │           progrok  (bundled xAI proxy)
                                     │           ~/.ima2/generated  (images + sidecars)
                                     └────────── better-sqlite3  (sessions + graph)</code></pre>
   <p>
     The runtime path is intentionally direct. CLI commands and the browser call the same endpoints;
-    the server sends image requests through the OAuth proxy (or the API-key Responses path), saves
-    files under the configured generated directory, and persists graph sessions in SQLite.
+    the server sends image requests through the OAuth proxy, the API-key Responses path, or bundled
+    progrok for Grok/xAI Images API, saves files under the configured generated directory, and
+    persists graph sessions in SQLite.
   </p>
 
   <h2>Module map</h2>
@@ -41,7 +43,7 @@ Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/
       <tr><td><code>server.ts</code></td><td>Express bootstrap; registers routes. Paired runtime artifact <code>server.js</code>.</td></tr>
       <tr><td><code>routes/*</code></td><td>API surfaces: capabilities, generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, the always-on agent (Agent Mode) and promptBuilder routes, and dev-gated cardNews.</td></tr>
       <tr><td><code>lib/*</code></td><td>Storage, OAuth proxy, logging, sessions, inflight state, image metadata embed/restore, prompt-library SQLite, reference compression, canvas-version store, soft-delete trash.</td></tr>
-      <tr><td><code>bin/*</code></td><td>CLI dispatcher and client commands — near-complete parity with the server API.</td></tr>
+      <tr><td><code>bin/*</code></td><td>CLI dispatcher and client commands — near-complete parity with the server API. Agent Mode is the intentional web-UI-only exception; prompt builder uses <code>ima2 prompt build</code>.</td></tr>
       <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node mode, Canvas Mode, the Agent Mode workspace (<code>components/agent/*</code>), mobile shell, prompt-library panel.</td></tr>
     </tbody>
   </table>

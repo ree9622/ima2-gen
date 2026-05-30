@@ -1,6 +1,6 @@
 # CLI Reference
 
-Most server routes under `/api/*` have a CLI wrapper; Agent Mode (`/api/agent/*`) and the prompt builder (`POST /api/prompt-builder/chat`) are web-UI-only and have no `ima2` subcommand. The CLI is a thin shell over the local server, so most commands require a running `ima2 serve` (the few exceptions — `serve`, `setup`, `doctor`, `status`, `open`, `reset`, `config`, `grok`, `skill`, `capabilities`, and local `defaults` inspection — work without a live server).
+Most server routes under `/api/*` have a CLI wrapper; Agent Mode (`/api/agent/*`) is web-UI-only and has no `ima2` subcommand. The prompt builder HTTP route (`POST /api/prompt-builder/chat`) is available through `ima2 prompt build`. The CLI is a thin shell over the local server, so most commands require a running `ima2 serve` (the few exceptions — `serve`, `setup`, `doctor`, `status`, `open`, `reset`, `config`, `grok`, `skill`, `capabilities`, and local `defaults` inspection — work without a live server).
 
 For a quick start, see the [main README](../README.md). For endpoint mapping, see [API.md](API.md).
 
@@ -190,6 +190,8 @@ Windows DNS/fragmentation bypass tool such as SecretDNS is in use.
 | `ima2 prompt import folder <localpath>` | Import a local folder of prompts |
 | `ima2 prompt import json <file\|@file\|-> [--folder <id>]` | Import a JSON export body through `/api/prompts/import` |
 | `ima2 prompt import preview <file\|@file\|-> [--filename <name>]` | Preview local markdown/text candidates without committing |
+| `ima2 prompt build --message <text> [--ref <file>] [--model <id>] [--json]` | Build a structured image prompt through `/api/prompt-builder/chat` |
+| `ima2 prompt build --messages <file\|@file\|-> [--json]` | Build from a message transcript file or stdin |
 
 ## Card News (gated)
 
@@ -220,6 +222,7 @@ Card News requires the server to be started with `IMA2_CARD_NEWS=1` (or `feature
 | `ima2 billing` | API usage / quota |
 | `ima2 providers` | Configured providers |
 | `ima2 oauth status` | OAuth proxy state |
+| `ima2 grok status` | Bundled progrok / xAI image-model probe state |
 | `ima2 ping` | Health-check the running server |
 
 ## Config
@@ -252,6 +255,8 @@ Allowed keys (whitelist):
 ```
 imageModels.default          imageModels.reasoningEffort
 apiProvider.defaultImageModel apiProvider.defaultReasoningEffort
+grokProvider.plannerModel     grokProvider.plannerTimeoutMs
+grokProvider.defaultImageModel
 log.level                    features.cardNews
 cardNewsPlanner.{enabled,model,timeoutMs,deterministicFallback}
 comfy.{defaultUrl,uploadTimeoutMs,maxUploadBytes}

@@ -181,8 +181,9 @@ Agent generation settings accept `provider: "oauth" | "api" | "grok"`. With `pro
 | Method | Path | Body | Response |
 |---|---|---|---|
 | `POST` | `/api/prompt-builder/chat` | prompt-builder chat turn (see `lib/promptBuilder/client.ts`) | builder chat result |
+| `GET` | `/api/grok/status` | bundled progrok status/model probe | status, proxy URL, visible xAI models |
 
-`/api/prompt-builder/chat` powers the in-UI prompt-builder assistant. Errors normalize to `PROMPT_BUILDER_UNKNOWN` when no specific upstream code is available. Like Agent Mode, it has no CLI wrapper.
+`/api/prompt-builder/chat` powers the prompt-builder assistant used by the UI and `ima2 prompt build`. Errors normalize to `PROMPT_BUILDER_UNKNOWN` when no specific upstream code is available. Agent Mode remains web-UI-only with no CLI wrapper.
 
 ## Session DB API
 
@@ -335,7 +336,8 @@ Node retry diagnostics include safe context such as `operation`, `clientNodeId`,
 - 2026-05-06: Documented API-key Responses parity for generate/edit/multimode/node (#49) via `lib/responsesImageAdapter.ts` and the `IMA2_API_*` env defaults; documented the `IMA2_OAUTH_MASKED_EDIT_ENABLED` feature flag and its `lib/oauthProxy/generators.ts` guard for #31; documented prompt safety intent policy injection from `lib/promptSafetyPolicy.ts` into `lib/oauthProxy/prompts.ts` and the API-key adapter.
 - 2026-05-13: Added `/api/capabilities` as the agent-facing runtime metadata endpoint for #62.
 - 2026-05-29: Persisted per-image `elapsed` (numeric seconds) and `reasoningEffort` in sidecar + embedded XMP and exposed both through `/api/history` for Classic, Canvas edit, and Node modes (#79, forward-fix; older items stay blank). Classic/edit `elapsed` responses are now numeric.
-- 2026-05-30: Documented the Agent Mode API (`/api/agent/*` — sessions, turns, durable queue, compact, manifest, tools; backed by `lib/agentStore.ts`, `lib/agentQueueStore.ts`, `lib/agentQueueWorker.ts`, `lib/agentRuntime.ts`) and the Prompt Builder endpoint (`POST /api/prompt-builder/chat`). Both are always-registered routes with no CLI wrapper (server + web UI only). Re-grounded the API map against current code at ima2-gen 1.1.14.
+- 2026-05-30: Documented the Agent Mode API (`/api/agent/*` — sessions, turns, durable queue, compact, manifest, tools; backed by `lib/agentStore.ts`, `lib/agentQueueStore.ts`, `lib/agentQueueWorker.ts`, `lib/agentRuntime.ts`) and the Prompt Builder endpoint (`POST /api/prompt-builder/chat`). Re-grounded the API map against current code at ima2-gen 1.1.14.
+- 2026-05-30: Updated the API map for ima2-gen 1.1.15: Grok Classic/Node/Agent provider path, `GET /api/grok/status`, prompt-builder CLI wrapper `ima2 prompt build`, and the image-only/no-video runtime scope.
 
 Previous document: `[[02-command-reference]]`
 

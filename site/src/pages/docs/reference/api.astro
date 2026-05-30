@@ -29,8 +29,9 @@ const genBody = `{
   <h1>Server API</h1>
   <p class="lead">
     The CLI is a thin shell over the local server — most <code>/api/*</code> routes have a CLI
-    wrapper, though Agent Mode and the prompt builder are web-UI only. This page maps the endpoint
-    groups; for full request and response shapes, see <a href={apiMd}>API.md</a>.
+    wrapper. Agent Mode is web-UI only; prompt builder is also available through
+    <code>ima2 prompt build</code>. This page maps the endpoint groups; for full request and
+    response shapes, see <a href={apiMd}>API.md</a>.
   </p>
 
   <h2>Base URL</h2>
@@ -54,11 +55,17 @@ const genBody = `{
   <h4>POST /api/generate — request body</h4>
   <pre><code>{genBody}</code></pre>
   <p>
-    Quality: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api. Recommended model
-    <code>gpt-5.4</code>; app default <code>gpt-5.4-mini</code>. SSE routes emit <code>phase</code>,
+    Quality: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api, grok.
+    Recommended OpenAI model <code>gpt-5.4</code>; app default <code>gpt-5.4-mini</code>.
+    Grok models are <code>grok-imagine-image</code> and
+    <code>grok-imagine-image-quality</code>. SSE routes emit <code>phase</code>,
     <code>partial</code>, <code>done</code>, and <code>error</code> when the client sends
     <code>Accept: text/event-stream</code>.
   </p>
+  <div class="docs-callout docs-callout-warn">
+    Grok video T2V/I2V is not shipped in <code>1.1.15</code>. There is no <code>/api/video</code>
+    route or video CLI in this runtime.
+  </div>
 
   <h2>History</h2>
   <table>
@@ -100,7 +107,7 @@ const genBody = `{
       <tr><td><code>GET · PATCH · DELETE /api/agent/sessions/:id</code></td><td>Load, update, or delete a session.</td></tr>
       <tr><td><code>POST /api/agent/sessions/:id/turns</code></td><td>Run an agent turn; supports slash commands and <code>/question</code>.</td></tr>
       <tr><td><code>GET · POST /api/agent/sessions/:id/queue</code></td><td>Inspect or enqueue durable queue work (<code>/api/agent/queue/:itemId/cancel</code> · <code>retry</code> manage items).</td></tr>
-      <tr><td><code>POST /api/prompt-builder/chat</code></td><td>In-UI prompt-builder assistant (no CLI).</td></tr>
+      <tr><td><code>POST /api/prompt-builder/chat</code></td><td>Prompt-builder assistant (<code>ima2 prompt build</code>).</td></tr>
     </tbody>
   </table>
 
@@ -109,6 +116,9 @@ const genBody = `{
     <thead><tr><th>Endpoint</th><th>Notes</th></tr></thead>
     <tbody>
       <tr><td><code>GET /api/health</code></td><td>Health check (<code>ima2 ping</code>).</td></tr>
+      <tr><td><code>GET /api/providers</code></td><td>Provider availability and runtime ports (<code>ima2 providers</code>).</td></tr>
+      <tr><td><code>GET /api/oauth/status</code></td><td>OAuth proxy status (<code>ima2 oauth status</code>).</td></tr>
+      <tr><td><code>GET /api/grok/status</code></td><td>Bundled progrok status and xAI model probe (<code>ima2 grok status</code>).</td></tr>
       <tr><td><code>GET /api/storage/status</code></td><td>Storage inspection.</td></tr>
       <tr><td><code>POST /api/storage/open-generated-dir</code></td><td>Open the generated directory in the OS file manager.</td></tr>
       <tr><td><code>GET /api/inflight</code> · <code>DELETE /api/inflight/:id</code></td><td>List or force-remove in-flight jobs.</td></tr>
@@ -129,6 +139,11 @@ const genBody = `{
       <tr><td><code>OAUTH_UNAVAILABLE</code></td><td>Local OAuth proxy is not available.</td></tr>
       <tr><td><code>GRAPH_VERSION_CONFLICT</code></td><td>Save made against a stale graph version.</td></tr>
       <tr><td><code>NODE_NOT_FOUND</code></td><td>Node metadata was not found.</td></tr>
+      <tr><td><code>GROK_REF_TOO_MANY</code></td><td>Grok request included more than three total input images.</td></tr>
+      <tr><td><code>GROK_MASK_UNSUPPORTED</code></td><td>Grok edit was requested with a mask.</td></tr>
+      <tr><td><code>INVALID_GROK_IMAGE_MODEL</code></td><td>Grok request used an unsupported image model.</td></tr>
+      <tr><td><code>GROK_RATE_LIMITED</code> · <code>GROK_AUTH_FAILED</code></td><td>xAI rate-limit or auth failure through progrok.</td></tr>
+      <tr><td><code>GROK_SEARCH_TIMEOUT</code> · <code>GROK_PLANNER_TIMEOUT</code> · <code>GROK_IMAGE_TIMEOUT</code></td><td>One Grok phase exceeded its timeout budget.</td></tr>
     </tbody>
   </table>
 

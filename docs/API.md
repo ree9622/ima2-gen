@@ -32,6 +32,7 @@ wrapper is shipped in this release.
 | `GET` | `/api/health` | Server health, version, paths, provider policy |
 | `GET` | `/api/providers` | Provider availability and runtime ports |
 | `GET` | `/api/oauth/status` | OAuth proxy status and visible models |
+| `GET` | `/api/grok/status` | Bundled progrok status and visible xAI image models |
 | `GET` | `/api/billing` | Billing/status probe, including API key source when configured |
 
 ## Storage
@@ -216,6 +217,7 @@ Server-side validation may return these reference codes:
 | `REF_TOO_LARGE` | A reference exceeded the configured base64 size |
 | `REF_NOT_BASE64` | A reference was not valid base64 |
 | `GROK_REF_TOO_MANY` | Grok classic generation received more than three reference images |
+| `GROK_MASK_UNSUPPORTED` | Grok edit was requested with a mask; xAI mask edit is not wired in this release |
 
 ## History
 
@@ -283,10 +285,14 @@ Style-sheet extraction can require an API key/openai client. Image generation al
 | `GRAPH_VERSION_CONFLICT` | Stale graph version |
 | `GRAPH_TOO_LARGE` | Graph exceeds node/edge limits |
 | `NODE_NOT_FOUND` | Node metadata was not found |
+| `INVALID_GROK_IMAGE_MODEL` | A Grok request used a model outside `grok-imagine-image` or `grok-imagine-image-quality` |
+| `GROK_RATE_LIMITED` | xAI returned a rate-limit response through progrok |
+| `GROK_AUTH_FAILED` | progrok could not authenticate the xAI request |
+| `GROK_SEARCH_TIMEOUT` / `GROK_PLANNER_TIMEOUT` / `GROK_IMAGE_TIMEOUT` | The Grok search, planner, or image API step exceeded its timeout budget |
 
 ## Endpoint → CLI Mapping
 
-Most server routes under `/api/*` have a CLI wrapper. The exceptions are server + web-UI-only surfaces: **Agent Mode** (`/api/agent/*`) and the **prompt builder** (`POST /api/prompt-builder/chat`) have no `ima2` subcommand. Use this table to find the command that calls a given endpoint. (See README.md "Client" section for full flag lists.)
+Most server routes under `/api/*` have a CLI wrapper. The exception is **Agent Mode** (`/api/agent/*`), which is server + web-UI-only and has no `ima2` subcommand. The prompt builder HTTP route (`POST /api/prompt-builder/chat`) is wrapped by `ima2 prompt build`. Use this table to find the command that calls a given endpoint. (See README.md "Client" section for full flag lists.)
 
 | Endpoint | CLI |
 |---|---|
@@ -312,11 +318,11 @@ Most server routes under `/api/*` have a CLI wrapper. The exceptions are server 
 | `POST /api/comfy/export-image` | `ima2 comfy export` |
 | `GET /api/inflight` / `DELETE /api/inflight/:id` | `ima2 inflight ls` (alias `ps`) / `ima2 inflight rm` (alias `cancel`) |
 | `GET /api/storage/status` / `POST /api/storage/open-generated-dir` | `ima2 storage status` / `ima2 storage open` |
-| `GET /api/billing` / `GET /api/providers` / `GET /api/oauth/status` | `ima2 billing` / `ima2 providers` / `ima2 oauth status` |
+| `GET /api/billing` / `GET /api/providers` / `GET /api/oauth/status` / `GET /api/grok/status` | `ima2 billing` / `ima2 providers` / `ima2 oauth status` / `ima2 grok status` |
 | `GET /api/health` | `ima2 ping` |
 | `GET /api/capabilities` | `ima2 capabilities` |
 | `GET/POST/PATCH/DELETE /api/agent/*` (sessions, turns, queue) | — (Agent Mode; web UI only, no CLI) |
-| `POST /api/prompt-builder/chat` | — (prompt builder; web UI only, no CLI) |
+| `POST /api/prompt-builder/chat` | `ima2 prompt build` |
 
 Notes:
 - `ima2 history favorite` and `ima2 annotate …` send `X-Ima2-Browser-Id: cli-<sha1prefix>` derived from the config dir, so CLI activity does not collide with browser sessions.

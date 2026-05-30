@@ -59,6 +59,19 @@ Use request-level overrides only for that one call:
 ima2 gen "cinematic mountain" --model gpt-5.5 --reasoning-effort high
 ```
 
+Use Grok when the request should run through bundled progrok, mandatory xAI Web
+Search, `grok-4.3` planning, and xAI Images API:
+
+```bash
+ima2 grok login
+ima2 grok status
+ima2 gen "cinematic neon city" --provider grok --model grok-imagine-image-quality
+```
+
+Grok requests with reference images use the edit/image-to-image path so the
+references remain attached after planning. Keep Grok references to three total
+input images.
+
 ## Prompting Guidance
 
 GPT Image 2 can follow detailed visual instructions and can render visible text
@@ -161,6 +174,13 @@ Expect job fields such as `requestId`, `kind`, `phase`, `startedAt`, `prompt`,
 partial completion before a final `done`.
 
 ## Prompt Import
+
+Build a structured image prompt from a message or transcript:
+
+```bash
+ima2 prompt build --message "make this product prompt clearer" --json
+ima2 prompt build --messages @conversation.json --json
+```
 
 Preview a local markdown/text prompt source before committing:
 

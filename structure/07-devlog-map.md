@@ -34,6 +34,8 @@ contradicts current code, prefer current code plus the active roadmap.
 | `devlog/_plan/260529_issue78-prompt-autofill-perf/` | planning | GitHub #78 히스토리 이미지 선택 시 프롬프트 자동 덮어쓰기 + 고해상도 이미지 성능 렉. P0/P1. |
 | `devlog/_plan/260529_issue79-metadata-ui-polish/` | planning | GitHub #79 (1) elapsed 사라짐 (2) reasoning 메타 미표시 (3) 모달 짤림. P1. |
 | `devlog/_plan/260529_issue80-batch-comparison-matrix/` | planning / P2 | GitHub #80 Prompt-locked batch comparison matrix. Agent Queue 재사용 가능, MVP 기획 후 별도 마일스톤. |
+| `devlog/_plan/260530_grok-provider-integration/` | local / ignored | Grok provider integration plan, employee audit notes, Node/Agent follow-up, and publish-readiness evidence. The lane is intentionally local because `devlog/` is ignored. |
+| `devlog/_plan/260530_grok-publish-pages-readiness/` | local / ignored | GitHub Pages, docs/API/CLI, structure, and capabilities contract reconciliation for the 1.1.15 Grok publish surface. |
 
 ## 2026-05-16 Completion References
 
@@ -73,6 +75,7 @@ contradicts current code, prefer current code plus the active roadmap.
 | Agent UI polish | Active. Follow-up polish lane for workspace payload safety, layout mismatch, settings visual quality, tool height, top model chip visibility, and sidebar tab separation. |
 | Agent auto generation | Active implementation lane. Deterministic planner, slash commands, `/question`, text response summary, planned variants/parallelism observability, right sidebar/model sheet UI, focused contracts, reviewer concern closure, and Chrome/Computer Use QA are recorded; `_fin` movement is a separate closeout step. |
 | Empty Response diagnostics | Active plan. Classify OAuth/Responses no-image failures with sanitized stream fingerprints, doctor probes, parser/payload hardening, image-tool-call hardening, prompt-only fallback, and Windows support repro evidence. Public reports live in GitHub #76 comments while the detailed lane folder remains an ignored local working note unless force-added. |
+| Grok provider publish surface | Current publish-readiness pass. Runtime supports Classic/Node/Agent Grok image generation; `ima2 grok`, `capabilities --json`, docs/API.md, docs/CLI.md, structure docs, and GitHub Pages must all describe the same 1.1.15 image-only/no-video contract before Jun deploys Pages/publishes. |
 
 ## Cleanup Checklist
 
@@ -91,3 +94,4 @@ contradicts current code, prefer current code plus the active roadmap.
 - 2026-05-26: Added GitHub #75 and `260526_issue75-prompt-studio-regressions/` for Prompt Studio regression implementation. Phase 1 covers prompt selection side effects, sidebar shortcut domain bounds, fixed gallery opener, and gallery viewport preservation.
 - 2026-05-27: Marked GitHub #75/#76 as completed after final closeout comments, and added GitHub #77 plus `260527_issue77-long-prompt-preview/` for long-prompt result preview layout hardening.
 - 2026-05-29: Moved #75/#76/#77 completed lanes to `_fin`. Added 3 external user issue lanes: #78 prompt autofill + perf (P0/P1), #79 metadata UI polish (P1), #80 batch comparison matrix (P2). Root causes identified: #78 is `restoreComposerFromHistory` + `useLayoutEffect` reflow + missing img lazy/async; #79 is `mapHistoryItem` elapsed gap + missing `GenerateItem.reasoningEffort` + modal max-height; #80 is large feature — Agent Queue reuse path available.
+- 2026-05-30: Added local ignored Grok publish/Page readiness lanes and recorded that current code is the contract: Grok image support is shipped, Grok video T2V/I2V is not shipped, Agent Mode has no CLI, and prompt builder has `ima2 prompt build`.

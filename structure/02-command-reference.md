@@ -12,7 +12,7 @@ This matters because `ima2-gen` is both a browser app and an automation tool. Us
 
 Before using client commands, make sure a server is running. `ima2 serve` starts the server and OAuth proxy, then advertises the actual bound URL in `~/.ima2/server.json`. Client commands such as `ima2 gen`, `ima2 edit`, `ima2 ls`, `ima2 ps`, and `ima2 ping` use that advertisement file or an override to find the server, including fallback ports when the default is busy.
 
-Not every server surface has a CLI wrapper. **Agent Mode** (`/api/agent/*`) and the **prompt-builder** assistant (`POST /api/prompt-builder/chat`) are server + web-UI features with no `ima2` subcommand. For agent-facing discovery, `ima2 capabilities --json` reports supported models, valid quality/reasoning/moderation/provider/mode values, writable config keys, limits, and the package/server version, and `ima2 skill` prints the packaged agent skill.
+Not every server surface has a CLI wrapper. **Agent Mode** (`/api/agent/*`) is a server + web-UI feature with no `ima2` subcommand. The prompt-builder assistant (`POST /api/prompt-builder/chat`) is available through `ima2 prompt build`. For agent-facing discovery, `ima2 capabilities --json` reports supported models, valid quality/reasoning/moderation/provider/mode values, writable config keys, limits, and the package/server version, and `ima2 skill` prints the packaged agent skill.
 
 ---
 
@@ -46,6 +46,7 @@ sequenceDiagram
 | `ima2 status` | none | Show config, provider, and OAuth session state | `bin/ima2.ts`, `lib/codexDetect.ts` |
 | `ima2 doctor` | none | Check Node, package, node_modules, config, and storage state | `bin/ima2.ts`, `bin/lib/storage-doctor.ts` |
 | `ima2 open` | none | Open the web UI at the advertised or default port | `bin/ima2.ts`, `bin/lib/platform.ts` |
+| `ima2 grok login/status/models/proxy` | none | Manage bundled progrok auth and model/status probes for `provider: "grok"` | `bin/commands/grok.ts`, `routes/grok.ts` |
 | `ima2 reset` | none | Reset `~/.ima2/config.json` to an empty object | `bin/ima2.ts` |
 | `ima2 --version` | `-v` | Print the package version | `bin/ima2.ts`, `package.json` |
 | `ima2 --help` | `-h` | Print top-level help | `bin/ima2.ts` |
@@ -63,6 +64,7 @@ The CLI surface was expanded to near-feature-parity with the server API in #45 (
 | `ima2 session <subcommand>` | `/api/sessions*` | List/load/save/rename/delete sessions and style sheets |
 | `ima2 history <subcommand>` | `/api/history*` | List, show, favorite, restore, soft-delete, permanent-delete history items |
 | `ima2 prompt <subcommand>` | `/api/prompts*` and `/api/prompt-import/*` | Prompt library list/show/save/delete/import/export |
+| `ima2 prompt build` | `POST /api/prompt-builder/chat` | Build a structured image prompt from a message or transcript |
 | `ima2 annotate <subcommand>` | `/api/annotations/:filename` | Get/put/delete canvas annotations |
 | `ima2 canvas-versions <subcommand>` | `/api/canvas-versions*` | List/save canvas version snapshots |
 | `ima2 metadata <subcommand>` | `/api/metadata/read` | Read embedded XMP metadata from images |
@@ -99,17 +101,17 @@ The CLI surface was expanded to near-feature-parity with the server API in #45 (
 | `--stdin` | false | Read extra prompt text from stdin |
 | `--timeout <sec>` | `180` | HTTP request timeout |
 | `--server <url>` | auto-discovered | Override server discovery |
-| `--model <id>` | server default | Image model: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, or server-rejected `gpt-5.3-codex-spark` |
-| `--provider <auto|oauth|api>` | server default | Per-request provider override; `api` requires a configured API key |
+| `--model <id>` | server default | Image model: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `grok-imagine-image`, `grok-imagine-image-quality`, or server-rejected `gpt-5.3-codex-spark` |
+| `--provider <auto|oauth|api|grok>` | server default | Per-request provider override; `api` requires a configured API key, `grok` uses bundled progrok |
 | `--mode <auto|direct>` | `auto` | Prompt handling mode |
 | `--moderation <auto|low>` | `low` | OAuth moderation level |
-| `--reasoning-effort <low|medium|high>` | server default | Reasoning effort hint for prompt-aware models |
+| `--reasoning-effort <none|low|medium|high|xhigh>` | server default | Reasoning effort hint for prompt-aware models |
 | `--web-search` / `--no-web-search` | server default | Toggle Responses-API web search for the request |
 | `--session <id>` | none | Apply enabled session style sheet |
 
 Web-search note: `--web-search` and `--no-web-search` set the request-level `webSearchEnabled` field. For `provider: "api"`, the request still respects the global API-provider gate (`IMA2_API_ALLOW_WEB_SEARCH` / `apiProvider.allowWebSearch`); a globally disabled API web-search setting cannot be re-enabled by one CLI call.
 
-Provider override semantics: `api` forces the API-key Responses path, `oauth` forces the local OAuth proxy path, and `auto` preserves route default behavior.
+Provider override semantics: `api` forces the API-key Responses path, `oauth` forces the local OAuth proxy path, `grok` forces the bundled progrok xAI path, and `auto` preserves route default behavior. Grok Classic and Node route through mandatory xAI Web Search, `grok-4.3` planning, and xAI Images API; requests with references use xAI `/v1/images/edits` to preserve image-to-image context.
 
 ## `edit` Options
 
@@ -122,11 +124,11 @@ Provider override semantics: `api` forces the API-key Responses path, `oauth` fo
 | `--json` | false | Print machine-readable JSON |
 | `--timeout <sec>` | `180` | HTTP request timeout |
 | `--server <url>` | auto-discovered | Target server URL |
-| `--model <id>` | server default | Image model: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, or server-rejected `gpt-5.3-codex-spark` |
-| `--provider <auto|oauth|api>` | server default | Per-request provider override; `api` requires a configured API key |
+| `--model <id>` | server default | Image model: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `grok-imagine-image`, `grok-imagine-image-quality`, or server-rejected `gpt-5.3-codex-spark` |
+| `--provider <auto|oauth|api|grok>` | server default | Per-request provider override; `api` requires a configured API key, `grok` uses bundled progrok |
 | `--mode <auto|direct>` | `auto` | Prompt handling mode |
 | `--moderation <auto|low>` | `low` | OAuth moderation level |
-| `--reasoning-effort <low|medium|high>` | server default | Reasoning effort hint for prompt-aware models |
+| `--reasoning-effort <none|low|medium|high|xhigh>` | server default | Reasoning effort hint for prompt-aware models |
 | `--web-search` / `--no-web-search` | server default | Toggle Responses-API web search for the request |
 | `--session <id>` | none | Apply enabled session style sheet |
 
@@ -135,7 +137,7 @@ Provider override semantics: `api` forces the API-key Responses path, `oauth` fo
 | Option | Default | Description |
 |---|---|---|
 | `--max-images <1..8>` | `4` | Maximum separate stage images |
-| `--provider <auto|oauth|api>` | server default | Per-request provider override |
+| `--provider <auto|oauth|api|grok>` | server default | Per-request provider override |
 | `--mode <auto|direct>` | `auto` | Prompt handling mode |
 | `--ref <file>` | none | Attach a reference image; repeatable, max 5 |
 | `--web-search` / `--no-web-search` | server default | Toggle Responses-API web search for the request |
@@ -180,7 +182,7 @@ Issue #61 tracks the parity slice after the browser/server surface moved ahead o
 Verified current behavior:
 
 - `ima2 gen`, `ima2 edit`, `ima2 multimode`, and `ima2 node generate` expose `--web-search` / `--no-web-search`.
-- Those commands expose `--provider <auto|oauth|api>` and pass it to matching server routes.
+- Those commands expose `--provider <auto|oauth|api|grok>` and pass it to matching server routes.
 - `ima2 multimode` exposes `--ref <file>` and `--mode <auto|direct>`.
 - `ima2 ps` / `ima2 inflight ls` document `classic|node|multimode`.
 - `ima2 ls --favorites` uses server-side `favoritesOnly=1` before its defensive client-side favorite filter.
@@ -232,6 +234,7 @@ Deferred:
 - 2026-05-10: Re-audited CLI parity for #61. Web-search flags are wired for `gen`, `edit`, `multimode`, and `node generate`; follow-up work was planned for provider override, multimode refs/mode, `ps` multimode help, server-side favorites listing, masked edit CLI decision, and dedicated CLI payload tests.
 - 2026-05-11: Implemented the #61 CLI parity slice: provider overrides for generation commands, multimode refs/mode, multimode inflight help, server-side `ls --favorites`, and CLI feature-parity contract tests. `edit --mask` remains deferred to #31.
 - 2026-05-13: Added #62 agent discovery commands: packaged `skills/ima2/SKILL.md`, `ima2 skill`, `ima2 capabilities`, and `ima2 defaults`.
+- 2026-05-30: Updated the command reference for the 1.1.15 Grok publish surface: `ima2 grok`, `--provider <auto|oauth|api|grok>`, Grok image models, `none`/`xhigh` reasoning values, and `ima2 prompt build` as the prompt-builder CLI wrapper.
 
 Previous document: `[[01-file-function-map]]`
 

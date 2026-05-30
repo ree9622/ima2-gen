@@ -25,6 +25,7 @@ graph TD
     SRV --> GEN["~/.ima2/generated"]
     SRV --> DB["SQLite via better-sqlite3"]
     SRV --> OAUTH["openai-oauth<br/>default port 10531"]
+    SRV --> GROK["progrok<br/>default port 18645"]
     SRV --> ENV["env vars"]
     SRV --> ADV["actual runtime URLs<br/>~/.ima2/server.json"]
 ```
@@ -34,7 +35,7 @@ graph TD
 | Item | Current value |
 |---|---|
 | package name | `ima2-gen` |
-| version | `1.1.14` |
+| version | `1.1.15` |
 | type | `module` |
 | bin | `ima2` -> `./bin/ima2.js` |
 | package engine | `node >=20` |
@@ -100,9 +101,14 @@ README may still mention a different Node baseline. The operational baseline is 
 | `IMA2_API_REASONING_EFFORT` | Default reasoning effort for `provider: "api"`, default `low` |
 | `IMA2_API_IMAGE_SIZE` | Default size for `provider: "api"`, default `1024x1024` |
 | `IMA2_API_ALLOW_WEB_SEARCH` | Toggle web search for `provider: "api"`, default `true` |
+| `IMA2_GROK_PROXY_HOST` | Bundled progrok bind host, default `127.0.0.1` |
+| `IMA2_GROK_PROXY_PORT` | Bundled progrok preferred port, default `18645` |
+| `IMA2_NO_GROK_PROXY` | Disable the embedded progrok proxy; use only when managing the proxy manually |
 | `IMA2_GROK_PLANNER_MODEL` | Search/planner model for `provider: "grok"` classic generation, default `grok-4.3` |
 | `IMA2_GROK_PLANNER_TIMEOUT_MS` | Timeout for each Grok search/planner call before the image API call, default `60000` |
 | `IMA2_GROK_IMAGE_MODEL_DEFAULT` | Default xAI image model for `provider: "grok"`, default `grok-imagine-image` |
+| `IMA2_GROK_GENERATION_TIMEOUT_MS` | Timeout for final Grok image generation/edit calls, default `120000` |
+| `IMA2_GROK_STATUS_TIMEOUT_MS` | Timeout for `/api/grok/status` model probes, default `3000` |
 | `IMA2_OAUTH_MASKED_EDIT_ENABLED` | Feature flag (#31) gating masked-edit requests on the OAuth path; default off — when off, `lib/oauthProxy/generators.ts` rejects requests carrying a mask before calling upstream |
 | `IMA2_INFLIGHT_TTL_MS` | Active in-flight stale-job TTL, default `600000` |
 | `IMA2_INFLIGHT_TERMINAL_TTL_MS` | Recent completed/error/canceled job debug retention, default `30000` |
@@ -192,6 +198,7 @@ Logs intentionally use counts rather than sensitive values: `promptChars`, `refs
 - 2026-05-06: Bumped package metadata to ima2-gen 1.1.10. Added `npm run typecheck:tests` (`tsconfig.tests.json`) and `npm run test:inventory` (`scripts/classify-tests.mjs --check --fail-js-runtime`) as pre-publish gates and updated the `prepublishOnly` chain accordingly. Added env vars `IMA2_API_IMAGE_MODEL_DEFAULT`, `IMA2_API_REASONING_EFFORT`, `IMA2_API_IMAGE_SIZE`, `IMA2_API_ALLOW_WEB_SEARCH` (API-key Responses defaults, #49) and `IMA2_OAUTH_MASKED_EDIT_ENABLED` (#31 masked-edit feature flag). Noted the `lib/oauthProxy.ts` → `lib/oauthProxy/*` subtree split (#50) — no env-var or publish-file change.
 - 2026-05-13: Added `skills/` to the package contract for #62 and documented `IMA2_REASONING_EFFORT` as the OAuth/default reasoning env override exposed by `ima2 defaults`.
 - 2026-05-30: Updated the package version snapshot to `ima2-gen` 1.1.14 (re-grounding pass). Agent Mode (`routes/agent.ts` + `lib/agent*.ts`) and the prompt builder (`routes/promptBuilder.ts`) ship inside the existing `routes/` and `lib/` publish paths; see `[[00-structure-hub]]` and `[[03-server-api]]` for the added runtime surface since 1.1.10.
+- 2026-05-30: Updated the package version snapshot to `ima2-gen` 1.1.15 and added bundled progrok/Grok environment variables, `IMA2_NO_GROK_PROXY`, generation/status timeouts, and image-only release scope.
 
 Previous document: `[[05-node-mode]]`
 

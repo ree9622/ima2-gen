@@ -7,7 +7,7 @@ type CapabilitySource = "local" | "server";
 
 const MAX_GENERATED_IMAGES = 8;
 const VALID_MODES = ["auto", "direct"] as const;
-const VALID_PROVIDERS = ["auto", "oauth", "api"] as const;
+const VALID_PROVIDERS = ["auto", "oauth", "api", "grok"] as const;
 const AGENT_COMMANDS = [
   "skill",
   "capabilities",
@@ -19,7 +19,8 @@ const AGENT_COMMANDS = [
   "inflight ls",
   "providers",
   "oauth status",
-  "agent",
+  "grok status",
+  "prompt build",
 ];
 
 function toArray<T>(value: Iterable<T> | T[] | undefined): T[] {
@@ -57,11 +58,16 @@ export function buildIma2Capabilities({
         size: appConfig.apiProvider.defaultSize,
         webSearchEnabled: appConfig.apiProvider.allowWebSearch,
       },
+      grok: {
+        model: appConfig.grokProvider.defaultImageModel,
+        plannerModel: appConfig.grokProvider.plannerModel,
+      },
     },
     valid: {
       imageModels: {
         supported: toArray(appConfig.imageModels.valid),
         unsupported: toArray(appConfig.imageModels.unsupported),
+        grokSupported: ["grok-imagine-image", "grok-imagine-image-quality"],
       },
       reasoningEfforts: toArray(appConfig.imageModels.validReasoningEfforts),
       quality: toArray(VALID_IMAGE_QUALITIES),
@@ -97,6 +103,8 @@ export function buildIma2Capabilities({
       route: "/api/agent/sessions",
       allowedTools: ["ima2.get_image_context", "ima2.web_search", "ima2.generate_image"],
       finalArtifact: "image",
+      uiOnly: true,
+      cliCommand: null,
     },
     guidance: {
       highQuality: "Use --quality high for requests where output fidelity matters.",

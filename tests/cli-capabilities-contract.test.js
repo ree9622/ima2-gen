@@ -27,9 +27,24 @@ describe("CLI capabilities contract", () => {
     assert.match(src, /moderation:\s*toArray\(appConfig\.oauth\.validModeration\)/);
     assert.match(src, /modes:\s*\[\.\.\.VALID_MODES\]/);
     assert.match(src, /providers:\s*\[\.\.\.VALID_PROVIDERS\]/);
+    assert.match(src, /const VALID_PROVIDERS = \["auto", "oauth", "api", "grok"\]/);
+    assert.doesNotMatch(src, /"agent",/);
+    assert.match(src, /"grok status"/);
+    assert.match(src, /"prompt build"/);
     assert.match(src, /configKeys:/);
     assert.match(src, /enforced:\s*false/);
     assert.match(src, /advisory client-side queue guidance only/);
+  });
+
+  it("capabilities marks Agent Mode as web-UI only while exposing Grok defaults", () => {
+    const src = readSource("lib/capabilities.ts");
+
+    assert.match(src, /grok:\s*\{/);
+    assert.match(src, /defaultImageModel/);
+    assert.match(src, /plannerModel/);
+    assert.match(src, /agentMode:\s*\{/);
+    assert.match(src, /uiOnly:\s*true/);
+    assert.match(src, /cliCommand:\s*null/);
   });
 
   it("capabilities command falls back to local metadata unless server is required", () => {

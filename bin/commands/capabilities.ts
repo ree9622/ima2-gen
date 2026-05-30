@@ -66,9 +66,14 @@ function printText(capabilities: any): void {
   out(`  oauth reasoning: ${capabilities.defaults?.oauth?.reasoningEffort}`);
   out(`  api model: ${capabilities.defaults?.api?.model}`);
   out(`  api reasoning: ${capabilities.defaults?.api?.reasoningEffort}`);
+  out(`  grok model: ${capabilities.defaults?.grok?.model}`);
+  out(`  grok planner: ${capabilities.defaults?.grok?.plannerModel}`);
   out("");
   out("valid:");
   out(`  models: ${capabilities.valid?.imageModels?.supported?.join(", ")}`);
+  if (capabilities.valid?.imageModels?.grokSupported?.length) {
+    out(`  grok models: ${capabilities.valid.imageModels.grokSupported.join(", ")}`);
+  }
   out(`  reasoning: ${capabilities.valid?.reasoningEfforts?.join(", ")}`);
   out(`  quality: ${capabilities.valid?.quality?.join(", ")}`);
   out(`  modes: ${capabilities.valid?.modes?.join(", ")}`);

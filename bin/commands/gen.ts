@@ -54,7 +54,7 @@ const HELP = `
         --stdin                              Read prompt from stdin
         --timeout <sec>                     Default: 180
         --server <url>                      Override server URL
-        --model <gpt-5.5|gpt-5.4|gpt-5.4-mini>
+        --model <gpt-5.5|gpt-5.4|gpt-5.4-mini|grok-imagine-image|grok-imagine-image-quality>
         --provider <auto|oauth|api|grok>    Provider for this request; grok uses progrok proxy
         --mode <auto|direct>                Prompt handling mode. Default: auto
         --moderation <auto|low>             Default: low

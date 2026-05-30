@@ -25,13 +25,14 @@ const gh = 'https://github.com/lidge-jun/ima2-gen/blob/main';
 Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/*
                                     │                     │
                                     │           lib/*  (storage, sessions, inflight, metadata)
-                                    │           openai-oauth  (local proxy)
+                                    │           openai-oauth  (OpenAI OAuth proxy)
+                                    │           progrok  (bundled xAI proxy)
                                     │           ~/.ima2/generated  (images + sidecars)
                                     └────────── better-sqlite3  (sessions + graph)</code></pre>
   <p>
     런타임 경로는 의도적으로 단순합니다. CLI 명령과 브라우저가 같은 엔드포인트를 호출하고, 서버는
-    OAuth 프록시(또는 API key Responses 경로)로 이미지 요청을 보내고, 설정된 생성 디렉터리에 파일을
-    저장하고, 그래프 세션을 SQLite에 보존합니다.
+    OAuth 프록시, API key Responses 경로, 또는 Grok/xAI Images API용 번들 progrok으로 이미지 요청을
+    보내고, 설정된 생성 디렉터리에 파일을 저장하고, 그래프 세션을 SQLite에 보존합니다.
   </p>
 
   <h2>모듈 맵</h2>
@@ -41,7 +42,7 @@ Web UI (ui/dist, served)          ──┼──→ server.ts ──→ routes/
       <tr><td><code>server.ts</code></td><td>Express 부트스트랩, 라우트 등록. 짝 런타임 산출물 <code>server.js</code>.</td></tr>
       <tr><td><code>routes/*</code></td><td>API 표면: capabilities, generate, edit, multimode, nodes, sessions, history, imageImport, health, storage, metadata, annotations, canvasVersions, comfy, prompts, promptImport, 항상 등록되는 agent(Agent 모드)·promptBuilder 라우트, dev 게이트된 cardNews.</td></tr>
       <tr><td><code>lib/*</code></td><td>스토리지, OAuth 프록시, 로깅, 세션, inflight 상태, 이미지 메타데이터 임베드/복원, 프롬프트 라이브러리 SQLite, 레퍼런스 압축, canvas 버전 저장소, soft-delete 휴지통.</td></tr>
-      <tr><td><code>bin/*</code></td><td>CLI 디스패처와 클라이언트 명령 — 서버 API와 거의 완전한 패리티.</td></tr>
+      <tr><td><code>bin/*</code></td><td>CLI 디스패처와 클라이언트 명령 — 서버 API와 거의 완전한 패리티. Agent Mode는 의도적인 웹 UI 전용 예외이고, prompt builder는 <code>ima2 prompt build</code>를 씁니다.</td></tr>
       <tr><td><code>ui/src/*</code></td><td>React UI, React Flow node 모드, Canvas Mode, Agent 모드 워크스페이스(<code>components/agent/*</code>), 모바일 셸, 프롬프트 라이브러리 패널.</td></tr>
     </tbody>
   </table>

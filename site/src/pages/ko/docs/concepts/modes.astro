@@ -49,7 +49,8 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
     원하는 걸 설명하면 에이전트가 반복합니다. Agent 모드는 대화형 이미지 워크스페이스입니다: 각 세션은
     현재 이미지, 턴 기록, 스타일/주제 잠금, durable 큐를 유지해 병렬·자동 생성 작업이 재연결에도
     살아남습니다. 슬래시 명령과 <code>/question</code>을 지원하며 웹 UI에서 동작합니다
-    (<code>ima2 agent</code> CLI 명령은 없습니다).
+    (<code>ima2 agent</code> CLI 명령은 없습니다). <code>provider: "grok"</code>일 때 Agent Mode는
+    Classic·Node와 같은 search + planner + xAI Images API 경로를 사용합니다.
   </p>
 
   <h2>프롬프트 라이브러리 &amp; 가져오기</h2>

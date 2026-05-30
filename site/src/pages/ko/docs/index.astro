@@ -9,14 +9,14 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
   lang="ko"
   active=""
   title="개요"
-  description="ima2-gen 개발자 문서 — Classic·Node·Multimode·Canvas 모드, OAuth/API 듀얼 프로바이더, 전체 CLI를 갖춘 로컬 이미지 스튜디오."
+  description="ima2-gen 개발자 문서 — Classic·Node·Multimode·Canvas 모드, OAuth/API/Grok 프로바이더, CLI 표면을 갖춘 로컬 이미지 스튜디오."
 >
   <p class="docs-eyebrow">개발자 문서</p>
   <h1>ima2-gen 개발자 문서</h1>
   <p class="lead">
     ima2-gen은 <code>npx</code>로 실행하는 로컬 이미지 생성 스튜디오입니다. Classic에서 만들고,
     Node 그래프에서 분기하고, Multimode 배치로 후보를 펼치고, Canvas Mode에서 마음에 든 컷을
-    정리하세요 — 전부 내 컴퓨터에서, 이미 쓰는 Codex/ChatGPT 로그인으로.
+    정리하세요 — 전부 내 컴퓨터에서, 기본 OAuth·설정된 API key·번들 Grok/progrok 중 필요한 경로로.
   </p>
 
   <div class="docs-install">
@@ -36,7 +36,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
     </a>
     <a class="docs-card" href={d('reference/cli')}>
       <div class="card-h">CLI 레퍼런스 →</div>
-      <div class="card-b">모든 서버 라우트에 CLI 래퍼가 있습니다. 명령어를 둘러보세요.</div>
+      <div class="card-b">대부분의 라우트 그룹에 CLI 래퍼가 있고, Agent Mode는 웹 UI 전용입니다.</div>
     </a>
   </div>
 
@@ -52,9 +52,9 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
 
   <h2>설계부터 로컬 &amp; 오픈</h2>
   <p>
-    이미지 생성은 로컬 Codex/ChatGPT OAuth 로그인 또는 설정된 OpenAI API key로 실행됩니다. 생성된
-    프레임과 작업 기록은 외부 저장소가 아니라 사용자 데이터 폴더(<code>~/.ima2</code>)에 남습니다.
-    ima2-gen은 MIT 라이선스입니다.
+    이미지 생성은 로컬 Codex/ChatGPT OAuth 로그인, 설정된 OpenAI API key, 또는 xAI 이미지 생성을 위한
+    번들 Grok/progrok 경로로 실행됩니다. 생성된 프레임과 작업 기록은 외부 저장소가 아니라 사용자 데이터
+    폴더(<code>~/.ima2</code>)에 남습니다. ima2-gen은 MIT 라이선스입니다.
   </p>
   <p>
     더 알아보려면 <a href={d('concepts/providers')}>프로바이더 &amp; 모델</a>과

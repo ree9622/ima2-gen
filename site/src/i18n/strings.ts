@@ -6,7 +6,7 @@ const en: Dict = {
   // Base / meta
   'meta.title': 'ima2-gen — Local Image Studio with Classic + Node + Canvas',
   'meta.desc':
-    'Generate images locally with Classic mode, branch the ones you love in a Node graph, and clean them up in Canvas Mode.',
+    'Generate images locally with Classic, Node, Canvas, OAuth/API providers, and bundled Grok image generation.',
   'meta.og.title': 'ima2-gen — Generate, branch, clean up',
   'meta.og.desc':
     'A local image studio with Classic, Node-graph branching, multimode batches, and Canvas Mode cleanup. Run it with npx.',
@@ -99,10 +99,10 @@ const en: Dict = {
   'local.h.before': 'Sign in. ',
   'local.h.em': 'Stay local.',
   'local.lede':
-    "ima2-gen reuses your existing Codex/ChatGPT login. Generated frames and sessions live on your disk — not on someone else's.",
+    "ima2-gen starts with your existing Codex/ChatGPT login, can use OpenAI API keys, and bundles Grok via progrok. Generated frames and sessions live on your disk — not on someone else's.",
   'local.quote.before': 'If the settings page says ',
   'local.quote.strong': 'Configured but disabled',
-  'local.quote.after': ', that means an API key exists in env/config but image generation still uses OAuth.',
+  'local.quote.after': ', that means an API key exists in env/config but the current workspace is using OAuth. Switch provider to API or Grok when you want those paths.',
   'local.meta': 'User-data folder · MIT licensed · Inspect, sync, version — your call.',
   'local.shot.alt':
     'ima2-gen Settings workspace showing OAuth active and an API key configured but disabled.',
@@ -112,7 +112,7 @@ const en: Dict = {
   'install.h.before': 'One command. ',
   'install.h.em': 'Then iterate.',
   'install.lede': 'Run it with npx. Sign in once with Codex. Start branching.',
-  'install.badge.npm': 'npm v1.1.14',
+  'install.badge.npm': 'npm v1.1.15',
   'install.badge.node': 'Node ≥20',
   'install.badge.mit': 'MIT',
   'install.links.aria': 'Project links',
@@ -133,7 +133,7 @@ const en: Dict = {
     'Locally. Generated images and session logs live in your user-data folder. Inspect, sync, version — your call. Image files are not uploaded to a separate remote store.',
   'faq.q3': 'Do I need an OpenAI API key?',
   'faq.a3':
-    'Not for image generation. `ima2-gen` uses your local Codex/ChatGPT login. An `API key` may still be detected for auxiliary tooling, but the generation path uses your login session by design.',
+    'No for the default OAuth path. `ima2-gen` can also use an OpenAI API key or bundled Grok/progrok when you explicitly choose those providers.',
 
   // FAQ — full detail page
   'faq.page.title': 'FAQ — ima2-gen',
@@ -176,10 +176,10 @@ const en: Dict = {
 
   'faq.tech.q1': 'What data leaves my machine?',
   'faq.tech.a1':
-    'The generation request goes to OpenAI to actually create the image. The result file and the session log stay on your disk. There is no separate `ima2-gen` analytics or remote store.',
+    'The generation request goes to the selected provider: OpenAI through OAuth/API, or xAI through bundled progrok for Grok. The result file and session log stay on your disk.',
   'faq.tech.q2': 'Does it work offline?',
   'faq.tech.a2':
-    'Generation needs the OpenAI API, so an internet connection is required for that step. Browsing the local gallery, organizing sessions, and editing style sheets all work offline.',
+    'Generation needs the selected provider network path, so an internet connection is required for that step. Browsing the local gallery, organizing sessions, and editing style sheets work offline.',
   'faq.tech.q3': 'Is it open source?',
   'faq.tech.a3':
     'Yes. `ima2-gen` is MIT licensed. The code lives on GitHub.',
@@ -198,7 +198,7 @@ const ko: Dict = {
   // Base / meta
   'meta.title': 'ima2-gen — 로컬 이미지 스튜디오, Classic + Node + Canvas',
   'meta.desc':
-    'Classic으로 만들고, Node로 분기하고, Canvas Mode로 정리하는 로컬 이미지 스튜디오.',
+    'Classic, Node, Canvas, OAuth/API 프로바이더, 번들 Grok 이미지 생성을 갖춘 로컬 이미지 스튜디오.',
   'meta.og.title': 'ima2-gen — 만들고, 분기하고, 정리하기',
   'meta.og.desc':
     'Classic, Node 분기, multimode batch, Canvas Mode cleanup을 갖춘 로컬 이미지 스튜디오. npx 한 줄로 시작합니다.',
@@ -292,11 +292,11 @@ const ko: Dict = {
   'local.h.before': '로그인 한 번, ',
   'local.h.em': '저장은 내 컴퓨터.',
   'local.lede':
-    '이미 쓰는 Codex/ChatGPT 로그인으로 시작하세요. 만든 이미지와 작업 기록은 외부 서버가 아니라 내 컴퓨터에 남습니다.',
+    '이미 쓰는 Codex/ChatGPT 로그인으로 시작하고, 필요하면 OpenAI API key나 번들 Grok/progrok도 선택하세요. 만든 이미지와 작업 기록은 외부 서버가 아니라 내 컴퓨터에 남습니다.',
   'local.quote.before': '설정에 ',
   'local.quote.strong': 'Configured but disabled',
   'local.quote.after':
-    '가 보인다면, API key가 설정돼 있어도 이미지 생성은 Codex/ChatGPT 로그인으로만 실행된다는 뜻입니다.',
+    '가 보인다면, API key가 설정돼 있지만 현재 작업공간은 OAuth를 쓰고 있다는 뜻입니다. API나 Grok 경로를 쓰려면 provider를 바꾸세요.',
   'local.meta': '로컬 저장 · MIT 라이선스 · 확인, 동기화, 버전 관리까지 원하는 방식으로.',
   'local.shot.alt':
     'ima2-gen 설정 화면 — OAuth 활성, API key는 설정되어 있지만 비활성.',
@@ -307,7 +307,7 @@ const ko: Dict = {
   'install.h.em': '바로 반복하세요.',
   'install.lede':
     'npx로 열고, Codex로 로그인하세요. 마음에 드는 결과가 나오면 바로 다음 방향을 펼칠 수 있습니다.',
-  'install.badge.npm': 'npm v1.1.14',
+  'install.badge.npm': 'npm v1.1.15',
   'install.badge.node': 'Node ≥20',
   'install.badge.mit': 'MIT',
   'install.links.aria': '프로젝트 링크',
@@ -328,7 +328,7 @@ const ko: Dict = {
     '로컬 사용자 데이터 폴더에 이미지와 작업 기록이 저장됩니다. 직접 확인, 동기화, 버전 관리까지 가능합니다. 이미지 파일을 별도 외부 저장소에 올리지 않습니다.',
   'faq.q3': 'OpenAI API key가 필요한가요?',
   'faq.a3':
-    '이미지 생성에는 필요 없습니다. 로컬에 로그인된 Codex/ChatGPT 계정을 그대로 사용합니다. `API key`가 설정돼 있어도 이미지 생성 경로는 로그인 세션을 우선 사용하도록 설계되어 있습니다.',
+    '기본 OAuth 경로에는 필요 없습니다. 명시적으로 선택하면 OpenAI API key 경로나 번들 Grok/progrok 경로도 사용할 수 있습니다.',
 
   // FAQ — 상세 페이지
   'faq.page.title': 'FAQ — ima2-gen',
@@ -371,10 +371,10 @@ const ko: Dict = {
 
   'faq.tech.q1': '내 컴퓨터에서 어떤 데이터가 나가나요?',
   'faq.tech.a1':
-    '이미지 생성 요청은 OpenAI로 전송됩니다. 결과 파일과 작업 기록은 로컬에만 남습니다. `ima2-gen`이 별도로 수집하는 분석 데이터나 외부 저장소는 없습니다.',
+    '이미지 생성 요청은 선택한 provider로 전송됩니다: OAuth/API는 OpenAI, Grok은 번들 progrok을 통한 xAI입니다. 결과 파일과 작업 기록은 로컬에 남습니다.',
   'faq.tech.q2': '오프라인에서도 되나요?',
   'faq.tech.a2':
-    '이미지 생성은 OpenAI API 호출이 필요해 인터넷이 있어야 합니다. 하지만 로컬 갤러리 조회, 세션 정리, 스타일 시트 편집 등의 기능은 오프라인에서도 자유롭게 사용할 수 있습니다.',
+    '이미지 생성은 선택한 provider 네트워크 경로가 필요해 인터넷이 있어야 합니다. 로컬 갤러리 조회, 세션 정리, 스타일 시트 편집은 오프라인에서도 사용할 수 있습니다.',
   'faq.tech.q3': '오픈소스인가요?',
   'faq.tech.a3':
     '네. `ima2-gen`은 MIT 라이선스로 공개되어 있습니다. 코드는 GitHub에서 볼 수 있습니다.',

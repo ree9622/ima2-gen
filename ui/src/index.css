@@ -6514,6 +6514,13 @@ body {
   flex-direction: column;
   gap: 12px;
 }
+.video-controls .option-row {
+  flex-wrap: wrap;
+}
+.video-controls .option-btn {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
 .video-progress {
   position: absolute;
   top: 12px;

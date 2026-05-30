@@ -108,7 +108,7 @@ function referenceImageUrl(ref: GrokReferenceImage): string {
   return ref.b64.startsWith("data:") ? ref.b64 : `data:${inputMime};base64,${ref.b64}`;
 }
 
-function imageEditPayload(
+export function imageEditPayload(
   model: string,
   prompt: string,
   references: GrokReferenceImage[],

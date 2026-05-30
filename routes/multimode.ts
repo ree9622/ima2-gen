@@ -297,6 +297,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
           size: effectiveSize,
           signal: cancelController.signal,
           requestId,
+          references: refCheck.refDetails,
           onFinalImage: async (image, index) => {
             const totalReturned = Math.max(index + 1, images.length + 1);
             await persistAndSendImage(image, index, totalReturned, sequenceStatus(totalReturned, maxImages));
@@ -356,30 +357,14 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
         finishStatus = "error";
         finishHttpStatus = 422;
         finishErrorCode = "EMPTY_RESPONSE";
-        finishMeta = {
-          sequenceId,
-          filenames: [],
-          imageCount: 0,
-          maxImages,
-          status,
-          composerPrompt: routeComposerPrompt,
-          composerInsertedPrompts: routeComposerInsertedPrompts,
-        };
+        finishMeta = { sequenceId, filenames: [], imageCount: 0, maxImages, status, composerPrompt: routeComposerPrompt, composerInsertedPrompts: routeComposerInsertedPrompts };
         sendSse(res, "error", {
           error: "No image data returned from the multimode stream",
           code: finishErrorCode,
           status: finishHttpStatus,
-          requestId,
-          sequenceId,
-          requested: maxImages,
-          returned,
+          requestId, sequenceId, requested: maxImages, returned,
         });
-        logEvent("multimode", "empty_response", {
-          requestId,
-          sequenceId,
-          maxImages,
-          elapsedMs: Date.now() - startTime,
-        });
+        logEvent("multimode", "empty_response", { requestId, sequenceId, maxImages, elapsedMs: Date.now() - startTime });
         return;
       }
       finishMeta = {

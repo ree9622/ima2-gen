@@ -1069,6 +1069,7 @@ export type VideoGenerateRequest = {
   sessionId?: string | null;
   clientNodeId?: string | null;
   clientRequestId?: string;
+  requestId?: string;
 };
 
 export type VideoGenerateDone = {

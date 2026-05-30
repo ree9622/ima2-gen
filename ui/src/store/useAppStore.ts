@@ -3099,6 +3099,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await postVideoGenerateStream(
         {
           prompt,
+          requestId: flightId,
           referenceImages: refs.length >= 2 ? refs : undefined,
           sourceImage: refs.length === 1 ? refs[0] : undefined,
           duration: clampVideoDurationUI(get().videoDuration, mode),
@@ -3132,7 +3133,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().startInFlightPolling();
     try {
       await postVideoGenerateStream(
-        { prompt: p, mode: "image-to-video", sourceFilename: filename, duration: 5, resolution: "480p", aspectRatio: "auto" },
+        { prompt: p, requestId: flightId, mode: "image-to-video", sourceFilename: filename, duration: 5, resolution: "480p", aspectRatio: "auto" },
         { onProgress: ({ progress }) => set({ videoProgress: progress ?? null }) },
       );
     } catch (error) {

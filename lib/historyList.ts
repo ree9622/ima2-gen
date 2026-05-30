@@ -14,7 +14,7 @@ async function listImageFiles(baseDir: string) {
       const full = join(dir, entry.name);
       if (entry.isDirectory() && depth > 0) {
         await walk(full, depth - 1);
-      } else if (entry.isFile() && /\.(png|jpe?g|webp)$/i.test(entry.name)) {
+      } else if (entry.isFile() && /\.(png|jpe?g|webp|mp4)$/i.test(entry.name)) {
         out.push({ full, rel: full.slice(baseDir.length + 1), name: entry.name });
       }
     }
@@ -34,6 +34,8 @@ export async function listHistoryRows(baseDir = config.storage.generatedDir) {
     return {
       filename: rel,
       url: `/generated/${rel.split("/").map(encodeURIComponent).join("/")}`,
+      mediaType: meta?.mediaType || (/\.mp4$/i.test(name) ? "video" : "image"),
+      video: meta?.video || null,
       createdAt: meta?.createdAt || st?.mtimeMs || 0,
       prompt: meta?.prompt || null,
       userPrompt: meta?.userPrompt || meta?.prompt || null,

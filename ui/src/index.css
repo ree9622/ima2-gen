@@ -1524,49 +1524,62 @@ body {
 
 .settings-section__header h3 {
   color: var(--text);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 720;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
 }
 
 .settings-section__header p {
   margin-top: 4px;
   color: var(--text-faint);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .settings-section__body {
   display: grid;
-  gap: 10px;
-  max-width: 920px;
+  gap: 8px;
+  max-width: none;
 }
 
 .settings-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(240px, min(420px, 44%));
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
 .settings-row__copy {
   min-width: 0;
+  display: contents;
 }
 
 .settings-row__control {
   width: 100%;
+  max-width: 560px;
   min-width: 0;
   display: flex;
-  justify-content: flex-end;
+  justify-content: stretch;
+  order: 2;
+}
+
+.settings-row > .settings-status {
+  order: 2;
 }
 
 .settings-row__control > * {
+  width: 100%;
   max-width: 100%;
+}
+
+.settings-row__control > .lang-toggle,
+.settings-row__control > .history-layout-toggle,
+.settings-row__control > .web-search-toggle {
+  width: fit-content;
+  margin-left: 0;
 }
 .settings-action-btn {
   width: 100%;
@@ -1585,18 +1598,31 @@ body {
 
 .settings-row h4,
 .settings-note h4 {
+  order: 1;
   color: var(--text);
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 680;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
 }
 
 .settings-row p,
 .settings-note p {
-  max-width: 540px;
-  margin-top: 6px;
+  order: 3;
+  max-width: none;
+  margin-top: 0;
   color: var(--text-dim);
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-row .settings-eyebrow {
+  order: 0;
+  margin-bottom: -2px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .settings-note {
@@ -1749,18 +1775,42 @@ body {
 
 .image-model-select--settings select {
   width: 100%;
-  min-width: 190px;
-  padding: 10px 12px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 8px;
   color: var(--text);
   background: var(--surface-2);
 }
 
 .settings-row__microcopy {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: -2px;
+  font-size: 11px;
   color: var(--text-faint);
+}
+
+.settings-field {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+}
+
+.settings-field__select {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.settings-field__description {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* ── Right Panel (collapsible) ── */

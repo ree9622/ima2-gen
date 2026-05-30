@@ -14,24 +14,19 @@ export function WorkspaceProfileSettings() {
 
   return (
     <div className="settings-field">
-      <label className="settings-field__label">{t("workspace.profileLabel")}</label>
-      <div className="settings-field__options">
+      <select
+        id="workspace-profile-select"
+        className="settings-field__select"
+        value={profile}
+        onChange={(event) => setProfile(event.target.value as WorkspaceProfile)}
+        aria-label={t("workspace.profileLabel")}
+      >
         {PROFILES.map((item) => (
-          <label key={item.value} className="settings-radio-option">
-            <input
-              type="radio"
-              name="workspaceProfile"
-              value={item.value}
-              checked={profile === item.value}
-              onChange={() => setProfile(item.value)}
-            />
-            <span className="settings-radio-option__text">
-              <strong>{t(item.labelKey)}</strong>
-              <span className="settings-radio-option__desc">{t(item.descKey)}</span>
-            </span>
-          </label>
+          <option key={item.value} value={item.value}>
+            {t(item.labelKey)}
+          </option>
         ))}
-      </div>
+      </select>
     </div>
   );
 }

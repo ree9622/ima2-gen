@@ -26,6 +26,8 @@ describe("generation controls custom plus UX contract", () => {
     assert.match(controls, /<SizePicker \/>/);
     assert.doesNotMatch(controls, /isGrok \? null : \(\s*<>\s*<SizePicker \/>/);
     assert.match(controls, /<CountPicker \/>/);
+    assert.match(controls, /<ProviderSelect allowGrok \/>/);
+    assert.match(controls, /const showMultimodeControls = uiMode === "classic"/);
   });
 
   it("preserves the existing size preset grid and visible auto option", () => {

@@ -72,4 +72,15 @@ describe("Agent Mode right sidebar contract", () => {
     assert.match(api, /cancelAgentQueueItem/);
     assert.match(api, /retryAgentQueueItem/);
   });
+
+  it("allows Grok as an Agent Mode provider and keeps model/provider in sync", () => {
+    const model = readSource("ui/src/components/agent/AgentModelSelector.tsx");
+    const types = readSource("ui/src/components/agent/agentTypes.ts");
+
+    assert.match(types, /provider: "oauth" \| "api" \| "grok"/);
+    assert.match(model, /<option value="grok">Grok<\/option>/);
+    assert.match(model, /isGrokImageModel\(settings\.model\)/);
+    assert.match(model, /provider === "grok"/);
+    assert.match(model, /onChange\(\{ model, provider: "grok" \}\)/);
+  });
 });

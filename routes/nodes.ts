@@ -13,11 +13,12 @@ import {
   makeGenerationCanceledError,
   throwIfJobCanceled,
 } from "../lib/generationCancel.js";
-import { summarizeReferencePayload, validateAndNormalizeRefs } from "../lib/refs.js";
+import { detectImageMimeFromB64, summarizeReferencePayload, validateAndNormalizeRefs } from "../lib/refs.js";
 import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateViaResponses, editViaResponses } from "../lib/responsesImageAdapter.js";
+import { generateViaGrok, type GrokReferenceImage } from "../lib/grokImageAdapter.js";
 import { isNonRetryableGenerationError, normalizeGenerationFailure, type UpstreamErr } from "../lib/generationErrors.js";
 import { logEvent, logError } from "../lib/logger.js";
 
@@ -73,6 +74,29 @@ function writeNodeError(
 
 function dataUrlFromB64(format: string, b64: string) {
   return `data:image/${format === "jpeg" ? "jpeg" : format};base64,${b64}`;
+}
+
+function imageFormatFromMime(mime: string | null | undefined): "png" | "jpeg" | "webp" {
+  if (mime === "image/jpeg") return "jpeg";
+  if (mime === "image/webp") return "webp";
+  return "png";
+}
+
+async function loadParentNodeB64(ctx: RuntimeContext, nodeId: string) {
+  for (const ext of ["png", "jpeg", "webp"] as const) {
+    const meta = await loadNodeMeta(ctx.rootDir, nodeId, ext, ctx.config.storage.generatedDir);
+    if (meta) return loadNodeB64(ctx.rootDir, `${nodeId}.${ext}`, ctx.config.storage.generatedDir);
+  }
+  return loadNodeB64(ctx.rootDir, `${nodeId}.png`, ctx.config.storage.generatedDir);
+}
+
+function toGrokReferences(parentB64: string | null, refs: Array<GrokReferenceImage | string>): GrokReferenceImage[] {
+  const parentMime = parentB64 ? detectImageMimeFromB64(parentB64) : null;
+  const parentRefs = parentB64
+    ? [{ b64: parentB64, declaredMime: parentMime, detectedMime: parentMime }]
+    : [];
+  const normalizedRefs = refs.map((ref) => typeof ref === "string" ? { b64: ref } : ref);
+  return [...parentRefs, ...normalizedRefs];
 }
 
 export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
@@ -170,6 +194,9 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const effectiveSize = providerOptions.size;
       const webSearchEnabled = providerOptions.webSearchEnabled;
       const activeProvider = providerOptions.provider;
+      const effectiveImageModel = activeProvider === "grok" && quality === "high"
+        ? "grok-imagine-image-quality"
+        : imageModel;
       if (contextMode === "ancestry") {
         finishStatus = "error";
         finishHttpStatus = 400;
@@ -215,7 +242,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const startTime = Date.now();
       let parentB64: string | null = null;
       if (parentNodeId) {
-        parentB64 = await loadNodeB64(ctx.rootDir, `${parentNodeId}.png`, ctx.config.storage.generatedDir);
+        parentB64 = await loadParentNodeB64(ctx, parentNodeId);
       } else if (typeof externalSrc === "string" && externalSrc.length > 0) {
         parentB64 = await loadAssetB64(ctx.rootDir, externalSrc, ctx.config.storage.generatedDir);
       }
@@ -226,6 +253,19 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const refsForRequest = contextMode === "parent-only" ? [] : (refCheck.refDetails || refCheck.refs);
       const parentImagePresent = !!parentB64;
       const inputImageCount = (parentImagePresent ? 1 : 0) + refsForRequest.length;
+      if (activeProvider === "grok" && inputImageCount > 3) {
+        finishStatus = "error";
+        finishHttpStatus = 400;
+        finishErrorCode = "GROK_REF_TOO_MANY";
+        return res.status(400).json({
+          error: {
+            code: "GROK_REF_TOO_MANY",
+            message: "Grok image editing supports up to 3 reference images.",
+          },
+          code: "GROK_REF_TOO_MANY",
+          parentNodeId,
+        });
+      }
       logEvent("node", "request", {
         requestId,
         operation,
@@ -233,7 +273,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         parentNodeId,
         clientNodeId,
         quality,
-        model: imageModel,
+        model: effectiveImageModel,
         size: effectiveSize,
         moderation,
         refs: refsForRequest.length,
@@ -260,6 +300,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       }
 
       let b64: string | undefined, usage: unknown, webSearchCalls = 0, revisedPrompt: string | null = null;
+      let resultFormat: "png" | "jpeg" | "webp" = activeProvider === "grok" ? "jpeg" : format as "png" | "jpeg" | "webp";
       const MAX_RETRIES = 1;
       let lastErr: UpstreamErr | null = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -271,7 +312,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
             sessionId,
             parentNodeId,
             clientNodeId,
-            model: imageModel,
+            model: effectiveImageModel,
             moderation,
             quality,
             size: effectiveSize,
@@ -282,49 +323,60 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
             searchMode,
             webSearchEnabled,
           });
-          const r = parentB64
-            ? await editViaResponses(activeProvider, prompt, parentB64, quality, effectiveSize, moderation, normalizedPromptMode, ctx, requestId, {
-                model: imageModel,
-                references: refsForRequest,
-                searchMode,
-                reasoningEffort,
-                webSearchEnabled,
-                signal: cancelController.signal,
-              })
-            : await generateViaResponses(
-                activeProvider,
-                prompt,
-                quality,
-                effectiveSize,
-                moderation,
-                refsForRequest,
+          const r = activeProvider === "grok"
+            ? await generateViaGrok(prompt, ctx, {
+                model: effectiveImageModel,
+                size: effectiveSize,
                 requestId,
-                normalizedPromptMode,
-                ctx,
-                {
-                  model: imageModel,
+                signal: cancelController.signal,
+                references: toGrokReferences(parentB64, refsForRequest),
+              })
+            : parentB64
+              ? await editViaResponses(activeProvider, prompt, parentB64, quality, effectiveSize, moderation, normalizedPromptMode, ctx, requestId, {
+                  model: effectiveImageModel,
+                  references: refsForRequest,
+                  searchMode,
                   reasoningEffort,
                   webSearchEnabled,
                   signal: cancelController.signal,
-                  partialImages: streamResponse ? 2 : 0,
-                  onPartialImage: streamResponse
-                    ? (partial) =>
-                        isJobCanceled(requestId)
-                          ? undefined
-                          : writeSse(res, "partial", {
-                              requestId,
-                              image: dataUrlFromB64(format, partial.b64),
-                              index: partial.index,
-                            })
-                    : null,
-                },
-              );
+                })
+              : await generateViaResponses(
+                  activeProvider,
+                  prompt,
+                  quality,
+                  effectiveSize,
+                  moderation,
+                  refsForRequest,
+                  requestId,
+                  normalizedPromptMode,
+                  ctx,
+                  {
+                    model: effectiveImageModel,
+                    reasoningEffort,
+                    webSearchEnabled,
+                    signal: cancelController.signal,
+                    partialImages: streamResponse ? 2 : 0,
+                    onPartialImage: streamResponse
+                      ? (partial) =>
+                          isJobCanceled(requestId)
+                            ? undefined
+                            : writeSse(res, "partial", {
+                                requestId,
+                                image: dataUrlFromB64(format, partial.b64),
+                                index: partial.index,
+                              })
+                      : null,
+                  },
+                );
           throwIfJobCanceled(requestId);
           if (r.b64) {
             b64 = r.b64;
             usage = r.usage;
             webSearchCalls = r.webSearchCalls || 0;
             revisedPrompt = r.revisedPrompt || null;
+            if (activeProvider === "grok") {
+              resultFormat = imageFormatFromMime(("mime" in r ? r.mime : undefined) || detectImageMimeFromB64(r.b64) || "image/jpeg");
+            }
             break;
           }
           lastErr = { message: "Empty response (safety refusal)" };
@@ -400,8 +452,8 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         userPrompt: prompt,
         revisedPrompt,
         promptMode: normalizedPromptMode,
-        options: { quality, size: effectiveSize, format, moderation },
-        model: imageModel,
+        options: { quality, size: effectiveSize, format: resultFormat, moderation },
+        model: effectiveImageModel,
         reasoningEffort,
         createdAt: Date.now(),
         createdAtIso: new Date().toISOString(),
@@ -417,7 +469,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         refsCount: refsForRequest.length,
         quality,
         size: effectiveSize,
-        format,
+        format: resultFormat,
         moderation,
       };
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
@@ -426,7 +478,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         nodeId,
         b64,
         meta,
-        ext: format,
+        ext: resultFormat,
         generatedDir: ctx.config.storage.generatedDir,
       });
       finishMeta = { nodeId, filename, imageChars: b64.length };
@@ -443,7 +495,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         nodeId,
         parentNodeId,
         requestId,
-        image: dataUrlFromB64(format, b64),
+        image: dataUrlFromB64(resultFormat, b64),
         filename,
         url: `/generated/${filename}`,
         elapsed,
@@ -451,9 +503,10 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         webSearchCalls,
         webSearchEnabled,
         provider: activeProvider,
-        model: imageModel,
+        model: effectiveImageModel,
         reasoningEffort,
         size: effectiveSize,
+        format: resultFormat,
         moderation,
         refsCount: refsForRequest.length,
         contextMode,

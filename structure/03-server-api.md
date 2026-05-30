@@ -52,7 +52,7 @@ graph TD
 
 `/api/billing` reports `apiKeySource` as `"none"`, `"env"`, or `"config"`. API-key generation requires a configured key and returns `API_KEY_REQUIRED` before upstream when `provider: "api"` is requested without one.
 
-The live generation/edit provider can be OAuth, API-key, or Grok based. OAuth and API-key paths use the Responses API `image_generation` tool through a shared image adapter; only the endpoint/auth boundary differs. The Grok path uses the bundled progrok xAI proxy: classic generation first runs mandatory xAI Web Search through `/v1/responses`, then calls `grok-4.3` with a forced local `generate_image` function, then the server executes xAI `/v1/images/generations`. When Grok classic references are attached, the planner also receives those images as multimodal inputs and the final step switches to xAI `/v1/images/edits` with the same reference images so i2i context survives the planner phase.
+The live generation/edit provider can be OAuth, API-key, or Grok based. OAuth and API-key paths use the Responses API `image_generation` tool through a shared image adapter; only the endpoint/auth boundary differs. The Grok path uses the bundled progrok xAI proxy: classic, Node, and Agent generation first run mandatory xAI Web Search through `/v1/responses`, then call `grok-4.3` with a forced local `generate_image` function, then the server executes xAI `/v1/images/generations`. When Grok references, a Node parent image, or an Agent current image are attached, the planner also receives those images as multimodal inputs and the final step switches to xAI `/v1/images/edits` with the same reference images so i2i context survives the planner phase.
 
 Storage endpoints are local-support helpers. `/api/storage/open-generated-dir` never accepts a browser-supplied path; it opens `ctx.config.storage.generatedDir` only.
 
@@ -77,7 +77,7 @@ For `provider: "api"`, missing options use `config.apiProvider` defaults: `gpt-5
 
 For `provider: "grok"`, supported image models are `grok-imagine-image` and
 `grok-imagine-image-quality`. Classic `n > 1` requests run mandatory search and
-the `grok-4.3` planner tool call once, then reuse the planned prompt for each image and report one search call in metadata. The planned image prompt is requested in English, with explicitly requested visible non-English text preserved verbatim. Grok classic requests with references send those images to the planner, use `/v1/images/edits` for the final image call, and are capped at three references (`GROK_REF_TOO_MANY`) because xAI documents up to three source images for image editing. Grok size
+the `grok-4.3` planner tool call once, then reuse the planned prompt for each image and report one search call in metadata. The planned image prompt is requested in English, with explicitly requested visible non-English text preserved verbatim. Grok classic and Node requests with references send those images to the planner, use `/v1/images/edits` for the final image call, and are capped at three total input images (`GROK_REF_TOO_MANY`) because xAI documents up to three source images for image editing. Node counts its parent image plus references; Agent uses the current image as its edit reference when one exists. Grok size
 requests are converted to xAI `aspect_ratio` and `resolution`; the OpenAI-style
 `size` field is not sent upstream. Grok edit calls xAI `/v1/images/edits`; Grok
 mask edit is rejected before upstream with `GROK_MASK_UNSUPPORTED`.
@@ -173,6 +173,8 @@ Agent Mode is a conversational image workspace. Each agent session holds a curre
 | `POST` | `/api/agent/queue/:itemId/retry` | Retry a queued item |
 
 Agent Mode is a server + web-UI feature (`ui/src/components/agent/*`, `ui/src/lib/agentApi.ts`, `ui/src/styles/agent-workspace*.css`). There is no `ima2 agent` CLI command; drive it from the web UI or `/api/agent/*` directly. Turns run through the durable queue worker so parallel/auto-generation work survives reconnects.
+
+Agent generation settings accept `provider: "oauth" | "api" | "grok"`. With `provider: "grok"`, the Agent runtime keeps the same user/tool/assistant turn skeleton (`ima2.get_image_context`, `ima2.web_search`, `ima2.generate_image`) but routes the generator through the Grok search + `grok-4.3` planner + xAI Images API path. Grok Agent turns force web search on because the provider planner depends on it; `quality: "high"` promotes the final image model to `grok-imagine-image-quality`. If the session has a current image, that image is sent as the Grok edit reference so Agent follow-up turns preserve image-to-image context.
 
 ## Prompt Builder API
 

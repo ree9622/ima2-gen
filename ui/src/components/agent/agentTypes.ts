@@ -13,7 +13,7 @@ export type AgentGenerationStrategy = "auto" | "manual";
 export type AgentSidebarTab = "image" | "library" | "forms" | "quality" | "model" | "queue";
 
 export type AgentGenerationSettings = {
-  provider: "oauth" | "api";
+  provider: "oauth" | "api" | "grok";
   model: string;
   quality: "low" | "medium" | "high";
   size: string;

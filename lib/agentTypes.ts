@@ -16,7 +16,7 @@ export type AgentGenerationPlanSource = "auto-default" | "auto-request" | "manua
 export type AgentSlashCommandName = "question" | "help" | "variants" | "generate" | "parallelism";
 
 export interface AgentGenerationSettings {
-  provider: "oauth" | "api";
+  provider: "oauth" | "api" | "grok";
   model: string;
   quality: "low" | "medium" | "high";
   size: string;

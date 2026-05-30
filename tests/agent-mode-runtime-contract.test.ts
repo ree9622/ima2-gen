@@ -168,6 +168,68 @@ describe("Agent Mode runtime contract", () => {
     });
   });
 
+  it("generates through Grok planned Images API when Agent provider is grok", async () => {
+    const finalImage = await pngB64();
+    const calls: Array<{ url: string; body: any }> = [];
+    globalThis.fetch = async (url, init) => {
+      if (String(url).startsWith("http://127.0.0.1:") && !String(url).includes("/v1/")) return originalFetch(url, init);
+      const body = JSON.parse(String(init?.body || "{}"));
+      calls.push({ url: String(url), body });
+      if (String(url).endsWith("/v1/responses")) {
+        return Response.json({
+          output: [{ type: "message", content: [{ type: "output_text", text: "Agent Grok visual brief." }] }],
+        });
+      }
+      if (String(url).endsWith("/v1/chat/completions")) {
+        return Response.json({
+          choices: [{
+            message: {
+              tool_calls: [{
+                type: "function",
+                function: {
+                  name: "generate_image",
+                  arguments: JSON.stringify({ prompt: "planned agent grok prompt", model: "grok-imagine-image" }),
+                },
+              }],
+            },
+          }],
+        });
+      }
+      return Response.json({
+        data: [{ b64_json: finalImage, mime_type: "image/jpeg" }],
+        usage: { cost_in_usd_ticks: 5 },
+      });
+    };
+
+    await withApp(async (baseUrl) => {
+      const created = await createSession(baseUrl);
+      const res = await fetch(`${baseUrl}/api/agent/sessions/${created.selectedSessionId}/turns`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "make a Grok agent poster",
+          provider: "grok",
+          model: "grok-imagine-image",
+          quality: "high",
+          webSearchEnabled: false,
+        }),
+      });
+      const body = await res.json() as any;
+      const images = Object.values(body.imagesById) as Array<{ url: string; revisedPrompt?: string }>;
+      const turns = body.turnsBySession[created.selectedSessionId] as Array<{ text: string; imageIds?: string[] }>;
+
+      assert.equal(res.status, 200);
+      assert.ok(images.some((image) => image.url.endsWith(".jpeg")));
+      assert.ok(images.some((image) => image.revisedPrompt === "planned agent grok prompt"));
+      assert.ok(turns.some((turn) => turn.text.includes("ima2.web_search + ima2.generate_image")));
+      assert.equal(calls.filter((call) => call.url.endsWith("/v1/responses")).length, 1);
+      assert.equal(calls.filter((call) => call.url.endsWith("/v1/chat/completions")).length, 1);
+      assert.equal(calls.filter((call) => call.url.endsWith("/v1/images/generations")).length, 1);
+      assert.equal(calls.find((call) => call.url.endsWith("/v1/images/generations"))?.body.model, "grok-imagine-image-quality");
+      assert.match(calls.find((call) => call.url.endsWith("/v1/chat/completions"))?.body.messages[1].content[0].text, /English only/);
+    });
+  });
+
   it("persists selected Agent image focus and rejects cross-session image ids", async () => {
     const finalImage = await pngB64();
     globalThis.fetch = async (url, init) => {

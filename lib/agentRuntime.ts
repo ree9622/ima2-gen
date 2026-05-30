@@ -1,14 +1,18 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ulid } from "ulid";
 import { embedImageMetadataBestEffort } from "./imageMetadataStore.js";
 import { invalidateHistoryIndex } from "./historyIndex.js";
 import { logEvent } from "./logger.js";
+import { detectImageMimeFromB64 } from "./refs.js";
+import { resolveProviderOptions } from "./providerOptions.js";
 import { generateViaResponses } from "./responsesImageAdapter.js";
+import { generateViaGrok, type GrokReferenceImage } from "./grokImageAdapter.js";
 import {
   appendAgentTurn,
   buildImageContextManifest,
+  getAgentImages,
   getAgentSession,
   importAgentImage,
   recordAgentWebFinding,
@@ -88,7 +92,7 @@ export async function runAgentGenerationPlan(
 ) {
   const session = getAgentSession(sessionId);
   if (!session) throw notFound(sessionId);
-  const webSearchEnabled = options.webSearchEnabled ?? session.webSearchEnabled;
+  const webSearchEnabled = options.provider === "grok" ? true : options.webSearchEnabled ?? session.webSearchEnabled;
   const enabledTools: AgentToolName[] = webSearchEnabled
     ? [...AGENT_ALLOWED_TOOLS]
     : ["ima2.get_image_context", "ima2.generate_image"];
@@ -135,7 +139,7 @@ export async function runAgentGenerationPlan(
       ...options,
       requestId,
     });
-    const findingIds = recordSearchFindings(sessionId, generationPrompt, result.webSearchCalls);
+    const findingIds = recordSearchFindings(sessionId, generationPrompt, result.webSearchCalls, result.provider ?? "oauth");
     const finishedAt = Date.now();
     return {
       prompt: generationPrompt,
@@ -274,26 +278,81 @@ async function generateAgentImage(
   options: AgentRunOptions,
 ) {
   const requestId = options.requestId ?? `agent_${ulid()}`;
-  const format = options.format ?? "png";
-  const response = await generateViaResponses(
-    options.provider ?? "oauth",
-    `${manifest}\n\nUser request:\n${prompt}`,
-    options.quality ?? "medium",
-    options.size ?? "1024x1024",
-    options.moderation ?? "low",
-    [],
-    requestId,
-    "auto",
-    ctx,
-    {
-      model: options.model,
-      reasoningEffort: options.reasoningEffort,
-      webSearchEnabled,
-      signal: options.signal,
-    },
-  );
-  const image = await persistAgentImage(ctx, sessionId, prompt, format, requestId, response);
-  return { image, webSearchCalls: response.webSearchCalls || 0, text: response.text ?? null };
+  const providerOptions = resolveProviderOptions(ctx, {
+    provider: options.provider ?? "oauth",
+    rawModel: options.model,
+    rawReasoningEffort: options.reasoningEffort,
+    rawSize: options.size ?? "1024x1024",
+    rawWebSearchEnabled: webSearchEnabled,
+    searchMode: webSearchEnabled ? "on" : "off",
+  });
+  if (providerOptions.error) {
+    const err = new Error(providerOptions.error) as Error & { code?: string; status?: number };
+    err.code = providerOptions.code;
+    err.status = providerOptions.status;
+    throw err;
+  }
+  const activeProvider = providerOptions.provider;
+  const effectiveModel = activeProvider === "grok" && options.quality === "high"
+    ? "grok-imagine-image-quality"
+    : providerOptions.model;
+  const response = activeProvider === "grok"
+    ? await generateViaGrok(`${manifest}\n\nUser request:\n${prompt}`, ctx, {
+        model: effectiveModel,
+        size: providerOptions.size,
+        requestId,
+        signal: options.signal ?? undefined,
+        references: await loadAgentCurrentImageReferences(ctx, sessionId),
+      })
+    : await generateViaResponses(
+        activeProvider,
+        `${manifest}\n\nUser request:\n${prompt}`,
+        options.quality ?? "medium",
+        providerOptions.size,
+        options.moderation ?? "low",
+        [],
+        requestId,
+        "auto",
+        ctx,
+        {
+          model: providerOptions.model,
+          reasoningEffort: providerOptions.reasoningEffort,
+          webSearchEnabled,
+          signal: options.signal,
+        },
+      );
+  const format = activeProvider === "grok"
+    ? imageFormatFromMime(("mime" in response ? response.mime : undefined) || detectImageMimeFromB64(response.b64) || "image/jpeg")
+    : options.format ?? "png";
+  const image = await persistAgentImage(ctx, sessionId, prompt, format, requestId, response, {
+    provider: String(activeProvider),
+    model: String(effectiveModel),
+  });
+  const responseText = "text" in response && typeof response.text === "string" ? response.text : null;
+  return { image, webSearchCalls: response.webSearchCalls || 0, text: responseText, provider: activeProvider };
+}
+
+async function loadAgentCurrentImageReferences(ctx: RuntimeContext, sessionId: string): Promise<GrokReferenceImage[]> {
+  const session = getAgentSession(sessionId);
+  const currentImage = session?.lastImageId
+    ? getAgentImages(sessionId).find((image) => image.id === session.lastImageId)
+    : null;
+  if (!currentImage?.filename) return [];
+  try {
+    const b64 = (await readFile(join(ctx.config.storage.generatedDir, currentImage.filename))).toString("base64");
+    const mime = detectImageMimeFromB64(b64);
+    return [{ b64, declaredMime: mime, detectedMime: mime }];
+  } catch (error) {
+    const err = errInfo(error);
+    logEvent("agent", "grok_ref_missing", { sessionId, filename: currentImage.filename, code: err.code, message: err.message });
+    return [];
+  }
+}
+
+function imageFormatFromMime(mime: string | null | undefined): "png" | "jpeg" | "webp" {
+  if (mime === "image/jpeg") return "jpeg";
+  if (mime === "image/webp") return "webp";
+  return "png";
 }
 
 async function persistAgentImage(
@@ -303,6 +362,7 @@ async function persistAgentImage(
   format: string,
   requestId: string,
   response: { b64: string; revisedPrompt?: string | null; usage?: unknown; webSearchCalls?: number },
+  generation: { provider: string; model: string },
 ) {
   await mkdir(ctx.config.storage.generatedDir, { recursive: true });
   const rand = randomBytes(ctx.config.ids.generatedHexBytes).toString("hex");
@@ -314,7 +374,8 @@ async function persistAgentImage(
     prompt,
     userPrompt: prompt,
     revisedPrompt: response.revisedPrompt ?? null,
-    provider: "agent",
+    provider: generation.provider,
+    model: generation.model,
     createdAt: Date.now(),
     usage: response.usage ?? null,
     webSearchCalls: response.webSearchCalls ?? 0,
@@ -336,14 +397,15 @@ async function persistAgentImage(
   });
 }
 
-function recordSearchFindings(sessionId: string, prompt: string, count: number) {
+function recordSearchFindings(sessionId: string, prompt: string, count: number, provider: string) {
   if (!count) return [];
+  const isGrok = provider === "grok";
   return [
     recordAgentWebFinding({
       sessionId,
       query: prompt,
-      title: "Responses web_search",
-      snippet: `Responses reported ${count} web search call${count === 1 ? "" : "s"}.`,
+      title: isGrok ? "Grok visual research" : "Responses web_search",
+      snippet: `${isGrok ? "Grok" : "Responses"} reported ${count} web search call${count === 1 ? "" : "s"}.`,
     }),
   ];
 }

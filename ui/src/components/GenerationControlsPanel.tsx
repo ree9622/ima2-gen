@@ -26,7 +26,6 @@ export function GenerationControlsPanel() {
   const setMultimode = useAppStore((s) => s.setMultimode);
   const uiMode = useAppStore((s) => s.uiMode);
   const showMultimodeControls = uiMode === "classic";
-  const grokAllowed = uiMode === "classic";
   const isGrok = provider === "grok";
   const qualityItems = [
     { value: "low" as const, label: t("quality.lowLabel"), sub: t("quality.lowSub") },
@@ -45,7 +44,7 @@ export function GenerationControlsPanel() {
 
   return (
     <div className="right-panel-settings" role="tabpanel">
-      <ProviderSelect allowGrok={grokAllowed} />
+      <ProviderSelect allowGrok />
       {isGrok ? (
         <div className="provider-compat-note" role="note">
           <strong>{t("provider.grokCompatTitle")}</strong>

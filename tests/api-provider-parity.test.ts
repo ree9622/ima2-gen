@@ -402,4 +402,87 @@ describe("API provider parity", () => {
       assert.match(text, /"provider":"api"/);
     });
   });
+
+  it("node provider=grok uses planned Images API output without Responses SSE partials", async () => {
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      if (String(url).startsWith("http://127.0.0.1:") && !String(url).includes("/v1/")) {
+        return originalFetch(url, init);
+      }
+      const body = JSON.parse(String(init?.body || "{}"));
+      calls.push({ url: String(url), body });
+      if (String(url).endsWith("/v1/responses")) {
+        return Response.json({
+          output: [{ type: "message", content: [{ type: "output_text", text: "Node visual brief." }] }],
+        });
+      }
+      if (String(url).endsWith("/v1/chat/completions")) {
+        return Response.json({
+          choices: [{
+            message: {
+              tool_calls: [{
+                type: "function",
+                function: {
+                  name: "generate_image",
+                  arguments: JSON.stringify({ prompt: "planned node grok prompt", model: "grok-imagine-image" }),
+                },
+              }],
+            },
+          }],
+        });
+      }
+      return Response.json({
+        data: [{ b64_json: FINAL_B64, mime_type: "image/jpeg" }],
+        usage: { cost_in_usd_ticks: 3 },
+      });
+    };
+    await withApp(async ({ baseUrl }) => {
+      const res = await fetch(`${baseUrl}/api/node/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({
+          prompt: "node grok",
+          provider: "grok",
+          model: "grok-imagine-image",
+          quality: "high",
+          requestId: "req_node_grok",
+        }),
+      });
+      const text = await res.text();
+      assert.equal(res.status, 200);
+      assert.match(text, /event: phase/);
+      assert.doesNotMatch(text, /event: partial/);
+      assert.match(text, /event: done/);
+      assert.match(text, /"provider":"grok"/);
+      assert.match(text, /"format":"jpeg"/);
+      assert.equal(calls.filter((call) => call.url.endsWith("/v1/responses")).length, 1);
+      assert.equal(calls.filter((call) => call.url.endsWith("/v1/chat/completions")).length, 1);
+      assert.equal(calls.filter((call) => call.url.endsWith("/v1/images/generations")).length, 1);
+      assert.equal(calls.find((call) => call.url.endsWith("/v1/images/generations"))?.body.model, "grok-imagine-image-quality");
+    });
+  });
+
+  it("node provider=grok rejects more than three total reference images before upstream", async () => {
+    const reference = await pngB64();
+    globalThis.fetch = async (url, init) => {
+      if (String(url).startsWith("http://127.0.0.1:") && !String(url).includes("/v1/")) {
+        return originalFetch(url, init);
+      }
+      throw new Error(`unexpected upstream call: ${String(url)}`);
+    };
+    await withApp(async ({ baseUrl }) => {
+      const res = await fetch(`${baseUrl}/api/node/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "too many node grok refs",
+          provider: "grok",
+          references: [reference, reference, reference, reference],
+        }),
+      });
+      const body = await res.json() as any;
+      assert.equal(res.status, 400);
+      assert.equal(body.error.code, "GROK_REF_TOO_MANY");
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { useI18n } from "../../i18n";
-import { IMAGE_MODEL_OPTIONS } from "../../lib/imageModels";
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODEL_OPTIONS, isGrokImageModel } from "../../lib/imageModels";
 import type { AgentGenerationSettings } from "./agentTypes";
 
 type Props = {
@@ -9,12 +9,34 @@ type Props = {
 
 export function AgentModelSelector({ settings, onChange }: Props) {
   const { t } = useI18n();
+  const setProvider = (provider: AgentGenerationSettings["provider"]) => {
+    if (provider === "grok" && !isGrokImageModel(settings.model)) {
+      onChange({ provider, model: "grok-imagine-image" });
+      return;
+    }
+    if (provider !== "grok" && isGrokImageModel(settings.model)) {
+      onChange({ provider, model: DEFAULT_IMAGE_MODEL });
+      return;
+    }
+    onChange({ provider });
+  };
+  const setModel = (model: string) => {
+    if (isGrokImageModel(model)) {
+      onChange({ model, provider: "grok" });
+      return;
+    }
+    if (settings.provider === "grok") {
+      onChange({ model, provider: "oauth" });
+      return;
+    }
+    onChange({ model });
+  };
 
   return (
     <section className="agent-settings-grid" aria-label={t("agent.model")}>
       <label>
         <span>{t("agent.model")}</span>
-        <select value={settings.model} onChange={(event) => onChange({ model: event.target.value })}>
+        <select value={settings.model} onChange={(event) => setModel(event.target.value)}>
           {IMAGE_MODEL_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>{t(option.fullLabelKey)}</option>
           ))}
@@ -22,9 +44,10 @@ export function AgentModelSelector({ settings, onChange }: Props) {
       </label>
       <label>
         <span>{t("agent.provider")}</span>
-        <select value={settings.provider} onChange={(event) => onChange({ provider: event.target.value as AgentGenerationSettings["provider"] })}>
+        <select value={settings.provider} onChange={(event) => setProvider(event.target.value as AgentGenerationSettings["provider"])}>
           <option value="oauth">OAuth</option>
           <option value="api">API</option>
+          <option value="grok">Grok</option>
         </select>
       </label>
       <label>

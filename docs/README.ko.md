@@ -62,6 +62,8 @@ ima2 serve
 
 Grok은 Classic, Node, Agent 흐름을 지원합니다. Classic 레퍼런스, Node 부모 이미지, Agent 현재 이미지가 있으면 최종 Grok 호출은 xAI image edit 경로로 전환되어 image-to-image 맥락을 유지합니다. 기본 모델은 `grok-imagine-image`이고, `quality: "high"`에서는 `grok-imagine-image-quality`를 사용합니다.
 
+Grok video 생성(T2V/I2V)은 `1.1.15`에 포함되지 않았습니다. `docs/grok-video-i2v-plan.md`와 `docs/grok-video-i2v-research.md`는 구현 계획과 조사 문서이며, 공개 런타임은 아직 이미지 생성만 지원합니다.
+
 설정 화면에 **API key provider available**이나 **Grok provider available**이 보이면 해당 공급자가 감지됐고 생성 요청에 사용할 수 있다는 뜻입니다.
 
 ![OAuth 활성화와 API 키 비활성 상태를 보여주는 설정 화면](../assets/screenshots/settings-oauth-generation.png)

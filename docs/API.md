@@ -20,6 +20,11 @@ Image generation supports OAuth, API-key, and Grok providers.
 - Grok generation maps `size` to xAI `aspect_ratio` and `resolution`; it does not send an OpenAI-style `size` field upstream. Grok edit uses xAI `/v1/images/edits`; Grok mask edit remains unsupported and returns `GROK_MASK_UNSUPPORTED`.
 - Mask edits are mask/selection guided edits, not pixel-perfect inpaint guarantees.
 
+Grok video generation (T2V/I2V) is not part of the `1.1.15` runtime API. The
+`docs/grok-video-i2v-plan.md` and `docs/grok-video-i2v-research.md` files are
+planning and research notes only; no `/api/video` route or Grok video endpoint
+wrapper is shipped in this release.
+
 ## Health And Status
 
 | Method | Path | Notes |

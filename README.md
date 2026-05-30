@@ -73,6 +73,8 @@ Image generation can run through the local Codex/ChatGPT OAuth path, a configure
 
 If no provider is specified, the app keeps the current OAuth/default behavior. API-key generation defaults to `gpt-5.4-mini`, `low` reasoning, and `1024x1024` unless the request passes validated model, reasoning, size, or web-search options. Grok defaults to `grok-imagine-image`; `quality: "high"` promotes the final image call to `grok-imagine-image-quality`.
 
+Grok video generation (T2V/I2V) is not shipped in `1.1.15`. The video files in `docs/grok-video-i2v-plan.md` and `docs/grok-video-i2v-research.md` are implementation planning and research notes only; the published runtime remains image-only.
+
 ![Settings workspace showing OAuth active and API key provider available.](assets/screenshots/settings-oauth-generation.png)
 
 ## Model Guidance

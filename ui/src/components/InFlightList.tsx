@@ -9,6 +9,7 @@ function truncate(s: string, max = 28) {
 export function InFlightList() {
   const inFlight = useAppStore((s) => s.inFlight);
   const cancelInFlightJob = useAppStore((s) => s.cancelInFlightJob);
+  const videoProgress = useAppStore((s) => s.videoProgress);
   const { t } = useI18n();
 
   const phaseLabels: Record<string, string> = {
@@ -35,7 +36,11 @@ export function InFlightList() {
             aria-label={`${phaseLabel}: ${promptLabel}`}
           >
             <span className="in-flight-prompt">{truncate(f.prompt)}</span>
-            <span className="in-flight-phase">{phaseLabel}</span>
+            <span className="in-flight-phase">
+              {f.kind === "video" && videoProgress != null
+                ? `${Math.round(videoProgress * 100)}%`
+                : phaseLabel}
+            </span>
             <button
               type="button"
               className="in-flight-cancel"

@@ -1,5 +1,5 @@
 import type { RuntimeContext } from "./runtimeContext.js";
-import { normalizeImageModel, normalizeReasoningEffort } from "./imageModels.js";
+import { normalizeImageModel, normalizeReasoningEffort, normalizeGrokImageModel } from "./imageModels.js";
 
 export function resolveProviderOptions(ctx: RuntimeContext | null | undefined, {
   provider = "oauth",
@@ -9,6 +9,20 @@ export function resolveProviderOptions(ctx: RuntimeContext | null | undefined, {
   rawWebSearchEnabled = true,
   searchMode = "on",
 }: any = {}) {
+  if (provider === "grok") {
+    const grokCfg: { defaultImageModel?: string } = (ctx?.config as any)?.grokProvider || {};
+    const modelInput = rawModel || grokCfg.defaultImageModel;
+    const grokModelCheck = normalizeGrokImageModel(modelInput);
+    if (grokModelCheck.error) return { error: grokModelCheck.error, code: grokModelCheck.code, status: grokModelCheck.status };
+    return {
+      provider: "grok" as const,
+      model: grokModelCheck.model,
+      reasoningEffort: "none",
+      size: rawSize,
+      webSearchEnabled: false,
+    };
+  }
+
   const activeProvider = provider === "api" ? "api" : "oauth";
   const apiConfig: { defaultImageModel?: string; defaultReasoningEffort?: string; defaultSize?: string; allowWebSearch?: boolean } = (ctx?.config as { apiProvider?: any })?.apiProvider || {};
   const modelInput = activeProvider === "api"

@@ -44,7 +44,7 @@ export function ProviderReadinessPopup() {
           <dl className="provider-readiness__facts">
             <div>
               <dt>{t("readiness.provider")}</dt>
-              <dd>{provider === "oauth" ? "OAuth" : t("provider.apiLabel")}</dd>
+              <dd>{provider === "grok" ? "Grok" : provider === "oauth" ? "OAuth" : t("provider.apiLabel")}</dd>
             </div>
             <div>
               <dt>{t("readiness.model")}</dt>

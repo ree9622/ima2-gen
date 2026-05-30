@@ -277,6 +277,13 @@ export const config = {
     defaultSize: pickStr(env.IMA2_API_IMAGE_SIZE, fileCfg.apiProvider?.defaultSize, "1024x1024"),
     allowWebSearch: pickBool(env.IMA2_API_ALLOW_WEB_SEARCH, fileCfg.apiProvider?.allowWebSearch, true),
   },
+  grokProvider: {
+    proxyPort: pickInt(env.IMA2_GROK_PROXY_PORT, fileCfg.grokProvider?.proxyPort, 18645),
+    proxyHost: pickStr(env.IMA2_GROK_PROXY_HOST, fileCfg.grokProvider?.proxyHost, "127.0.0.1"),
+    defaultImageModel: pickStr(env.IMA2_GROK_IMAGE_MODEL_DEFAULT, fileCfg.grokProvider?.defaultImageModel, "grok-imagine-image"),
+    generationTimeoutMs: pickInt(env.IMA2_GROK_GENERATION_TIMEOUT_MS, fileCfg.grokProvider?.generationTimeoutMs, 120_000),
+    statusTimeoutMs: pickInt(env.IMA2_GROK_STATUS_TIMEOUT_MS, fileCfg.grokProvider?.statusTimeoutMs, 3000),
+  },
   log: {
     level: pickStr(env.IMA2_LOG_LEVEL, fileCfg.log?.level, defaultLogLevelForEnv(env)),
     pretty: env.NODE_ENV !== "production",

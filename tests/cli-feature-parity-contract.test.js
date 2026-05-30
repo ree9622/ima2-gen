@@ -11,8 +11,8 @@ describe("CLI feature parity contract", () => {
     const src = readSource("bin/commands/gen.ts");
 
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
-    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api"\]\)/);
-    assert.match(src, /--provider must be one of: auto, oauth, api/);
+    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok"\]\)/);
+    assert.match(src, /--provider must be one of: auto, oauth, api, grok/);
     assert.match(src, /if \(args\.provider\) body\.provider = args\.provider/);
     assert.match(src, /body\.webSearchEnabled = false/);
     assert.match(src, /body\.webSearchEnabled = true/);
@@ -23,8 +23,8 @@ describe("CLI feature parity contract", () => {
     const docs = readSource("docs/CLI.md");
 
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
-    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api"\]\)/);
-    assert.match(src, /--provider must be one of: auto, oauth, api/);
+    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok"\]\)/);
+    assert.match(src, /--provider must be one of: auto, oauth, api, grok/);
     assert.match(src, /if \(args\.provider\) editBody\.provider = args\.provider/);
     assert.match(src, /editBody\.webSearchEnabled = false/);
     assert.match(src, /editBody\.webSearchEnabled = true/);
@@ -40,7 +40,7 @@ describe("CLI feature parity contract", () => {
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
     assert.match(src, /mode:\s*\{\s*type:\s*"string",\s*default:\s*"auto"\s*\}/);
     assert.match(src, /ref:\s*\{\s*type:\s*"string",\s*repeatable:\s*true\s*\}/);
-    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api"\]\)/);
+    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok"\]\)/);
     assert.match(src, /VALID_MODES = new Set\(\["auto", "direct"\]\)/);
     assert.match(src, /refs\.length > 5/);
     assert.match(src, /refs\.map\(\(p: string\) => fileToDataUri\(p\)\)/);
@@ -55,8 +55,8 @@ describe("CLI feature parity contract", () => {
     const src = readSource("bin/commands/node.ts");
 
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
-    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api"\]\)/);
-    assert.match(src, /--provider must be one of: auto, oauth, api/);
+    assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok"\]\)/);
+    assert.match(src, /--provider must be one of: auto, oauth, api, grok/);
     assert.match(src, /if \(args\.provider\) body\.provider = args\.provider/);
     assert.match(src, /body\.webSearchEnabled = false/);
     assert.match(src, /body\.webSearchEnabled = true/);
@@ -82,7 +82,7 @@ describe("CLI feature parity contract", () => {
   it("public CLI docs describe provider semantics and multimode parity", () => {
     const docs = readSource("docs/CLI.md");
 
-    assert.match(docs, /--provider <auto\|oauth\|api>/);
+    assert.match(docs, /--provider <auto\|oauth\|api\|grok>/);
     assert.match(docs, /api` forces the API-key Responses path/);
     assert.match(docs, /oauth` forces the local OAuth proxy path/);
     assert.match(docs, /auto` preserves route default behavior/);

@@ -9,11 +9,11 @@ const HELP = `
   ima2 node <subcommand> [options]
 
   Subcommands:
-    generate <prompt...> [--parent <nodeId>] [--ref <file>...] [--provider <auto|oauth|api>] [--no-stream] [...gen-style flags]
+    generate <prompt...> [--parent <nodeId>] [--ref <file>...] [--provider <auto|oauth|api|grok>] [--no-stream] [...gen-style flags]
     show <nodeId> [--json]
 
   Generate options:
-        --provider <auto|oauth|api>    Provider for this request; api requires a configured API key
+        --provider <auto|oauth|api|grok>  Provider for this request; grok uses progrok proxy
 `;
 
 const GEN_FLAGS = {
@@ -54,10 +54,10 @@ async function generateSub(argv: string[]) {
   const prompt = args.positional.join(" ");
   if (!prompt) die(2, "prompt required");
   const refs = (Array.isArray(args.ref) ? args.ref : []) as string[];
-  const VALID_PROVIDERS = new Set(["auto", "oauth", "api"]);
+  const VALID_PROVIDERS = new Set(["auto", "oauth", "api", "grok"]);
   const VALID_REASONING = new Set(["none", "low", "medium", "high", "xhigh"]);
   if (args.provider && !VALID_PROVIDERS.has(String(args.provider))) {
-    die(2, "--provider must be one of: auto, oauth, api");
+    die(2, "--provider must be one of: auto, oauth, api, grok");
   }
   if (args["reasoning-effort"] && !VALID_REASONING.has(String(args["reasoning-effort"]))) {
     die(2, "--reasoning-effort must be one of: none, low, medium, high, xhigh");

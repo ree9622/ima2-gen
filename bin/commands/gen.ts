@@ -8,8 +8,8 @@ import { createCliRequestId, recoverGeneratedOutputs, formatRecoveryHint } from 
 import { errInfo } from "../../lib/errInfo.js";
 const VALID_MODES = new Set(["auto", "direct"]);
 const VALID_MODERATION = new Set(["auto", "low"]);
-const VALID_PROVIDERS = new Set(["auto", "oauth", "api"]);
-const KNOWN_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]);
+const VALID_PROVIDERS = new Set(["auto", "oauth", "api", "grok"]);
+const KNOWN_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark", "grok-imagine-image", "grok-imagine-image-quality"]);
 
 const SPEC = {
   flags: {
@@ -55,7 +55,7 @@ const HELP = `
         --timeout <sec>                     Default: 180
         --server <url>                      Override server URL
         --model <gpt-5.5|gpt-5.4|gpt-5.4-mini>
-        --provider <auto|oauth|api>         Provider for this request; api requires a configured API key
+        --provider <auto|oauth|api|grok>    Provider for this request; grok uses progrok proxy
         --mode <auto|direct>                Prompt handling mode. Default: auto
         --moderation <auto|low>             Default: low
         --session <id>                      Apply session style sheet if enabled
@@ -86,10 +86,10 @@ export default async function genCmd(argv: string[]) {
   if (!VALID_MODES.has(String(args.mode))) die(2, "--mode must be one of: auto, direct");
   if (!VALID_MODERATION.has(String(args.moderation))) die(2, "--moderation must be one of: auto, low");
   if (args.provider && !VALID_PROVIDERS.has(String(args.provider))) {
-    die(2, "--provider must be one of: auto, oauth, api");
+    die(2, "--provider must be one of: auto, oauth, api, grok");
   }
   if (args.model && !KNOWN_IMAGE_MODELS.has(String(args.model))) {
-    die(2, "--model must be one of: gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark");
+    die(2, "--model must be one of: gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark, grok-imagine-image, grok-imagine-image-quality");
   }
   const VALID_REASONING = new Set(["none", "low", "medium", "high", "xhigh"]);
   if (args["reasoning-effort"] && !VALID_REASONING.has(String(args["reasoning-effort"]))) {

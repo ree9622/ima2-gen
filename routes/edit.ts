@@ -6,6 +6,7 @@ import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { editViaResponses } from "../lib/responsesImageAdapter.js";
+import { editViaGrok } from "../lib/grokImageAdapter.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
   isGenerationCanceledError,
@@ -149,6 +150,12 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         finishErrorCode = "INVALID_EDIT_INPUT";
         return res.status(400).json({ error: "Prompt and image are required" });
       }
+      if (activeProvider === "grok" && rawMask) {
+        finishStatus = "error";
+        finishHttpStatus = 400;
+        finishErrorCode = "GROK_MASK_UNSUPPORTED";
+        return res.status(400).json({ error: "Grok provider does not support mask editing", code: "GROK_MASK_UNSUPPORTED" });
+      }
       const maskCheck: any = validateEditMask(imageB64, rawMask);
       if (maskCheck.error) {
         finishStatus = "error";
@@ -181,30 +188,49 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         maskBytes: maskCheck.maskBytes ?? 0,
       });
       const startTime = Date.now();
-      const { b64: resultB64, usage, revisedPrompt, webSearchCalls = 0 } = await editViaResponses(
-        activeProvider,
-        prompt,
-        imageB64,
-        quality,
-        effectiveSize,
-        moderation,
-        normalizedPromptMode,
-        ctx,
-        requestId,
-        {
-          model: imageModel,
-          reasoningEffort,
-          webSearchEnabled,
-          mask: maskCheck.mask,
-          signal: cancelController.signal,
-        },
-      );
+      let resultB64: string;
+      let usage: Record<string, number> | null;
+      let revisedPrompt: string | undefined;
+      let webSearchCalls = 0;
+
+      if (activeProvider === "grok") {
+        const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
+        const r = await editViaGrok(prompt, imageB64, ctx, { model: grokModel, signal: cancelController.signal, requestId });
+        resultB64 = r.b64;
+        usage = r.usage;
+        revisedPrompt = r.revisedPrompt;
+        webSearchCalls = r.webSearchCalls;
+      } else {
+        const r = await editViaResponses(
+          activeProvider,
+          prompt,
+          imageB64,
+          quality,
+          effectiveSize,
+          moderation,
+          normalizedPromptMode,
+          ctx,
+          requestId,
+          {
+            model: imageModel,
+            reasoningEffort,
+            webSearchEnabled,
+            mask: maskCheck.mask,
+            signal: cancelController.signal,
+          },
+        );
+        resultB64 = r.b64;
+        usage = r.usage ?? null;
+        revisedPrompt = r.revisedPrompt ?? undefined;
+        webSearchCalls = r.webSearchCalls ?? 0;
+      }
       throwIfJobCanceled(requestId);
 
       const elapsed = +((Date.now() - startTime) / 1000).toFixed(1);
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
       throwIfJobCanceled(requestId);
-      const filename = `${Date.now()}_${randomBytes(ctx.config.ids.generatedHexBytes).toString("hex")}.png`;
+      const editExt = activeProvider === "grok" ? "jpeg" : "png";
+      const filename = `${Date.now()}_${randomBytes(ctx.config.ids.generatedHexBytes).toString("hex")}.${editExt}`;
       await writeFile(join(ctx.config.storage.generatedDir, filename), Buffer.from(resultB64, "base64"));
       const meta = {
         prompt,
@@ -217,7 +243,7 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         model: imageModel,
         reasoningEffort,
         elapsed,
-        format: "png",
+        format: editExt,
         provider: activeProvider,
         kind: "edit",
         requestId,
@@ -237,14 +263,15 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         elapsedMs: Date.now() - startTime,
       });
 
+      const editMime = activeProvider === "grok" ? "image/jpeg" : "image/png";
       res.json({
-        image: `data:image/png;base64,${resultB64}`,
+        image: `data:${editMime};base64,${resultB64}`,
         elapsed,
         reasoningEffort,
         filename,
         usage,
         provider: activeProvider,
-        model: imageModel,
+        model: activeProvider === "grok" ? (quality === "high" ? "grok-imagine-image-quality" : imageModel) : imageModel,
         moderation,
         warnings: qualityWarnings,
         revisedPrompt: revisedPrompt || null,

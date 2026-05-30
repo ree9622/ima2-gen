@@ -43,7 +43,7 @@ const HELP = `
     -d, --out-dir <dir>                 Output dir for multiple images
         --json
         --model <gpt-5.5|gpt-5.4|gpt-5.4-mini>
-        --provider <auto|oauth|api>     Provider for this request; api requires a configured API key
+        --provider <auto|oauth|api|grok>  Provider for this request; grok uses progrok proxy
         --mode <auto|direct>            Prompt handling mode. Default: auto
         --ref <file>                    Attach reference image (repeatable, max 5)
         --reasoning-effort <none|low|medium|high|xhigh>
@@ -60,11 +60,11 @@ export default async function multimodeCmd(argv: string[]) {
   const prompt = args.positional.join(" ");
   if (!prompt) die(2, "prompt required");
 
-  const VALID_PROVIDERS = new Set(["auto", "oauth", "api"]);
+  const VALID_PROVIDERS = new Set(["auto", "oauth", "api", "grok"]);
   const VALID_MODES = new Set(["auto", "direct"]);
   const VALID_REASONING = new Set(["none", "low", "medium", "high", "xhigh"]);
   if (args.provider && !VALID_PROVIDERS.has(String(args.provider))) {
-    die(2, "--provider must be one of: auto, oauth, api");
+    die(2, "--provider must be one of: auto, oauth, api, grok");
   }
   if (!VALID_MODES.has(String(args.mode))) die(2, "--mode must be one of: auto, direct");
   if (args["reasoning-effort"] && !VALID_REASONING.has(String(args["reasoning-effort"]))) {

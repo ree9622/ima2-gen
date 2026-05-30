@@ -7,6 +7,7 @@ import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateViaResponses } from "../lib/responsesImageAdapter.js";
+import { generateViaGrok } from "../lib/grokImageAdapter.js";
 import { isNonRetryableGenerationError, normalizeGenerationFailure, type UpstreamErr } from "../lib/generationErrors.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
@@ -146,10 +147,18 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       const startTime = Date.now();
 
       const mimeMap: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
-      const mime = mimeMap[String(format)] || "image/png";
+      const effectiveFormat = activeProvider === "grok" ? "jpeg" : String(format);
+      const mime = mimeMap[effectiveFormat] || "image/png";
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
 
       const generateOne = async () => {
+        if (activeProvider === "grok") {
+          const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
+          const r = await generateViaGrok(prompt, ctx, { model: grokModel, signal: cancelController.signal, requestId });
+          throwIfJobCanceled(requestId);
+          return r;
+        }
+
         const MAX_RETRIES = 1;
         let lastErr: unknown;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -219,7 +228,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             };
           }
           const rand = randomBytes(ctx.config.ids.generatedHexBytes).toString("hex");
-          const filename = `${Date.now()}_${rand}_${images.length}.${format}`;
+          const filename = `${Date.now()}_${rand}_${images.length}.${effectiveFormat}`;
           const meta = {
             kind: "classic",
             requestId,
@@ -233,9 +242,9 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             composerInsertedPrompts,
             quality,
             size: effectiveSize,
-            format,
+            format: effectiveFormat,
             moderation,
-            model: imageModel,
+            model: activeProvider === "grok" ? (quality === "high" ? "grok-imagine-image-quality" : imageModel) : imageModel,
             reasoningEffort,
             provider: activeProvider,
             createdAt: Date.now(),
@@ -245,7 +254,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             refsCount: refCheck.refs.length,
           };
           const rawBuffer = Buffer.from(r.value.b64, "base64");
-          const embedded: any = await embedImageMetadataBestEffort(rawBuffer, format, meta, {
+          const embedded: any = await embedImageMetadataBestEffort(rawBuffer, effectiveFormat, meta, {
             version: ctx.packageVersion,
           });
           if (!embedded.embedded) {

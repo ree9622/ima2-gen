@@ -6,6 +6,9 @@ const UNSUPPORTED_IMAGE_MODELS = new Set(["gpt-5.3-codex-spark"]);
 const FALLBACK_REASONING_EFFORT = "none";
 const VALID_REASONING_EFFORTS = new Set(["none", "low", "medium", "high", "xhigh"]);
 
+const GROK_FALLBACK_IMAGE_MODEL = "grok-imagine-image";
+const VALID_GROK_IMAGE_MODELS = new Set(["grok-imagine-image", "grok-imagine-image-quality"]);
+
 export function normalizeReasoningEffort(ctx: RouteRuntimeContext | null | undefined, rawEffort: unknown) {
   const configured = (ctx?.config as { imageModels?: { reasoningEffort?: string; validReasoningEfforts?: Set<string> } } | undefined)?.imageModels;
   const fallback = configured?.reasoningEffort ?? FALLBACK_REASONING_EFFORT;
@@ -50,5 +53,19 @@ export function normalizeImageModel(ctx: RouteRuntimeContext | null | undefined,
     };
   }
 
+  return { model: rawModel };
+}
+
+export function normalizeGrokImageModel(rawModel: unknown) {
+  if (typeof rawModel !== "string" || rawModel.length === 0) {
+    return { model: GROK_FALLBACK_IMAGE_MODEL };
+  }
+  if (!VALID_GROK_IMAGE_MODELS.has(rawModel)) {
+    return {
+      error: `Grok image model must be one of: ${[...VALID_GROK_IMAGE_MODELS].join(", ")}`,
+      code: "INVALID_GROK_IMAGE_MODEL" as const,
+      status: 400 as const,
+    };
+  }
   return { model: rawModel };
 }

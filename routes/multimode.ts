@@ -7,6 +7,7 @@ import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateMultimodeViaResponses } from "../lib/responsesImageAdapter.js";
+import { generateMultimodeViaGrok } from "../lib/grokImageAdapter.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
   isGenerationCanceledError,
@@ -195,7 +196,8 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
 
       const startTime = Date.now();
       const mimeMap: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
-      const mime = mimeMap[String(format)] || "image/png";
+      const mmFormat = activeProvider === "grok" ? "jpeg" : String(format);
+      const mime = mimeMap[mmFormat] || "image/png";
       const sequenceId = `seq_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
       routeMaxImages = maxImages;
       routeSequenceId = sequenceId;
@@ -221,7 +223,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
         if (persistedIndexes.has(index)) return;
         throwIfJobCanceled(requestId);
         const rand = randomBytes(ctx.config.ids.generatedHexBytes).toString("hex");
-        const filename = `${Date.now()}_${rand}_multimode_${index}.${format}`;
+        const filename = `${Date.now()}_${rand}_multimode_${index}.${mmFormat}`;
         const meta = {
           kind: "multimode-image",
           generationStrategy: "one-call-text-sequence",
@@ -240,9 +242,9 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
           composerInsertedPrompts,
           quality,
           size: effectiveSize,
-          format,
+          format: mmFormat,
           moderation,
-          model: imageModel,
+          model: activeProvider === "grok" ? (quality === "high" ? "grok-imagine-image-quality" : imageModel) : imageModel,
           provider: activeProvider,
           createdAt: Date.now(),
           usage: latestUsage,
@@ -251,7 +253,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
           refsCount: refCheck.refs.length,
         };
         const rawBuffer = Buffer.from(image.b64, "base64");
-        const embedded = await embedImageMetadataBestEffort(rawBuffer, format, meta, {
+        const embedded = await embedImageMetadataBestEffort(rawBuffer, mmFormat, meta, {
           version: ctx.packageVersion,
         });
         await writeFile(join(ctx.config.storage.generatedDir, filename), embedded.buffer);
@@ -273,42 +275,54 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
       };
 
       sendSse(res, "phase", { phase: "streaming", requestId, sequenceId, maxImages });
-      const generated = await generateMultimodeViaResponses(
-        activeProvider,
-        prompt,
-        quality,
-        effectiveSize,
-        moderation,
-        refCheck.refDetails || refCheck.refs,
-        requestId,
-        normalizedPromptMode,
-        ctx,
-        {
-          model: imageModel,
+
+      let generated: { images: Array<{ b64: string; revisedPrompt?: string | null }>; usage: Record<string, number> | null; webSearchCalls?: number; extraIgnored?: number };
+
+      if (activeProvider === "grok") {
+        const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
+        generated = await generateMultimodeViaGrok(prompt, ctx, {
+          model: grokModel,
           maxImages,
-          reasoningEffort,
-          webSearchEnabled,
-          onPartialImage: (partial) =>
-            isJobCanceled(requestId)
-              ? undefined
-              : sendSse(res, "partial", {
-                  image: `data:${mime};base64,${partial.b64}`,
-                  requestId,
-                  sequenceId,
-                  index: partial.index,
-                }),
+          signal: cancelController.signal,
+          requestId,
           onFinalImage: async (image, index) => {
             const totalReturned = Math.max(index + 1, images.length + 1);
-            await persistAndSendImage(
-              image,
-              index,
-              totalReturned,
-              sequenceStatus(totalReturned, maxImages),
-            );
+            await persistAndSendImage(image, index, totalReturned, sequenceStatus(totalReturned, maxImages));
           },
-          signal: cancelController.signal,
-        },
-      );
+        });
+      } else {
+        generated = await generateMultimodeViaResponses(
+          activeProvider,
+          prompt,
+          quality,
+          effectiveSize,
+          moderation,
+          refCheck.refDetails || refCheck.refs,
+          requestId,
+          normalizedPromptMode,
+          ctx,
+          {
+            model: imageModel,
+            maxImages,
+            reasoningEffort,
+            webSearchEnabled,
+            onPartialImage: (partial) =>
+              isJobCanceled(requestId)
+                ? undefined
+                : sendSse(res, "partial", {
+                    image: `data:${mime};base64,${partial.b64}`,
+                    requestId,
+                    sequenceId,
+                    index: partial.index,
+                  }),
+            onFinalImage: async (image, index) => {
+              const totalReturned = Math.max(index + 1, images.length + 1);
+              await persistAndSendImage(image, index, totalReturned, sequenceStatus(totalReturned, maxImages));
+            },
+            signal: cancelController.signal,
+          },
+        );
+      }
       throwIfJobCanceled(requestId);
 
       latestUsage = generated.usage || null;

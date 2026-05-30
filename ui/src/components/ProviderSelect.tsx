@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useOAuthStatus } from "../hooks/useOAuthStatus";
 import { useBilling } from "../hooks/useBilling";
+import { useGrokStatus } from "../hooks/useGrokStatus";
 import { ApiDisabledModal } from "./ApiDisabledModal";
 import type { Provider } from "../types";
 import { useI18n } from "../i18n";
@@ -16,6 +17,7 @@ export function useProviderAvailability(): Record<Provider, ProviderAvailability
   const { t } = useI18n();
   const oauth = useOAuthStatus();
   const { data } = useBilling();
+  const grok = useGrokStatus();
 
   const oauthReady = oauth?.status === "ready";
   let oauthReason = t("provider.oauthNotReady");
@@ -31,11 +33,27 @@ export function useProviderAvailability(): Record<Provider, ProviderAvailability
 
   const apiOk = data?.apiKeyValid === true;
 
+  const grokReady = grok?.status === "ready";
+  const grokReason = !grok
+    ? t("provider.grokNotReady")
+    : grok.status === "offline"
+      ? t("provider.grokOffline")
+      : grok.status === "no_image_model"
+        ? t("provider.grokNoImageModel")
+        : grok.status === "error"
+          ? t("provider.grokNotReady")
+          : "";
+
   return {
     oauth: { ok: oauthReady, reason: oauthReason, hint: oauthHint },
     api: {
       ok: apiOk,
       reason: apiOk ? "" : t("provider.apiInvalid"),
+    },
+    grok: {
+      ok: grokReady,
+      reason: grokReason,
+      hint: grokReady ? undefined : t("provider.grokOfflineHint"),
     },
   };
 }
@@ -50,6 +68,7 @@ export function ProviderSelect() {
   const PROVIDERS: { value: Provider; label: string }[] = [
     { value: "oauth", label: "OAuth" },
     { value: "api", label: t("provider.apiLabel") },
+    { value: "grok", label: "Grok" },
   ];
 
   const handleClick = (p: Provider) => {

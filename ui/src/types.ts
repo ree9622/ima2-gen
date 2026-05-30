@@ -12,11 +12,13 @@ export const THEME_FAMILIES = [
   "gemini",
   "grok",
 ] as const satisfies readonly ThemeFamily[];
-export type Provider = "oauth" | "api";
+export type Provider = "oauth" | "api" | "grok";
 export type Quality = "low" | "medium" | "high";
 export type Format = "png" | "jpeg" | "webp";
 export type Moderation = "low" | "auto";
 export type ImageModel = "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini";
+export type GrokImageModel = "grok-imagine-image" | "grok-imagine-image-quality";
+export type AnyImageModel = ImageModel | GrokImageModel;
 export type UnsupportedImageModel = "gpt-5.3-codex-spark";
 export type Count = number;
 

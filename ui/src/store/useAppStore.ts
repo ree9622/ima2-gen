@@ -1186,7 +1186,7 @@ function isModeration(value: unknown): value is Moderation {
 }
 
 function isProvider(value: unknown): value is Provider {
-  return value === "oauth" || value === "api";
+  return value === "oauth" || value === "api" || value === "grok";
 }
 
 function isPromptMode(value: unknown): value is "auto" | "direct" {
@@ -2963,7 +2963,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setProvider: (provider) => {
     saveGenerationDefaultsPatch({ provider });
-    set({ provider });
+    const currentModel = get().imageModel;
+    if (provider === "grok" && !currentModel.startsWith("grok-")) {
+      set({ provider, imageModel: "grok-imagine-image" as any });
+    } else if (provider !== "grok" && currentModel.startsWith("grok-")) {
+      set({ provider, imageModel: DEFAULT_IMAGE_MODEL });
+      saveImageModel(DEFAULT_IMAGE_MODEL);
+    } else {
+      set({ provider });
+    }
   },
   setQuality: (quality) => {
     saveGenerationDefaultsPatch({ quality });

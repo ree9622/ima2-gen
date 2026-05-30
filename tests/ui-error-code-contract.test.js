@@ -31,6 +31,7 @@ test("UI surfaces server terminal generation errors from inflight polling", () =
 
   assert.match(api, /No image data returned from the multimode stream/);
   assert.match(api, /e\.code = "EMPTY_RESPONSE"/);
+  assert.match(api, /finalPayload\.images\.length === 0/);
   assert.match(store, /includeTerminal: true/);
   assert.match(store, /terminalJobError/);
   assert.match(store, /terminal\.status === "error"/);

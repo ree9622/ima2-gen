@@ -359,6 +359,28 @@ describe("API provider parity", () => {
     });
   });
 
+  it("multimode provider=api converts zero returned images into an SSE error", async () => {
+    globalThis.fetch = async (url, init) => {
+      if (String(url).startsWith("http://127.0.0.1:")) {
+        return originalFetch(url, init);
+      }
+      return sseResponse(imageEvents([]));
+    };
+    await withApp(async ({ baseUrl }) => {
+      const res = await fetch(`${baseUrl}/api/generate/multimode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "empty stages", provider: "api", maxImages: 1 }),
+      });
+      const text = await res.text();
+      assert.equal(res.status, 200);
+      assert.match(text, /event: error/);
+      assert.doesNotMatch(text, /event: done/);
+      assert.match(text, /"code":"EMPTY_RESPONSE"/);
+      assert.match(text, /"returned":0/);
+    });
+  });
+
   it("node provider=api preserves SSE partial and done envelope", async () => {
     globalThis.fetch = async (url, init) => {
       if (String(url).startsWith("http://127.0.0.1:")) {

@@ -199,6 +199,12 @@ export async function postMultimodeGenerateStream(
     e.status = 422;
     throw e;
   }
+  if (!Array.isArray(finalPayload.images) || finalPayload.images.length === 0) {
+    const e = new Error("No image data returned from the multimode stream") as Error & { code?: string; status?: number };
+    e.code = "EMPTY_RESPONSE";
+    e.status = 422;
+    throw e;
+  }
   return finalPayload;
 }
 

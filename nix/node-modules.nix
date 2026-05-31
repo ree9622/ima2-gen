@@ -18,7 +18,7 @@
   src,
 }:
 let
-  # progrok is vendored as `file:vendor/progrok-0.1.0.tgz` (a bundleDependency).
+  # progrok is vendored as `file:vendor/progrok-0.1.1.tgz` (a bundleDependency).
   # importNpmLock resolves a `file:` entry as `npmRoot + "/" + resolved`, which
   # keeps the literal `file:` prefix and points outside the tree. Strip it so it
   # resolves to the committed tgz; npm then installs it by extraction.

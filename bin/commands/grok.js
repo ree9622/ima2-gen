@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { dirname, join, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { color, die, out } from "../lib/output.js";
-import { resolveBin, isWin } from "../lib/platform.js";
+import { isWin } from "../lib/platform.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "..");
 const HELP = `
@@ -27,14 +27,16 @@ function localBinPath() {
 }
 function spawnProgrok(argv, env) {
     return new Promise((resolve, reject) => {
+        const progrokBin = join(localBinPath(), isWin ? "progrok.cmd" : "progrok");
         const child = isWin
-            ? spawn("cmd.exe", ["/d", "/s", "/c", `progrok ${argv.map((a) => a.includes(" ") ? `"${a}"` : a).join(" ")}`], {
+            ? spawn(progrokBin, argv, {
                 cwd: ROOT,
                 env,
                 stdio: "inherit",
+                shell: true,
                 windowsHide: true,
             })
-            : spawn(resolveBin("progrok"), argv, {
+            : spawn(progrokBin, argv, {
                 cwd: ROOT,
                 env,
                 stdio: "inherit",

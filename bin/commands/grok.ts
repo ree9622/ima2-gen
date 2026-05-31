@@ -13,7 +13,7 @@ const HELP = `
   No separate progrok install is required.
 
   Subcommands:
-    login [--device-code]  Log in to xAI OAuth for the bundled proxy
+    login [options]        Log in to xAI OAuth (default: --manual-paste)
     logout                 Remove stored xAI credentials
     status                 Show bundled progrok authentication status
     models                 List available Grok models

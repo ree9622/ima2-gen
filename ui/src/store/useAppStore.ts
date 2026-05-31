@@ -564,7 +564,8 @@ type GraphSaveReason =
   | "beforeunload"
   | "queued"
   | "edge-disconnect"
-  | "node-complete";
+  | "node-complete"
+  | "video-node-complete";
 type GraphSaveResult = "saved" | "skipped" | "conflict" | "failed";
 
 function narrowGenerateKind(k?: string | null): GenerateItem["kind"] {
@@ -3169,7 +3170,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     pendingRequestId: null,
                     pendingPhase: null,
                     pendingStartedAt: null,
-                    elapsed: result.elapsed ?? null,
+                    elapsed: result.elapsed ?? undefined,
                     model: null,
                   },
                 }

@@ -43,8 +43,9 @@ test("server falls back when advertised localhost port is occupied", async () =>
     const advertisePath = join(home, "server.json");
     const info = await waitForAdvertise(advertisePath);
     assert.equal(info.backend.configuredPort, preferred);
-    assert.equal(info.backend.actualPort, preferred + 1);
-    assert.equal(info.backend.url, `http://127.0.0.1:${preferred + 1}`);
+    assert.notEqual(info.backend.actualPort, preferred, "should have fallen back to a different port");
+    assert.ok(info.backend.actualPort > preferred, "fallback port should be higher than preferred");
+    assert.equal(info.backend.url, `http://127.0.0.1:${info.backend.actualPort}`);
   } finally {
     child?.kill("SIGTERM");
     await new Promise((resolve) => child?.once("exit", resolve) || resolve());

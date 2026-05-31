@@ -1745,9 +1745,8 @@ body {
 
 .image-model-select__item {
   width: 100%;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 8px;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   padding: 8px 9px;
   border: 0;
@@ -1770,7 +1769,9 @@ body {
   font-family: var(--font);
   font-size: 11px;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .image-model-select--settings select {

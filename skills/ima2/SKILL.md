@@ -431,8 +431,135 @@ done
 
 ### Limitations
 
-- Motion continuity between clips is approximate (planner-guided, not frame-exact)
-- No audio generation (video only)
-- Max 15 seconds per clip
-- Max 720p resolution
-- V2V (video input) not supported — use last-frame extraction instead
+- Max 15 seconds per clip (extend adds 2-10s more)
+- Max 720p resolution (no upscale API available)
+- Video edit/extend: grok-imagine-video only (1.5-preview not supported)
+- Video edit input: max 8.7 seconds
+- Video extend input: 2-15 seconds
+
+### Video Editing (V2V)
+
+Edit an existing video with a text prompt. Keeps motion intact, changes style/objects.
+
+```bash
+# Get the video URL from a previous generation
+VIDEO_URL=$(ima2 video "ocean waves" --json | jq -r '.url')
+
+# Edit: change style
+ima2 video edit "Make the water glow neon blue, bioluminescent" --video "$VIDEO_URL"
+
+# Edit: add object
+ima2 video edit "Add a sailboat in the distance" --video "$VIDEO_URL"
+
+# Edit: change mood
+ima2 video edit "Make it stormy with dark clouds" --video "$VIDEO_URL"
+```
+
+Constraints: grok-imagine-video only, input mp4 ≤8.7s, output matches input duration/aspect/resolution.
+
+### Video Extension (Continue from Last Frame)
+
+Extend a video seamlessly from its last frame. No frame extraction needed — the API handles continuity.
+
+```bash
+# Generate initial clip
+VIDEO_URL=$(ima2 video "a bird takes flight from a branch" --duration 5 --json | jq -r '.url')
+
+# Extend: add 5 more seconds
+ima2 video extend "the bird soars higher into the clouds" --video "$VIDEO_URL" --duration 5
+
+# Chain extensions for longer videos
+EXTENDED=$(ima2 video extend "camera follows the bird" --video "$VIDEO_URL" --duration 5 --json | jq -r '.url')
+ima2 video extend "bird lands on a distant tree" --video "$EXTENDED" --duration 5
+```
+
+### Video Frame Extraction
+
+Extract frames from generated videos for use as references or analysis.
+
+```bash
+# Extract last frame
+ima2 video frame 1780226256355_50252101.mp4 --last -o lastframe.png
+
+# Extract frame at specific timestamp
+ima2 video frame 1780226256355_50252101.mp4 --position 2.5 -o frame_2s.png
+
+# Use extracted frame as reference for new generation
+ima2 video "continue this scene" --ref lastframe.png
+```
+
+### Video Analysis (Recreation Prompt)
+
+Analyze a video with Grok 4.3 vision to get a structured recreation prompt.
+
+```bash
+# Analyze a video
+ima2 video analyze https://vidgen.x.ai/.../clip.mp4
+
+# Output: structured prompt with shot type, camera, lighting, color, motion, mood
+
+# Use the analysis to recreate with variations
+ANALYSIS=$(ima2 video analyze "$VIDEO_URL" --json | jq -r '.analysis')
+ima2 video "$ANALYSIS but in anime style" --ref reference.png
+```
+
+### Audio in Video (Prompt-Controlled)
+
+Grok video generates synchronized audio by default. Control it via prompt:
+
+```bash
+# Explicit sound direction
+ima2 video "ocean waves crashing on rocks with seagull calls and distant thunder"
+
+# Music direction
+ima2 video "timelapse of city at night, lo-fi hip hop background music"
+
+# Dialogue
+ima2 video "person speaking to camera: Hello world, welcome to my channel"
+
+# Silent/minimal
+ima2 video "quiet forest scene, only subtle wind and leaves rustling"
+```
+
+### End Frame Targeting (via Ref2V)
+
+Guide the video to end at a specific scene using reference images:
+
+```bash
+# Start frame + end frame concept
+ima2 video "smooth transition from day to night" \
+  --ref sunrise.png --ref nightsky.png
+```
+
+The planner uses reference images to guide the final frames toward the reference composition.
+
+### Soul Character / Face Consistency (via Ref2V)
+
+Maintain character identity across multiple videos using reference photos:
+
+```bash
+# Provide face references for consistency
+ima2 video "person walking through a park, smiling" \
+  --ref face_front.png --ref face_side.png --ref face_smile.png
+
+# Same character in different scenes
+ima2 video "same person now sitting at a cafe" \
+  --ref face_front.png --ref face_side.png --topic "character-series"
+```
+
+### Marketing / Product Video
+
+Turn a product image into a dynamic showcase video:
+
+```bash
+# Step 1: Generate or provide product image
+ima2 gen "clean product photo of wireless earbuds on white background" -o product.png
+
+# Step 2: Create product video
+ima2 video "sleek product reveal, rotating camera, premium studio lighting" \
+  --ref product.png --duration 10 --aspect-ratio 16:9
+
+# Step 3: Extend with lifestyle shot
+PRODUCT_VID=$(ima2 video "product reveal" --ref product.png --json | jq -r '.url')
+ima2 video extend "person puts on the earbuds and smiles" --video "$PRODUCT_VID" --duration 5
+```

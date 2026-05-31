@@ -1715,7 +1715,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const serverJob = serverById.get(f.id);
         if (serverJob) {
           const restored = toPersistedInFlightJob(serverJob);
-          return [{ ...f, ...restored, prompt: f.prompt || restored.prompt }];
+          return [{ ...f, ...restored, prompt: f.prompt || restored.prompt, phase: f.phase || restored.phase }];
         }
         if (!matchesInflightScope(f, scopes)) return [f];
         const terminal = terminalById.get(f.id);

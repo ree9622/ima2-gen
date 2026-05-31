@@ -21,6 +21,10 @@ function closeServer(server): void {
   server.close();
 }
 
+function fakeMp4Bytes(): Buffer {
+  return Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
+}
+
 async function makeTinyMp4(path: string): Promise<void> {
   await execFileAsync("ffmpeg", [
     "-y",
@@ -75,7 +79,7 @@ function makeProxy(opts: { operation?: "edit" | "extend"; blocked?: boolean; blo
     }
     if (url.includes("/dl/")) {
       res.writeHead(200, { "Content-Type": "video/mp4" });
-      res.end(Buffer.from("FAKE-EDITED-MP4"));
+      res.end(fakeMp4Bytes());
       return;
     }
     res.writeHead(404);

@@ -41,6 +41,10 @@ function ctx(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+function fakeMp4Bytes() {
+  return Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
+}
+
 function jsonRes(body: unknown, status = 200, contentType = "application/json") {
   return {
     ok: status >= 200 && status < 300,
@@ -52,7 +56,7 @@ function jsonRes(body: unknown, status = 200, contentType = "application/json") 
 }
 
 function videoBytesRes() {
-  const buf = Buffer.from("FAKE-MP4-BYTES");
+  const buf = fakeMp4Bytes();
   return {
     ok: true,
     status: 200,
@@ -173,7 +177,7 @@ describe("Grok video adapter", () => {
       resolution: "480p",
       onEvent: (ev) => events.push(ev),
     });
-    assert.equal(result.videoBuffer.toString(), "FAKE-MP4-BYTES");
+    assert.equal(result.videoBuffer.subarray(4, 8).toString("ascii"), "ftyp");
     assert.equal(result.contentType, "video/mp4");
     assert.equal(result.mode, "text-to-video");
     assert.equal(result.xaiVideoRequestId, "vid-1");
@@ -262,6 +266,17 @@ describe("Grok video adapter", () => {
       headers: { get: (k: string) => (k.toLowerCase() === "content-type" ? "video/mp4" : null) },
     })) as any;
     await assert.rejects(downloadVideo(ctx(), "https://vidgen.example/empty.mp4"), (e: any) => e.code === "GROK_VIDEO_DOWNLOAD_FAILED");
+
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => {
+        const buf = Buffer.from("<html>not an mp4</html>");
+        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      },
+      headers: { get: (k: string) => (k.toLowerCase() === "content-type" ? "video/mp4" : null) },
+    })) as any;
+    await assert.rejects(downloadVideo(ctx(), "https://vidgen.example/bad.mp4"), (e: any) => e.code === "GROK_VIDEO_DOWNLOAD_FAILED");
 
     globalThis.fetch = (async () => ({
       ok: true,

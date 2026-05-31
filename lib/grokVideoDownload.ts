@@ -15,6 +15,10 @@ function withTimeoutSignal(signal: AbortSignal | undefined, timeoutMs: number) {
   return { combinedSignal, timer };
 }
 
+export function isMp4Container(buffer: Buffer): boolean {
+  return buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp";
+}
+
 export async function downloadVideo(ctx: RouteRuntimeContext, url: string, signal?: AbortSignal): Promise<{ buffer: Buffer; contentType: string }> {
   const { combinedSignal, timer } = withTimeoutSignal(signal, downloadTimeoutMs(ctx));
   try {
@@ -38,6 +42,9 @@ export async function downloadVideo(ctx: RouteRuntimeContext, url: string, signa
     if (buffer.length === 0) throw grokError("Grok video download was empty", 502, "GROK_VIDEO_DOWNLOAD_FAILED");
     if (buffer.length > MAX_VIDEO_DOWNLOAD_BYTES) {
       throw grokError("Grok video download exceeds the 100MB limit", 502, "GROK_VIDEO_DOWNLOAD_FAILED");
+    }
+    if (!isMp4Container(buffer)) {
+      throw grokError("Grok video download returned an invalid MP4 container", 502, "GROK_VIDEO_DOWNLOAD_FAILED");
     }
     return { buffer, contentType };
   } catch (e: any) {

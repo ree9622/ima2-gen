@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
@@ -34,6 +34,17 @@ type NormalizeError = { error: string; code: string; status: number };
 
 function isNormalizeError(x: unknown): x is NormalizeError {
   return typeof x === "object" && x !== null && typeof (x as { error?: unknown }).error === "string";
+}
+
+export async function saveGeneratedVideoArtifact(ctx: RuntimeContext, filename: string, buffer: Buffer, metadata: unknown): Promise<void> {
+  const filePath = join(ctx.config.storage.generatedDir, filename);
+  await writeFile(filePath, buffer);
+  try {
+    await writeFile(`${filePath}.json`, JSON.stringify(metadata));
+  } catch (err) {
+    await unlink(filePath).catch(() => {});
+    throw err;
+  }
 }
 
 async function resolveSourceImage(
@@ -192,8 +203,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         },
         ...(topic ? { videoSeries: { topic, chainIndex: chain.length } } : {}),
       };
-      await writeFile(join(ctx.config.storage.generatedDir, filename), result.videoBuffer);
-      await writeFile(join(ctx.config.storage.generatedDir, filename + ".json"), JSON.stringify(meta)).catch(() => {});
+      await saveGeneratedVideoArtifact(ctx, filename, result.videoBuffer, meta);
       invalidateHistoryIndex();
 
       finishMeta = { filename, xaiVideoRequestId: result.xaiVideoRequestId };

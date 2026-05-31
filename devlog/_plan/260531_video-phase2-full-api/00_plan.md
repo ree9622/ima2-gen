@@ -47,6 +47,9 @@ The latest isolated API/CDP/Computer Use smoke covered the hardened local HEAD a
 - `lib/historyList.ts` now checks only `<video>.mp4.json` for video sidecars and skips embedded image metadata reads for `.mp4` files.
 - `tests/history-video-row.test.ts` now verifies sidecarless MP4 history rows still appear as video rows without sidecar or embedded-metadata warning noise.
 - CLI/help documentation now separates generation duration (`1..15`) from extension duration (`2..10`) so agents do not infer that `ima2 video extend --duration 1` or `--duration 15` is valid.
+- `/api/video/generate` now uses the same sidecar atomicity policy as edit/extend: if generated MP4 sidecar metadata cannot be written, the just-written MP4 is removed and the request fails instead of returning a misleading successful SSE `done` event.
+- `downloadVideo()` now rejects responses whose bytes are not an MP4 container even when the upstream content type says `video/mp4` or `application/octet-stream`.
+- `tests/videoRoute.test.ts`, `tests/grokVideoAdapter.test.ts`, and `tests/generated-static-privacy.test.ts` cover sidecar-write rollback, invalid-MP4 download rejection, and `/generated/*.json` sidecar privacy.
 
 Sections below are the original implementation plan. Treat planned file names such as `routes/videoEdit.ts` as superseded by the consolidated `routes/videoExtended.ts` implementation.
 

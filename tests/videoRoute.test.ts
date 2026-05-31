@@ -2,14 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createServer } from "node:http";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { config } from "../config.js";
-import { registerVideoRoutes } from "../routes/video.ts";
+import { registerVideoRoutes, saveGeneratedVideoArtifact } from "../routes/video.ts";
 
 function listen(server): Promise<string> {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
+}
+
+function fakeMp4Bytes() {
+  return Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
 }
 
 // Mock progrok upstream: search -> planner -> start -> poll(done) -> download.
@@ -38,7 +42,7 @@ function makeProxy() {
     }
     if (url.includes("/dl/")) {
       res.writeHead(200, { "Content-Type": "video/mp4" });
-      return res.end(Buffer.from("FAKE-MP4-BODY"));
+      return res.end(fakeMp4Bytes());
     }
     res.writeHead(404);
     res.end("nope");
@@ -102,6 +106,25 @@ test("/api/video/generate streams progress and saves mp4 + sidecar", async () =>
   } finally {
     await new Promise((r) => server.close(r));
     await new Promise((r) => proxy.close(r));
+    await rm(generatedDir, { recursive: true, force: true });
+  }
+});
+
+test("saveGeneratedVideoArtifact removes mp4 when sidecar write fails", async () => {
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-sidecar-fail-"));
+  const filename = "broken.mp4";
+  try {
+    await mkdir(join(generatedDir, `${filename}.json`));
+    await assert.rejects(
+      saveGeneratedVideoArtifact(
+        { config: { ...config, storage: { ...config.storage, generatedDir } } } as any,
+        filename,
+        fakeMp4Bytes(),
+        { kind: "video", mediaType: "video" },
+      ),
+    );
+    await assert.rejects(access(join(generatedDir, filename)), (err: any) => err?.code === "ENOENT");
+  } finally {
     await rm(generatedDir, { recursive: true, force: true });
   }
 });

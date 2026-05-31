@@ -287,6 +287,56 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
 | `GROK_VIDEO_REF_TOO_MANY` | More than 7 reference images |
 | `GROK_VIDEO_FAILED` | Upstream xAI video generation failed |
 
+### `POST /api/video/edit`
+
+Edit an existing video via Grok V2V. This is a blocking JSON endpoint that starts the xAI edit job, polls it, downloads the final MP4, and saves it as a generated video artifact.
+
+```json
+{
+  "prompt": "make it sunset",
+  "videoUrl": "https://vidgen.x.ai/.../clip.mp4",
+  "model": "grok-imagine-video"
+}
+```
+
+`videoUrl` may be an HTTPS video URL, xAI `file_id`, `data:video/*` URL, or generated `.mp4` filename. Generated-file inputs are restricted to real `.mp4` files under the generated directory.
+
+### `POST /api/video/extend`
+
+Extend a video from its last frame. This is a blocking JSON endpoint that starts the xAI extension job, polls it, downloads the combined output MP4, and saves it as a generated video artifact.
+
+```json
+{
+  "prompt": "camera pulls back",
+  "videoUrl": "1780226256355_50252101.mp4",
+  "duration": 6,
+  "model": "grok-imagine-video"
+}
+```
+
+`duration` must be an integer from 2 to 10 seconds. Edit and extension support `grok-imagine-video` only; `grok-imagine-video-1.5-preview` is not accepted for these endpoints.
+
+### `GET /api/video/frame`
+
+Extract a PNG frame from a generated `.mp4` file.
+
+| Query | Notes |
+|---|---|
+| `file` | Required generated `.mp4` filename or generated-dir absolute path |
+| `position` | `last` (default) or non-negative seconds |
+
+### `POST /api/video/analyze`
+
+Analyze first and last frames from a generated `.mp4` using Grok 4.3 image understanding. This does not upload the video as temporal video; it extracts two PNG frames and asks the vision model to infer likely motion.
+
+```json
+{
+  "videoUrl": "1780226256355_50252101.mp4"
+}
+```
+
+Remote URLs and `data:` inputs are intentionally rejected to avoid server-side URL fetching through `ffmpeg`.
+
 ## History
 
 | Method | Path | Notes |
@@ -368,6 +418,10 @@ Most server routes under `/api/*` have a CLI wrapper. The exception is **Agent M
 | `POST /api/edit` | `ima2 edit` |
 | `POST /api/generate/multimode` (SSE) | `ima2 multimode` |
 | `POST /api/video/generate` (SSE) | `ima2 video` |
+| `POST /api/video/edit` | `ima2 video edit` |
+| `POST /api/video/extend` | `ima2 video extend` |
+| `GET /api/video/frame` | `ima2 video frame` |
+| `POST /api/video/analyze` | `ima2 video analyze` |
 | `POST /api/node/generate` (SSE) / `GET /api/node/:id` | `ima2 node generate` / `ima2 node show` |
 | `GET /api/history` | `ima2 ls` |
 | `DELETE /api/history/:name` / `…/permanent` | `ima2 history rm [--permanent]` |

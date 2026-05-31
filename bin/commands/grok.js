@@ -12,7 +12,7 @@ const HELP = `
   No separate progrok install is required.
 
   Subcommands:
-    login [--device-code]  Log in to xAI OAuth for the bundled proxy
+    login [options]        Log in to xAI OAuth (default: --manual-paste)
     logout                 Remove stored xAI credentials
     status                 Show bundled progrok authentication status
     models                 List available Grok models
@@ -50,6 +50,11 @@ export default async function grokCmd(argv) {
         PATH: `${localBinPath()}${delimiter}${process.env.PATH || ""}`,
     };
     try {
+        // Default to --manual-paste for login (most reliable across platforms).
+        // Users can still pass --device-code or --browser explicitly.
+        if (sub === "login" && !argv.includes("--device-code") && !argv.includes("--browser") && !argv.includes("--manual-paste")) {
+            argv = [...argv, "--manual-paste"];
+        }
         const code = await spawnProgrok(argv, env);
         if (code && code !== 0) {
             // progrok 0.1.1+ defaults to device-code flow already.

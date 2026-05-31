@@ -4,7 +4,7 @@ import express from "express";
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { config } from "../config.js";
@@ -36,7 +36,7 @@ function jsonRes(res, body, status = 200): void {
   res.end(JSON.stringify(body));
 }
 
-function makeProxy(opts: { operation?: "edit" | "extend"; blocked?: boolean; responseText?: string; capture?: (url: string, body: any) => void } = {}) {
+function makeProxy(opts: { operation?: "edit" | "extend"; blocked?: boolean; blockedWithoutUrl?: boolean; responseText?: string; capture?: (url: string, body: any) => void } = {}) {
   let polls = 0;
   const server = createServer((req, res) => {
     const url = req.url || "";
@@ -56,7 +56,11 @@ function makeProxy(opts: { operation?: "edit" | "extend"; blocked?: boolean; res
       return jsonRes(res, {
         status: "done",
         progress: 100,
-        video: { url: `http://127.0.0.1:${port}/dl/out.mp4`, duration: opts.operation === "extend" ? 9 : 4, respect_moderation: opts.blocked ? false : true },
+        video: {
+          ...(opts.blockedWithoutUrl ? {} : { url: `http://127.0.0.1:${port}/dl/out.mp4` }),
+          duration: opts.operation === "extend" ? 9 : 4,
+          respect_moderation: opts.blocked ? false : true,
+        },
         usage: { cost_in_usd_ticks: 500000000 },
       });
     }
@@ -129,11 +133,54 @@ test("/api/video/edit forwards xAI payload and saves local video artifact", asyn
     assert.equal(data.sourceUrl, `http://127.0.0.1:${new URL(proxyUrl).port}/dl/out.mp4`);
     const files = await readdir(generatedDir);
     assert.ok(files.some((f) => f.endsWith(".mp4")), "mp4 written");
-    assert.ok(files.some((f) => f.endsWith(".mp4.json")), "sidecar written");
+    const sidecar = files.find((f) => f.endsWith(".mp4.json"));
+    assert.ok(sidecar, "sidecar written");
+    const meta = JSON.parse(await readFile(join(generatedDir, sidecar!), "utf8"));
+    assert.deepEqual(meta.video.source, { kind: "url", origin: "https://vidgen.example", pathname: "input.mp4" });
+    assert.deepEqual(meta.video.sourceUrl, { kind: "url", origin: "http://127.0.0.1:" + new URL(proxyUrl).port, pathname: "out.mp4" });
   } finally {
     closeServer(server);
     closeServer(proxy);
     await rm(generatedDir, { recursive: true, force: true });
+  }
+});
+
+test("/api/video/edit rejects whitespace prompt and unsafe generated-file inputs", async () => {
+  const proxy = makeProxy({ operation: "edit" });
+  const proxyUrl = await listen(proxy);
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-inputs-"));
+  await writeFile(join(generatedDir, "clip.mp4.json"), JSON.stringify({ secret: true }));
+  await writeFile(join(tmpdir(), "ima2-outside-secret.mp4"), "not really a video");
+  await symlink(join(tmpdir(), "ima2-outside-secret.mp4"), join(generatedDir, "linked.mp4"));
+  const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
+  try {
+    const blank = await fetch(`${url}/api/video/edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "   ", videoUrl: "https://vidgen.example/input.mp4" }),
+    });
+    assert.equal(blank.status, 400);
+
+    const sidecar = await fetch(`${url}/api/video/edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "edit", videoUrl: "clip.mp4.json" }),
+    });
+    assert.equal(sidecar.status, 400);
+    assert.match((await sidecar.json()).error, /\.mp4/);
+
+    const linked = await fetch(`${url}/api/video/edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "edit", videoUrl: "linked.mp4" }),
+    });
+    assert.equal(linked.status, 400);
+    assert.match((await linked.json()).error, /invalid file path|MP4/);
+  } finally {
+    closeServer(server);
+    closeServer(proxy);
+    await rm(generatedDir, { recursive: true, force: true });
+    await rm(join(tmpdir(), "ima2-outside-secret.mp4"), { force: true });
   }
 });
 
@@ -173,6 +220,26 @@ test("/api/video/extend validates duration/model and rejects moderation-blocked 
   }
 });
 
+test("/api/video/extend reports moderation block even when upstream omits url", async () => {
+  const proxy = makeProxy({ operation: "extend", blocked: true, blockedWithoutUrl: true });
+  const proxyUrl = await listen(proxy);
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-blocked-"));
+  const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
+  try {
+    const blocked = await fetch(`${url}/api/video/extend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "continue", videoUrl: "https://vidgen.example/input.mp4", duration: 5 }),
+    });
+    assert.equal(blocked.status, 502);
+    assert.match((await blocked.json()).error, /moderation/i);
+  } finally {
+    closeServer(server);
+    closeServer(proxy);
+    await rm(generatedDir, { recursive: true, force: true });
+  }
+});
+
 test("/api/video/frame supports generated relative and absolute paths safely", async () => {
   const proxy = makeProxy();
   const proxyUrl = await listen(proxy);
@@ -189,6 +256,10 @@ test("/api/video/frame supports generated relative and absolute paths safely", a
     }
     const traversal = await fetch(`${url}/api/video/frame?file=${encodeURIComponent("../clip.mp4")}`);
     assert.equal(traversal.status, 400);
+    const notVideo = join(generatedDir, "not-video.mp4");
+    await writeFile(notVideo, "not an mp4");
+    const invalid = await fetch(`${url}/api/video/frame?file=${encodeURIComponent("not-video.mp4")}`);
+    assert.equal(invalid.status, 400);
   } finally {
     closeServer(server);
     closeServer(proxy);
@@ -218,6 +289,14 @@ test("/api/video/analyze extracts first/last frames and sends input_image payloa
     const content = responseBody.input[0].content;
     assert.equal(content.filter((item: any) => item.type === "input_image").length, 2);
     assert.ok(content.every((item: any) => item.type !== "input_file"));
+
+    const remote = await fetch(`${url}/api/video/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoUrl: "https://vidgen.example/clip.mp4" }),
+    });
+    assert.equal(remote.status, 400);
+    assert.match((await remote.json()).error, /generated .mp4/);
   } finally {
     closeServer(server);
     closeServer(proxy);

@@ -14,6 +14,10 @@ function parseIntegerFlag(value, fallback, label) {
         die(2, `${label} must be an integer`);
     return Number(raw);
 }
+function rejectUnknownFlags(args) {
+    if (args._unknown?.length)
+        die(2, `unknown option: ${args._unknown[0]}`);
+}
 async function readJsonResponse(res, label) {
     const text = await res.text();
     try {
@@ -25,18 +29,20 @@ async function readJsonResponse(res, label) {
 }
 function timeoutSignal(seconds) {
     const sec = parseIntegerFlag(seconds, 600, "--timeout");
+    if (sec < 1)
+        die(2, "--timeout must be at least 1");
     return AbortSignal.timeout(sec * 1000);
 }
 async function writeBuffer(path, buf) {
     await mkdir(dirname(path), { recursive: true }).catch(() => { });
     await writeFile(path, buf);
 }
-async function downloadReturnedVideo(serverBase, data, outPath) {
+async function downloadReturnedVideo(serverBase, data, outPath, signal) {
     const rawUrl = typeof data.url === "string" ? data.url : "";
     const url = rawUrl.startsWith("/") ? `${serverBase}${rawUrl}` : rawUrl;
     if (!url)
         die(1, "server did not return a video url");
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    const res = await fetch(url, { signal });
     if (!res.ok)
         die(1, `failed to download video: HTTP ${res.status}`);
     await writeBuffer(outPath, Buffer.from(await res.arrayBuffer()));
@@ -61,9 +67,9 @@ const SPEC = {
 const HELP = `
   ima2 video <prompt...> [options]
   ima2 video edit <prompt> --video <url>
-  ima2 video extend <prompt> --video <url> [--duration 5]
+  ima2 video extend <prompt> --video <url> [--duration 6]
   ima2 video frame <file> [--last] [-o output.png]
-  ima2 video analyze <video-url>
+  ima2 video analyze <generated-file>
 
   Generate, edit, extend, or analyze video via Grok.
 
@@ -99,7 +105,7 @@ const HELP = `
     ima2 video edit "make it sunset" --video https://vidgen.x.ai/.../clip.mp4
     ima2 video extend "camera pulls back" --video https://vidgen.x.ai/.../clip.mp4 --duration 5
     ima2 video frame 1780226256355_50252101.mp4 --last -o lastframe.png
-    ima2 video analyze https://vidgen.x.ai/.../clip.mp4
+    ima2 video analyze 1780226256355_50252101.mp4
 `;
 export default async function videoCmd(argv) {
     const sub = argv[0];
@@ -112,6 +118,7 @@ export default async function videoCmd(argv) {
     if (sub === "analyze")
         return videoAnalyzeCmd(argv.slice(1));
     const args = parseArgs(argv, SPEC);
+    rejectUnknownFlags(args);
     if (args.help) {
         out(HELP);
         return;
@@ -148,7 +155,10 @@ export default async function videoCmd(argv) {
         const buf = await readFile(p);
         return buf.toString("base64");
     }));
-    const timeoutMs = (parseInt(String(args.timeout)) || 600) * 1000;
+    const timeoutSeconds = parseIntegerFlag(args.timeout, 600, "--timeout");
+    if (timeoutSeconds < 1)
+        die(2, "--timeout must be at least 1");
+    const timeoutMs = timeoutSeconds * 1000;
     const requestId = `req_cli_video_${Date.now().toString(36)}`;
     const body = {
         prompt,
@@ -241,7 +251,7 @@ export default async function videoCmd(argv) {
     }
     // Download the video file from server
     const videoUrl = `${server.base}${doneData.url || `/generated/${encodeURIComponent(filename)}`}`;
-    const dlRes = await fetch(videoUrl, { signal: AbortSignal.timeout(30_000) });
+    const dlRes = await fetch(videoUrl, { signal: timeoutSignal(args.timeout) });
     if (!dlRes.ok)
         die(1, `failed to download video: HTTP ${dlRes.status}`);
     const videoBuf = Buffer.from(await dlRes.arrayBuffer());
@@ -274,6 +284,7 @@ function renderBar(pct) {
 async function videoEditCmd(argv) {
     const spec = { flags: { video: { type: "string" }, out: { short: "o", type: "string" }, output: { type: "string" }, json: { type: "boolean" }, timeout: { type: "string", default: "600" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
     const args = parseArgs(argv, spec);
+    rejectUnknownFlags(args);
     if (args.help) {
         out(`  ima2 video edit <prompt> --video <url|file_id|generated-file>\n\n  Edit existing video with text prompt (real V2V).\n  Model: grok-imagine-video only. Input: mp4, max 8.7s.\n\n  Options:\n        --video <value>   Source video HTTPS URL, xAI file_id, data URL, or generated filename (required)\n    -o, --out <file>      Download edited video to file\n        --output <file>   Alias for --out\n        --json            Print JSON result\n        --timeout <sec>   Default: 600\n        --server <url>    Override server URL`);
         return;
@@ -297,7 +308,7 @@ async function videoEditCmd(argv) {
         die(1, `edit failed: ${data.error ?? res.status}`);
     const outPath = (args.out || args.output);
     if (outPath)
-        await downloadReturnedVideo(server.base, data, outPath);
+        await downloadReturnedVideo(server.base, data, outPath, timeoutSignal(args.timeout));
     if (args.json) {
         out(JSON.stringify(data, null, 2));
     }
@@ -308,8 +319,9 @@ async function videoEditCmd(argv) {
 async function videoExtendCmd(argv) {
     const spec = { flags: { video: { type: "string" }, duration: { type: "string", default: "6" }, out: { short: "o", type: "string" }, output: { type: "string" }, json: { type: "boolean" }, timeout: { type: "string", default: "600" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
     const args = parseArgs(argv, spec);
+    rejectUnknownFlags(args);
     if (args.help) {
-        out(`  ima2 video extend <prompt> --video <url|file_id|generated-file> [--duration 5]\n\n  Extend video from its last frame.\n  Model: grok-imagine-video only. Extension: 2-10s.\n\n  Options:\n        --video <value>   Source video HTTPS URL, xAI file_id, data URL, or generated filename (required)\n        --duration <2-10> Extension duration (default: 6)\n    -o, --out <file>      Download extended video to file\n        --output <file>   Alias for --out\n        --json            Print JSON result\n        --timeout <sec>   Default: 600\n        --server <url>    Override server URL`);
+        out(`  ima2 video extend <prompt> --video <url|file_id|generated-file> [--duration 6]\n\n  Extend video from its last frame.\n  Model: grok-imagine-video only. Extension: 2-10s.\n\n  Options:\n        --video <value>   Source video HTTPS URL, xAI file_id, data URL, or generated filename (required)\n        --duration <2-10> Extension duration (default: 6)\n    -o, --out <file>      Download extended video to file\n        --output <file>   Alias for --out\n        --json            Print JSON result\n        --timeout <sec>   Default: 600\n        --server <url>    Override server URL`);
         return;
     }
     const prompt = args.positional.join(" ");
@@ -317,6 +329,9 @@ async function videoExtendCmd(argv) {
         die(2, "prompt is required");
     if (!args.video)
         die(2, "--video <url> is required");
+    const duration = parseIntegerFlag(args.duration, 6, "--duration");
+    if (duration < 2 || duration > 10)
+        die(2, "--duration must be between 2 and 10");
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });
@@ -325,16 +340,13 @@ async function videoExtendCmd(argv) {
         die(exitCodeForError(e), e.message);
         throw e;
     }
-    const duration = parseIntegerFlag(args.duration, 6, "--duration");
-    if (duration < 2 || duration > 10)
-        die(2, "--duration must be between 2 and 10");
     const res = await fetch(`${server.base}/api/video/extend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, videoUrl: args.video, duration }), signal: timeoutSignal(args.timeout) });
     const data = await readJsonResponse(res, "extend");
     if (!res.ok)
         die(1, `extend failed: ${data.error ?? res.status}`);
     const outPath = (args.out || args.output);
     if (outPath)
-        await downloadReturnedVideo(server.base, data, outPath);
+        await downloadReturnedVideo(server.base, data, outPath, timeoutSignal(args.timeout));
     if (args.json) {
         out(JSON.stringify(data, null, 2));
     }
@@ -345,6 +357,7 @@ async function videoExtendCmd(argv) {
 async function videoFrameCmd(argv) {
     const spec = { flags: { last: { type: "boolean" }, position: { type: "string" }, out: { type: "string" }, output: { short: "o", type: "string" }, timeout: { type: "string", default: "60" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
     const args = parseArgs(argv, spec);
+    rejectUnknownFlags(args);
     if (args.help) {
         out(`  ima2 video frame <generated-file> [--last] [--position <sec>] [-o output.png]\n\n  Extract a frame from a generated video file.\n\n  Options:\n        --last            Extract last frame (default)\n        --position <sec>  Extract frame at specific second\n    -o, --output <path>   Output file path\n        --out <path>      Alias for --output\n        --timeout <sec>   Default: 60\n        --server <url>    Override server URL`);
         return;
@@ -352,6 +365,11 @@ async function videoFrameCmd(argv) {
     const file = args.positional[0];
     if (!file)
         die(2, "file argument required");
+    if (args.last && args.position)
+        die(2, "use either --last or --position, not both");
+    const position = args.last ? "last" : (String(args.position || "last"));
+    if (position !== "last" && !/^\d+(\.\d+)?$/.test(position))
+        die(2, "--position must be a non-negative number");
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });
@@ -360,7 +378,6 @@ async function videoFrameCmd(argv) {
         die(exitCodeForError(e), e.message);
         throw e;
     }
-    const position = args.last ? "last" : (String(args.position || "last"));
     const url = `${server.base}/api/video/frame?file=${encodeURIComponent(file)}&position=${encodeURIComponent(position)}`;
     const res = await fetch(url, { signal: timeoutSignal(args.timeout) });
     if (!res.ok) {
@@ -375,13 +392,14 @@ async function videoFrameCmd(argv) {
 async function videoAnalyzeCmd(argv) {
     const spec = { flags: { json: { type: "boolean" }, timeout: { type: "string", default: "180" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
     const args = parseArgs(argv, spec);
+    rejectUnknownFlags(args);
     if (args.help) {
-        out(`  ima2 video analyze <video-url-or-generated-file>\n\n  Analyze first/last video frames with Grok 4.3 image understanding. Outputs structured recreation prompt.\n\n  Options:\n        --json            Print JSON result\n        --timeout <sec>   Default: 180\n        --server <url>    Override server URL`);
+        out(`  ima2 video analyze <generated-file>\n\n  Analyze first/last frames from a generated .mp4 with Grok 4.3 image understanding. Outputs structured recreation prompt.\n\n  Options:\n        --json            Print JSON result\n        --timeout <sec>   Default: 180\n        --server <url>    Override server URL`);
         return;
     }
     const videoUrl = args.positional[0];
     if (!videoUrl)
-        die(2, "video URL or generated filename required");
+        die(2, "generated video filename required");
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });

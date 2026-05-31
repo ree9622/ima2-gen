@@ -1,0 +1,99 @@
+# 00 — Video Phase 2: xAI Full API Surface + CLI + Skill
+
+## Part 1: 비개발자 설명
+
+이 문서는 Video Phase 2 원계획과 이후 E2E edge audit에서 확인된 실제 구현 상태를 함께 기록합니다. 현재 구현은 비디오 편집(V2V), 이어붙이기, generated MP4 프레임 추출, generated MP4 first/last-frame 분석을 CLI/API 표면으로 제공합니다.
+
+## Part 2: 구현 상세
+
+### 2026-05-31 E2E Edge Audit Update
+
+The original section below was the implementation plan. The verified implementation now differs in these ways:
+
+- The four new API operations live together in `routes/videoExtended.ts`, registered by `routes/index.ts`.
+- `/api/video/edit` and `/api/video/extend` are blocking JSON endpoints for CLI/API use, not SSE endpoints. They now poll through the shared Grok video adapter, reject moderation-blocked results, download the upstream MP4, save a generated artifact plus sidecar metadata, and return `/generated/<file>.mp4`.
+- `ima2 video edit|extend` support `--video <url|file_id|generated-file>`, `--timeout`, `--json`, and `-o/--out/--output` for downloading the returned generated video.
+- The UI still uses the existing generated-video flow and derived last-frame image-to-video path for video child nodes. It does not call `/api/video/extend`.
+- `/api/video/analyze` is frame-based: it extracts first/last frames with ffmpeg and sends `input_image` items to Grok 4.3 image understanding. It is not full temporal video understanding and no longer uses undocumented `input_file` video analysis.
+- `progrok` already exposes video model capability data through the vendored 0.2.0 capability surface; no separate ima2 code change was needed here.
+
+### 2026-06-01 Security/Contract Audit Update
+
+The remaining edge-case audit found and fixed additional route/CLI/documentation risks:
+
+- `/api/video/edit` and `/api/video/extend` now reject whitespace-only prompts, validate generated-file inputs as real `.mp4` files, use symlink-aware generated-dir containment, check moderation before URL presence, propagate request abort signals to start/poll/download, and fail if sidecar metadata cannot be written.
+- Generated sidecar metadata is no longer publicly served from `/generated/*.json`; sidecars also store redacted source summaries instead of raw source/data URLs.
+- `/api/video/analyze` intentionally rejects remote URLs and data URLs to avoid `ffmpeg` SSRF; it now accepts generated `.mp4` filenames/paths only.
+- `downloadVideo` now enforces HTTPS or loopback download URLs, video-ish content type, and a 100MB cap.
+- `ffmpeg` extraction has timeout/resource caps and no longer returns raw ffmpeg stderr to clients.
+- `ima2 video` CLI now rejects unknown options, validates `--timeout`, validates extend duration before server resolution, uses `--duration 6` consistently for extension default, validates frame position locally, and documents analyze as generated-file-only.
+- Public docs (`docs/API.md`, `docs/CLI.md`, site EN/KO reference pages) now list the extended video endpoints and subcommands.
+
+Sections below are the original implementation plan. Treat planned file names such as `routes/videoEdit.ts` as superseded by the consolidated `routes/videoExtended.ts` implementation.
+
+### Feature 1: Video Edit (V2V)
+
+**NEW** `routes/videoEdit.ts` (original plan; implemented in `routes/videoExtended.ts`)
+- `POST /api/video/edit` — prompt + videoUrl → progrok `/v1/videos/edits` → poll → save
+- Blocking JSON response for CLI/API. SSE is not implemented for edit.
+- 모델 가드: grok-imagine-video만 허용
+
+**MODIFY** `bin/commands/video.ts`
+- `edit` 서브커맨드 추가: `ima2 video edit "prompt" --video <url>`
+- `--video` (required), `--json`, `--timeout`, `--server`, `--output`
+
+### Feature 2: Video Extension
+
+**NEW** `routes/videoExtend.ts` (original plan; implemented in `routes/videoExtended.ts`)
+- `POST /api/video/extend` — prompt + videoUrl + duration → progrok `/v1/videos/extensions` → poll → save
+- Blocking JSON response for CLI/API. SSE is not implemented for extend.
+- duration 검증: 2-10s
+
+**MODIFY** `bin/commands/video.ts`
+- `extend` 서브커맨드: `ima2 video extend "prompt" --video <url> --duration 5`
+
+**MODIFY** `ui/src/store/useAppStore.ts`
+- Planned but not implemented in this phase. The UI still uses derived last-frame image-to-video for video child nodes.
+
+### Feature 3: Video Frame 추출
+
+**NEW** `routes/videoFrame.ts` (original plan; implemented in `routes/videoExtended.ts`)
+- `GET /api/video/frame?file=xxx.mp4&position=last` → ffmpeg → PNG 반환
+- ffmpeg: `-sseof -3 -i input -update 1 -q:v 1 output.png`
+
+**MODIFY** `bin/commands/video.ts`
+- `frame` 서브커맨드: `ima2 video frame <file> --last --output frame.png`
+
+### Feature 4: Video Analysis
+
+**NEW** `routes/videoAnalyze.ts` (original plan; implemented in `routes/videoExtended.ts`)
+- `POST /api/video/analyze` — generated filename → ffmpeg first/last frames → Grok 4.3 Responses API (`input_image`) → 구조화 프롬프트
+- 시스템 프롬프트: "Analyze these first and last frames from a video for recreation..."
+
+**MODIFY** `bin/commands/video.ts`
+- `analyze` 서브커맨드: `ima2 video analyze <generated-file>`
+
+### Feature 5: Skill 워크플로우 문서
+
+**MODIFY** `skills/ima2/SKILL.md`
+- Audio 프롬프팅, End Frame, Soul Character, Analysis→Recreation, Marketing, Multi-shot, V2V Edit 레시피 추가
+
+### Feature 6: progrok video-generation-models
+
+**MODIFY** progrok `src/commands/capabilities.ts`
+- `/v1/video-generation-models` 엔드포인트 추가
+
+## 구현 순서
+1. routes/videoEdit.ts + CLI edit (가장 단순)
+2. routes/videoExtend.ts + CLI extend + 노드 모드 연동
+3. routes/videoFrame.ts + CLI frame
+4. routes/videoAnalyze.ts + CLI analyze
+5. Skill 문서 업데이트
+6. progrok models 업데이트
+7. tsc + tests + CI
+
+## 성공 기준
+- `npx tsc --noEmit` pass (server + UI)
+- `npm test` pass
+- CLI smoke: `ima2 video edit/extend/frame/analyze` 동작
+- Skill 문서에 7개 워크플로우 레시피 포함

@@ -380,8 +380,12 @@ To continue from an existing video's last frame:
 # Get the last generated video filename
 LAST=$(ima2 ls -n 1 --json | jq -r '.items[0].filename')
 
-# Use it as source for the next clip
-ima2 video "the camera slowly pulls back revealing the full scene" --ref "/path/to/generated/$LAST"
+# True extension keeps the original clip and appends new motion
+ima2 video extend "the camera slowly pulls back revealing the full scene" --video "$LAST" --duration 6
+
+# Last-frame I2V continuation is a separate workflow
+ima2 video frame "$LAST" --last -o lastframe.png
+ima2 video "the camera slowly pulls back revealing the full scene" --ref lastframe.png
 ```
 
 Or in the UI: click "자식" on a video node. The current UI uses a derived last-frame image-to-video flow, not the `/api/video/extend` endpoint.
@@ -435,7 +439,7 @@ done
 - Max 720p resolution (no upscale API available)
 - Video edit/extend: grok-imagine-video only (1.5-preview not supported)
 - Video edit input: max 8.7 seconds
-- Video extend input: 2-15 seconds
+- Video extend input: 2-15 seconds; extension duration: 2-10 seconds
 
 ### Video Editing (V2V)
 
@@ -493,19 +497,19 @@ ima2 video "continue this scene" --ref lastframe.png
 Analyze first and last video frames with Grok 4.3 image understanding to get a structured recreation prompt. This infers motion from frames; it is not full temporal video understanding.
 
 ```bash
-# Analyze a video URL or generated filename
-ima2 video analyze https://vidgen.x.ai/.../clip.mp4
+# Analyze a generated filename
+ima2 video analyze 1780226256355_50252101.mp4
 
 # Output: structured prompt with shot type, inferred camera movement, lighting, color, motion, mood
 
 # Use the analysis to recreate with variations
-ANALYSIS=$(ima2 video analyze "$VIDEO_URL" --json | jq -r '.analysis')
+ANALYSIS=$(ima2 video analyze 1780226256355_50252101.mp4 --json | jq -r '.analysis')
 ima2 video "$ANALYSIS but in anime style" --ref reference.png
 ```
 
 ### Audio in Video (Prompt-Controlled)
 
-Grok video generates synchronized audio by default. Control it via prompt:
+The API does not expose a separate audio on/off or audio-track control. You can include sound, music, or dialogue direction in the prompt, but audio behavior is provider-dependent and not guaranteed by a local ima2 parameter:
 
 ```bash
 # Explicit sound direction

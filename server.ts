@@ -92,7 +92,10 @@ export function buildApp(ctx: RuntimeContext) {
   app.use("/assets", (_req, res) => {
     res.status(404).type("text/plain").send("Asset not found");
   });
-  app.use("/generated", express.static(ctx.config.storage.generatedDir, {
+  app.use("/generated", (req, res, next) => {
+    if (req.path.endsWith(".json")) return res.status(404).type("text/plain").send("Generated metadata is not public");
+    return next();
+  }, express.static(ctx.config.storage.generatedDir, {
     maxAge: ctx.config.storage.staticMaxAge,
     immutable: true,
   }));

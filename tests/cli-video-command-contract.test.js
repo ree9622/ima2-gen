@@ -61,9 +61,9 @@ describe("ima2 video CLI contracts", () => {
     assert.equal(code, 0);
     assert.match(stdout, /ima2 video <prompt/);
     assert.match(stdout, /ima2 video edit/);
-    assert.match(stdout, /ima2 video extend/);
+    assert.match(stdout, /ima2 video extend <prompt> --video <url> \[--duration 6\]/);
     assert.match(stdout, /ima2 video frame/);
-    assert.match(stdout, /ima2 video analyze/);
+    assert.match(stdout, /ima2 video analyze <generated-file>/);
     assert.match(stdout, /--topic <text>/);
     assert.match(stdout, /grok-imagine-video-1\.5-preview/);
   });
@@ -80,6 +80,23 @@ describe("ima2 video CLI contracts", () => {
     const badExtend = await runCLI(["video", "extend", "continue", "--video", "https://example.com/a.mp4", "--duration", "999"]);
     assert.equal(badExtend.code, 2);
     assert.match(badExtend.stderr, /--duration must be between 2 and 10/);
+
+    const badExtendBeforeServer = await runCLI(["video", "extend", "continue", "--video", "https://example.com/a.mp4", "--duration", "abc", "--server", "http://127.0.0.1:9"]);
+    assert.equal(badExtendBeforeServer.code, 2);
+    assert.match(badExtendBeforeServer.stderr, /--duration must be an integer/);
+    assert.doesNotMatch(badExtendBeforeServer.stderr, /server unreachable/);
+
+    const badTimeout = await runCLI(["video", "clip", "--timeout", "1abc"]);
+    assert.equal(badTimeout.code, 2);
+    assert.match(badTimeout.stderr, /--timeout must be an integer/);
+
+    const zeroTimeout = await runCLI(["video", "edit", "p", "--video", "https://example.com/v.mp4", "--timeout", "0"]);
+    assert.equal(zeroTimeout.code, 2);
+    assert.match(zeroTimeout.stderr, /--timeout must be at least 1/);
+
+    const unknown = await runCLI(["video", "clip", "--duraton", "5"]);
+    assert.equal(unknown.code, 2);
+    assert.match(unknown.stderr, /unknown option: --duraton/);
   });
 
   it("passes edit/extend timeout to fetch", async () => {
@@ -127,7 +144,7 @@ describe("ima2 video CLI contracts", () => {
       res.writeHead(404).end();
     });
     const base = await listen(server);
-    const result = await runCLI(["video", "analyze", "https://example.com/v.mp4", "--server", base]);
+    const result = await runCLI(["video", "analyze", "sample.mp4", "--server", base]);
     assert.equal(result.code, 1);
     assert.match(result.stderr, /expected JSON response/);
     assert.doesNotMatch(result.stderr, /SyntaxError|node:internal/);

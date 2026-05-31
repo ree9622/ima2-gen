@@ -51,6 +51,10 @@ const genBody = `{
       <tr><td><code>POST /api/node/generate</code> (SSE)</td><td>Node-mode generation and child edits.</td></tr>
       <tr><td><code>GET /api/node/:nodeId</code></td><td>Fetch stored node metadata and asset URL.</td></tr>
       <tr><td><code>POST /api/video/generate</code> (SSE)</td><td>Video generation via Grok (T2V/I2V/Ref2V).</td></tr>
+      <tr><td><code>POST /api/video/edit</code></td><td>Video-to-video edit via Grok; saves a generated MP4 artifact.</td></tr>
+      <tr><td><code>POST /api/video/extend</code></td><td>Extend a generated or remote MP4 from its last frame.</td></tr>
+      <tr><td><code>GET /api/video/frame</code></td><td>Extract a PNG frame from a generated MP4.</td></tr>
+      <tr><td><code>POST /api/video/analyze</code></td><td>Analyze first/last frames from a generated MP4 with Grok 4.3 vision.</td></tr>
     </tbody>
   </table>
   <h4>POST /api/generate — request body</h4>
@@ -67,7 +71,9 @@ const genBody = `{
     <strong>Video generation.</strong> <code>POST /api/video/generate</code> (SSE) generates videos
     via Grok. Models: <code>grok-imagine-video</code>, <code>grok-imagine-video-1.5-preview</code>.
     Modes: text-to-video, image-to-video, reference-to-video (2–7 refs). CLI:
-    <code>ima2 video</code>.
+    <code>ima2 video</code>. Extended CLI/API surfaces include <code>ima2 video edit</code>,
+    <code>ima2 video extend</code>, <code>ima2 video frame</code>, and <code>ima2 video analyze</code>.
+    Frame/analyze accept generated MP4 files; analyze rejects arbitrary remote URLs.
   </div>
 
   <h2>History</h2>

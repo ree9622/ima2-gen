@@ -117,7 +117,7 @@ const en: Dict = {
   'install.tag': '06 · Get going',
   'install.h.before': 'One command. ',
   'install.h.em': 'Then iterate.',
-  'install.lede': 'Run it with npx. Sign in once with Codex. Start branching.',
+  'install.lede': 'Run it with npx. Sign in with ChatGPT or Grok. Start creating.',
   'install.badge.npm': 'npm v1.1.18',
   'install.badge.node': 'Node ≥20',
   'install.badge.mit': 'MIT',

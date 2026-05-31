@@ -91,26 +91,65 @@ Veo 3.1, Veo 3, Kling 3.0, Kling 2.6, Seedance 2.0, Seedance 1.5, Wan 2.7, Wan 2
 ## ima2-gen Provider Interface Design
 
 ```typescript
-interface VideoProvider {
-  name: string;
-  submitJob(input: VideoJobInput): Promise<VideoJobHandle>;
-  pollStatus(handle: VideoJobHandle): Promise<VideoJobStatus>;
-  downloadResult(handle: VideoJobHandle): Promise<Buffer>;
-  cancelJob?(handle: VideoJobHandle): Promise<void>;
-  listModels(): Promise<VideoModelInfo[]>;
-}
+// ima2 as MCP Client — connects to remote MCP servers
+import { Client } from "@modelcontextprotocol/client";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
-interface VideoJobInput {
-  prompt: string;
-  model?: string;
-  duration?: number;
-  resolution?: string;
-  aspectRatio?: string;
-  sourceImage?: string;      // b64 or URL
-  sourceVideo?: string;      // URL (real V2V)
-  referenceImages?: string[];
-  startFrame?: string;
-  endFrame?: string;
-  generateAudio?: boolean;
+// Provider registry
+const PROVIDERS = {
+  grok: { type: "internal" },  // existing adapter
+  runway: { url: "https://mcp.runwayml.com/mcp", tool: "generate_video", auth: "RUNWAYML_API_SECRET" },
+  higgsfield: { url: "https://mcp.higgsfield.ai/mcp", tool: "generate_create", auth: "oauth-device-code" },
+};
+
+// CLI usage:
+// ima2 video "prompt" --provider runway --model seedance-2 --duration 10
+// ima2 video "prompt" --provider higgsfield --model kling3_0
+// ima2 video "prompt"  (default: grok)
+
+// Workflow chaining (MCP tool sequences):
+// 1. Image→Video: generate_image → generate_video(startFrame=imageUrl)
+// 2. Multi-shot: generate_multishot_video(shots=[...])
+// 3. Marketing: generate_product_marketing_video(productUrl=...)
+// 4. Real V2V: generate_video(referenceVideo=videoUrl)
+```
+
+## Runway MCP Exact Tool Schema
+
+```json
+{
+  "name": "generate_video",
+  "params": {
+    "promptText": "string (required)",
+    "model": "seedance-2 | kling-o3-pro | kling-3-pro | gen-4.5 | veo-3.1 | gen-4-turbo",
+    "duration": "5 | 10 | 15",
+    "ratio": "1280:720 | 720:1280 | 960:960 | ...",
+    "resolution": "480p | 720p | 1080p",
+    "startFrame": "{ url }",
+    "endFrame": "{ url }",
+    "referenceVideo": "{ url, durationSeconds? }",
+    "referenceImages": "[{ url, tag? }]",
+    "generateAudio": "boolean"
+  }
 }
 ```
+
+## Higgsfield MCP/CLI Schema
+
+```bash
+higgsfield generate create <model> \
+  --prompt "..." --duration 5 --aspect_ratio 16:9 \
+  --resolution 1080p --mode pro --start-image ./img.png \
+  --wait --json
+# Returns: { id, status, result_url, model, created_at, completed_at }
+```
+
+## MCP Ecosystem (Video/Media Servers)
+
+| Server | Approach | Models |
+|--------|----------|--------|
+| Runway MCP (official) | REST API wrapper | Gen-4.5, Seedance-2, Kling, Veo |
+| Higgsfield MCP | Multi-model aggregator | 17 models (Veo, Kling, Seedance, Wan, Hailuo, Grok) |
+| PiAPI MCP | Paid proxy | Midjourney, Flux, Kling, Luma, Suno |
+| kie-ai MCP | Unified API | Runway Aleph + Suno + Midjourney + Recraft |
+| agbrowse (planned) | CDP browser automation | All web UIs (zero credits) |

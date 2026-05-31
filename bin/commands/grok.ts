@@ -31,7 +31,7 @@ function localBinPath() {
 function spawnProgrok(argv: string[], env: NodeJS.ProcessEnv): Promise<number | null> {
   return new Promise((resolve, reject) => {
     const child = isWin
-      ? spawn("cmd.exe", ["/d", "/s", "/c", `progrok ${argv.map((arg) => JSON.stringify(arg)).join(" ")}`], {
+      ? spawn("cmd.exe", ["/d", "/s", "/c", `progrok ${argv.map((a) => a.includes(" ") ? `"${a}"` : a).join(" ")}`], {
           cwd: ROOT,
           env,
           stdio: "inherit",

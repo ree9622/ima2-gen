@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
-import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
+import { startJob, finishJob, registerJobAbortController, isJobCanceled, setJobPhase } from "../lib/inflight.js";
 import { isGenerationCanceledError, makeGenerationCanceledError } from "../lib/generationCancel.js";
 import { logEvent, logError } from "../lib/logger.js";
 import { invalidateHistoryIndex } from "../lib/historyIndex.js";
@@ -133,9 +133,15 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const startTime = Date.now();
 
       const onEvent = (ev: GrokVideoEvent) => {
-        if (ev.phase === "submitted") sendSse(res, "submitted", { requestId, xaiVideoRequestId: ev.xaiVideoRequestId });
-        else if (ev.phase === "progress") sendSse(res, "progress", { requestId, progress: typeof ev.progress === "number" ? ev.progress / 100 : null, stalled: Boolean(ev.stalled) });
-        else sendSse(res, "planning", { requestId });
+        if (ev.phase === "submitted") {
+          setJobPhase(requestId, "streaming");
+          sendSse(res, "submitted", { requestId, xaiVideoRequestId: ev.xaiVideoRequestId });
+        } else if (ev.phase === "progress") {
+          sendSse(res, "progress", { requestId, progress: typeof ev.progress === "number" ? ev.progress / 100 : null, stalled: Boolean(ev.stalled) });
+        } else {
+          setJobPhase(requestId, "planning");
+          sendSse(res, "planning", { requestId });
+        }
       };
 
       const result = await generateVideoViaGrok(prompt, ctx, {

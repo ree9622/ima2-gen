@@ -3,6 +3,7 @@ import type { RouteRuntimeContext } from "./runtimeContext.js";
 import { getGrokProxyUrl } from "./grokRuntime.js";
 import { grokError, searchGrokVisualContext } from "./grokImageAdapter.js";
 import { detectImageMimeFromB64 } from "./refs.js";
+import { aspectToCanvas, generateWhiteCanvasB64 } from "./grokVideoCanvas.js";
 import { downloadVideo } from "./grokVideoDownload.js";
 import type { VideoAspectRatio, VideoMode, VideoResolution } from "./imageModels.js";
 import { MAX_REF2V_REFERENCES } from "./imageModels.js";
@@ -123,26 +124,6 @@ function sourceImageUrl(image: string, mime?: string | null): string {
   if (image.startsWith("data:") || image.startsWith("http")) return image;
   const detected = mime || detectImageMimeFromB64(image) || "image/png";
   return `data:${detected};base64,${image}`;
-}
-
-/** Map aspect ratio + resolution to pixel dimensions for white canvas injection. */
-function aspectToCanvas(aspectRatio: string, resolution: string): { width: number; height: number } {
-  const base = resolution === "720p" ? 720 : 480;
-  const ratios: Record<string, [number, number]> = {
-    "16:9": [16, 9], "9:16": [9, 16], "4:3": [4, 3], "3:4": [3, 4],
-    "3:2": [3, 2], "2:3": [2, 3], "1:1": [1, 1], "auto": [16, 9],
-  };
-  const [w, h] = ratios[aspectRatio] || [16, 9];
-  if (w >= h) return { width: Math.round(base * w / h), height: base };
-  return { width: base, height: Math.round(base * h / w) };
-}
-
-/** Generate a minimal white PNG as base64 (no external deps). */
-function generateWhiteCanvasB64(): string {
-  // Minimal valid 1x1 white PNG, scaled conceptually — xAI will accept any valid PNG
-  // For simplicity, use a tiny white PNG (the model doesn't use it as a real frame)
-  const PNG_1x1_WHITE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/58BAwAHBQKhPX8EPAAAAABJRU5ErkJggg==";
-  return PNG_1x1_WHITE;
 }
 
 const FAILED_CODE_MAP: Record<string, { code: string; status: number }> = {
@@ -454,7 +435,7 @@ export async function generateVideoViaGrok(prompt: string, ctx: RouteRuntimeCont
   let effectivePayload = payload;
   if (model === "grok-imagine-video-1.5-preview" && !srcUrl && refUrls.length === 0) {
     const { width, height } = aspectToCanvas(plan.aspectRatio, plan.resolution);
-    const whiteCanvas = generateWhiteCanvasB64();
+    const whiteCanvas = await generateWhiteCanvasB64(width, height);
     const canvasSrcUrl = `data:image/png;base64,${whiteCanvas}`;
     effectivePayload = buildVideoGenerationPayload(
       { ...plan, mode: "image-to-video", prompt: `${plan.prompt}. This is not a start frame — generate freely as a new video.` },

@@ -11,6 +11,7 @@ import {
   type GrokVideoPlan,
 } from "../lib/grokVideoAdapter.js";
 import { normalizeGrokVideoModel, VALID_GROK_VIDEO_MODELS } from "../lib/imageModels.js";
+import { parsePngInfo } from "../lib/pngInfo.js";
 import { config } from "../config.js";
 
 const originalFetch = globalThis.fetch;
@@ -261,6 +262,34 @@ describe("Grok video adapter", () => {
       headers: { get: (k: string) => (k.toLowerCase() === "content-type" ? "video/mp4" : null) },
     })) as any;
     await assert.rejects(downloadVideo(ctx(), "https://vidgen.example/empty.mp4"), (e: any) => e.code === "GROK_VIDEO_DOWNLOAD_FAILED");
+
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => Buffer.from("too-large").buffer,
+      headers: { get: (k: string) => (k.toLowerCase() === "content-length" ? String(101 * 1024 * 1024) : k.toLowerCase() === "content-type" ? "video/mp4" : null) },
+    })) as any;
+    await assert.rejects(downloadVideo(ctx(), "https://vidgen.example/too-large.mp4"), (e: any) => e.code === "GROK_VIDEO_DOWNLOAD_FAILED");
+  });
+
+  it("maps video download timeout to GROK_VIDEO_TIMEOUT", async () => {
+    globalThis.fetch = (async (_input: any, init?: any) => {
+      await new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          },
+          { once: true },
+        );
+      });
+    }) as any;
+    await assert.rejects(
+      downloadVideo(ctx({ config: { ...config, grokProvider: { ...config.grokProvider, videoDownloadTimeoutMs: 1 } } } as any), "https://vidgen.example/slow.mp4"),
+      (e: any) => e.code === "GROK_VIDEO_TIMEOUT",
+    );
   });
 
   it("accepts grok-imagine-video-1.5-preview as valid model", () => {
@@ -283,6 +312,8 @@ describe("Grok video adapter", () => {
     assert.equal(result.mode, "text-to-video");
     assert.equal(startBody.model, "grok-imagine-video-1.5-preview");
     assert.ok(startBody.image?.url?.startsWith("data:image/png;base64,"));
+    const canvas = Buffer.from(startBody.image.url.replace(/^data:image\/png;base64,/, ""), "base64");
+    assert.deepEqual(parsePngInfo(canvas), { width: 853, height: 480, bitDepth: 8, colorType: 2 });
     assert.match(startBody.prompt, /not a start frame/);
   });
 });

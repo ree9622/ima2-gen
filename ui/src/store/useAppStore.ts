@@ -3100,7 +3100,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         {
           prompt,
           requestId: flightId,
-          model: get().videoModelSelected || undefined,
+          model: (typeof get().videoModelSelected === "string" && get().videoModelSelected) || undefined,
           referenceImages: refs.length >= 2 ? refs : undefined,
           sourceImage: refs.length === 1 ? refs[0] : undefined,
           duration: clampVideoDurationUI(get().videoDuration, mode),

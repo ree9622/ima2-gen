@@ -31,20 +31,13 @@ function localBinPath() {
 function spawnProgrok(argv: string[], env: NodeJS.ProcessEnv): Promise<number | null> {
   return new Promise((resolve, reject) => {
     const progrokBin = join(localBinPath(), isWin ? "progrok.cmd" : "progrok");
-    const child = isWin
-      ? spawn(progrokBin, argv, {
-          cwd: ROOT,
-          env,
-          stdio: "inherit",
-          shell: true,
-          windowsHide: true,
-        })
-      : spawn(progrokBin, argv, {
-          cwd: ROOT,
-          env,
-          stdio: "inherit",
-          windowsHide: true,
-        });
+    const child = spawn(progrokBin, argv, {
+      cwd: ROOT,
+      env,
+      stdio: "inherit",
+      shell: isWin,
+      windowsHide: true,
+    });
     child.on("error", (err) => reject(err));
     child.on("close", resolve);
   });
@@ -65,13 +58,13 @@ export default async function grokCmd(argv: string[]) {
   try {
     const code = await spawnProgrok(argv, env);
     if (code && code !== 0) {
-      // Auto-fallback: if login (without --device-code) failed, retry with device-code
+      // progrok 0.1.1+ defaults to device-code flow already.
+      // Do NOT auto-retry with --device-code — it issues a NEW code that
+      // invalidates the one the user may already be looking at in their browser.
       if (sub === "login" && !argv.includes("--device-code")) {
-        out(color.yellow("⚠ ") + "Browser login failed. Retrying with device-code flow...\n");
-        const fallbackCode = await spawnProgrok(["login", "--device-code"], env);
-        if (fallbackCode && fallbackCode !== 0) {
-          die(fallbackCode, "bundled progrok device-code login also failed");
-        }
+        out(color.yellow("⚠ ") + "Login failed. Try again with:\n");
+        out("  ima2 grok login --device-code\n");
+        die(code, "bundled progrok login failed");
       } else {
         die(code, `bundled progrok exited with code ${code}`);
       }

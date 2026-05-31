@@ -30,10 +30,21 @@ const SPEC = {
 
 const HELP = `
   ima2 video <prompt...> [options]
+  ima2 video edit <prompt> --video <url>
+  ima2 video extend <prompt> --video <url> [--duration 5]
+  ima2 video frame <file> [--last] [-o output.png]
+  ima2 video analyze <video-url>
 
-  Generate a video via the Grok video provider (SSE streaming).
+  Generate, edit, extend, or analyze video via Grok.
 
-  Options:
+  Subcommands:
+    (default)   Generate video (T2V / I2V / Ref2V)
+    edit        Edit existing video with text prompt (V2V)
+    extend      Continue video from last frame
+    frame       Extract a frame from video (requires ffmpeg on server)
+    analyze     Analyze video with Grok 4.3 vision
+
+  Options (generate mode):
         --duration <1..15>              Duration in seconds. Default: 5
         --resolution <480p|720p>        Default: 480p
         --aspect-ratio <ratio|auto>     1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto. Default: auto
@@ -55,10 +66,19 @@ const HELP = `
   Examples:
     ima2 video "a cat playing piano"
     ima2 video "animate this" --ref photo.png --duration 10
-    ima2 video "cinematic" --resolution 720p --aspect-ratio 16:9 -o out.mp4
+    ima2 video edit "make it sunset" --video https://vidgen.x.ai/.../clip.mp4
+    ima2 video extend "camera pulls back" --video https://vidgen.x.ai/.../clip.mp4 --duration 5
+    ima2 video frame 1780226256355_50252101.mp4 --last -o lastframe.png
+    ima2 video analyze https://vidgen.x.ai/.../clip.mp4
 `;
 
 export default async function videoCmd(argv: string[]) {
+  const sub = argv[0];
+  if (sub === "edit") return videoEditCmd(argv.slice(1));
+  if (sub === "extend") return videoExtendCmd(argv.slice(1));
+  if (sub === "frame") return videoFrameCmd(argv.slice(1));
+  if (sub === "analyze") return videoAnalyzeCmd(argv.slice(1));
+
   const args = parseArgs(argv, SPEC);
   if (args.help) { out(HELP); return; }
 
@@ -202,4 +222,69 @@ function renderBar(pct: number): string {
   const width = 20;
   const filled = Math.round((pct / 100) * width);
   return color.green("█".repeat(filled)) + color.dim("░".repeat(width - filled));
+}
+
+// --- Subcommands ---
+
+async function videoEditCmd(argv: string[]) {
+  const spec = { flags: { video: { type: "string" }, json: { type: "boolean" }, timeout: { type: "string", default: "600" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
+  const args = parseArgs(argv, spec);
+  if (args.help) { out(`  ima2 video edit <prompt> --video <url>\n\n  Edit existing video with text prompt (real V2V).\n  Model: grok-imagine-video only. Input: mp4, max 8.7s.\n\n  Options:\n        --video <url>     Source video HTTPS URL (required)\n        --json            Print JSON result\n        --timeout <sec>   Default: 600\n        --server <url>    Override server URL`); return; }
+  const prompt = args.positional.join(" ");
+  if (!prompt) die(2, "prompt is required");
+  if (!args.video) die(2, "--video <url> is required");
+  let server;
+  try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
+  const res = await fetch(`${server.base}/api/video/edit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, videoUrl: args.video }) });
+  const data = await res.json() as Record<string, unknown>;
+  if (!res.ok) die(1, `edit failed: ${data.error ?? res.status}`);
+  if (args.json) { out(JSON.stringify(data, null, 2)); } else { out(color.green("✓ ") + `Edited video: ${data.url}`); }
+}
+
+async function videoExtendCmd(argv: string[]) {
+  const spec = { flags: { video: { type: "string" }, duration: { type: "string", default: "6" }, json: { type: "boolean" }, timeout: { type: "string", default: "600" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
+  const args = parseArgs(argv, spec);
+  if (args.help) { out(`  ima2 video extend <prompt> --video <url> [--duration 5]\n\n  Extend video from its last frame.\n  Model: grok-imagine-video only. Extension: 2-10s.\n\n  Options:\n        --video <url>     Source video HTTPS URL (required)\n        --duration <2-10> Extension duration (default: 6)\n        --json            Print JSON result\n        --server <url>    Override server URL`); return; }
+  const prompt = args.positional.join(" ");
+  if (!prompt) die(2, "prompt is required");
+  if (!args.video) die(2, "--video <url> is required");
+  let server;
+  try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
+  const duration = parseInt(String(args.duration)) || 6;
+  const res = await fetch(`${server.base}/api/video/extend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, videoUrl: args.video, duration }) });
+  const data = await res.json() as Record<string, unknown>;
+  if (!res.ok) die(1, `extend failed: ${data.error ?? res.status}`);
+  if (args.json) { out(JSON.stringify(data, null, 2)); } else { out(color.green("✓ ") + `Extended video (${data.duration}s): ${data.url}`); }
+}
+
+async function videoFrameCmd(argv: string[]) {
+  const spec = { flags: { last: { type: "boolean" }, position: { type: "string" }, output: { short: "o", type: "string" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
+  const args = parseArgs(argv, spec);
+  if (args.help) { out(`  ima2 video frame <file> [--last] [--position <sec>] [-o output.png]\n\n  Extract a frame from a video file.\n\n  Options:\n        --last            Extract last frame (default)\n        --position <sec>  Extract frame at specific second\n    -o, --output <path>   Output file path\n        --server <url>    Override server URL`); return; }
+  const file = args.positional[0];
+  if (!file) die(2, "file argument required");
+  let server;
+  try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
+  const position = args.last ? "last" : (String(args.position || "last"));
+  const url = `${server.base}/api/video/frame?file=${encodeURIComponent(file)}&position=${encodeURIComponent(position)}`;
+  const res = await fetch(url);
+  if (!res.ok) { const d = await res.json().catch(() => ({})); die(1, `frame extraction failed: ${(d as any).error || res.status}`); }
+  const buf = Buffer.from(await res.arrayBuffer());
+  const outPath = (args.output as string) || `frame-${file.replace(/\.[^.]+$/, "")}.png`;
+  await writeFile(outPath, buf);
+  out(color.green("✓ ") + `Frame saved: ${outPath} (${buf.length} bytes)`);
+}
+
+async function videoAnalyzeCmd(argv: string[]) {
+  const spec = { flags: { json: { type: "boolean" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
+  const args = parseArgs(argv, spec);
+  if (args.help) { out(`  ima2 video analyze <video-url-or-file>\n\n  Analyze video with Grok 4.3 vision. Outputs structured recreation prompt.\n\n  Options:\n        --json            Print JSON result\n        --server <url>    Override server URL`); return; }
+  const videoUrl = args.positional[0];
+  if (!videoUrl) die(2, "video URL or filename required");
+  let server;
+  try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
+  const res = await fetch(`${server.base}/api/video/analyze`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ videoUrl }) });
+  const data = await res.json() as Record<string, unknown>;
+  if (!res.ok) die(1, `analyze failed: ${(data as any).error || res.status}`);
+  if (args.json) { out(JSON.stringify(data, null, 2)); } else { out((data as any).analysis); }
 }

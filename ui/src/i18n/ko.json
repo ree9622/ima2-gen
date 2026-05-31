@@ -71,6 +71,7 @@
   },
   "inflight": {
     "queued": "대기 중",
+    "planning": "프롬프트 생성 중",
     "streaming": "생성 중",
     "decoding": "마무리 중",
     "canceling": "취소 중",

@@ -14,6 +14,7 @@ export function InFlightList() {
 
   const phaseLabels: Record<string, string> = {
     queued: t("inflight.queued"),
+    planning: t("inflight.planning"),
     streaming: t("inflight.streaming"),
     decoding: t("inflight.decoding"),
     canceling: t("inflight.canceling"),

@@ -3108,7 +3108,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           sessionId: get().activeSessionId,
           clientNodeId: nodeId ?? null,
         },
-        { onProgress: ({ progress }) => set({ videoProgress: progress ?? null }) },
+        {
+          onPlanning: () => set({ inFlight: get().inFlight.map((f) => f.id === flightId ? { ...f, phase: "planning" } : f) }),
+          onSubmitted: () => set({ inFlight: get().inFlight.map((f) => f.id === flightId ? { ...f, phase: "streaming" } : f) }),
+          onProgress: ({ progress }) => set({ videoProgress: progress ?? null }),
+        },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Video generation failed";
@@ -3134,7 +3138,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await postVideoGenerateStream(
         { prompt: p, requestId: flightId, mode: "image-to-video", sourceFilename: filename, duration: 5, resolution: "480p", aspectRatio: "auto" },
-        { onProgress: ({ progress }) => set({ videoProgress: progress ?? null }) },
+        {
+          onPlanning: () => set({ inFlight: get().inFlight.map((f) => f.id === flightId ? { ...f, phase: "planning" } : f) }),
+          onSubmitted: () => set({ inFlight: get().inFlight.map((f) => f.id === flightId ? { ...f, phase: "streaming" } : f) }),
+          onProgress: ({ progress }) => set({ videoProgress: progress ?? null }),
+        },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Video generation failed";

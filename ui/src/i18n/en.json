@@ -71,6 +71,7 @@
   },
   "inflight": {
     "queued": "Queued",
+    "planning": "Planning",
     "streaming": "Generating",
     "decoding": "Finalizing",
     "canceling": "Canceling",

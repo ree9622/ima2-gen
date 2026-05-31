@@ -56,6 +56,12 @@ export default async function grokCmd(argv: string[]) {
   };
 
   try {
+    // Default to --manual-paste for login (most reliable across platforms).
+    // Users can still pass --device-code or --browser explicitly.
+    if (sub === "login" && !argv.includes("--device-code") && !argv.includes("--browser") && !argv.includes("--manual-paste")) {
+      argv = [...argv, "--manual-paste"];
+    }
+
     const code = await spawnProgrok(argv, env);
     if (code && code !== 0) {
       // progrok 0.1.1+ defaults to device-code flow already.

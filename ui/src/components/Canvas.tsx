@@ -243,17 +243,27 @@ export function Canvas() {
             />
           </div>
           <div className="result-meta">
-            {[
-              currentImage.elapsed != null ? `${currentImage.elapsed}s` : null,
-              currentImage.usage
-                ? t("canvas.tokens", { n: currentImage.usage.total_tokens ?? "?" })
-                : null,
-              formatReasoningLabel(currentImage.reasoningEffort),
-              displayQuality,
-              displaySize,
-              displayModel,
-              currentImage.provider ?? null,
-            ]
+            {(isVideoItem(currentImage)
+              ? [
+                  currentImage.elapsed != null ? `${currentImage.elapsed}s` : null,
+                  (currentImage as any).video?.duration ? `${(currentImage as any).video.duration}s clip` : null,
+                  (currentImage as any).video?.resolution ?? null,
+                  (currentImage as any).video?.aspectRatio ?? null,
+                  displayModel,
+                  currentImage.provider ?? null,
+                ]
+              : [
+                  currentImage.elapsed != null ? `${currentImage.elapsed}s` : null,
+                  currentImage.usage
+                    ? t("canvas.tokens", { n: currentImage.usage.total_tokens ?? "?" })
+                    : null,
+                  formatReasoningLabel(currentImage.reasoningEffort),
+                  displayQuality,
+                  displaySize,
+                  displayModel,
+                  currentImage.provider ?? null,
+                ]
+            )
               .filter((value): value is string => Boolean(value))
               .join(" · ")}
           </div>

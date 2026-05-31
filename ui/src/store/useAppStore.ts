@@ -713,7 +713,7 @@ export type ImageNodeData = {
   model?: string | null;
   size?: string | null;
   referenceImages?: string[];
-  video?: { duration?: number; resolution?: string; aspectRatio?: string } | null;
+  video?: { duration?: number; resolution?: string; aspectRatio?: string; topic?: string } | null;
 };
 
 export type GraphNode = FlowNode<ImageNodeData>;
@@ -2312,8 +2312,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     // If parent is a video node, extract last frame as child reference + load topic
     if (parent.data.imageUrl && isVideoUrl(parent.data.imageUrl)) {
       const videoSrc = parent.data.imageUrl;
-      if (parent.data.video && (parent.data.video as any).topic) {
-        get().setVideoTopic((parent.data.video as any).topic);
+      if (parent.data.video && parent.data.video.topic) {
+        get().setVideoTopic(parent.data.video.topic);
       }
       void (async () => {
         try {
@@ -3188,7 +3188,10 @@ export const useAppStore = create<AppState>((set, get) => ({
                     pendingStartedAt: null,
                     elapsed: result.elapsed ?? undefined,
                     model: null,
-                    video: result.video as ImageNodeData["video"] ?? null,
+                    video: {
+                      ...(result.video as Record<string, unknown> ?? {}),
+                      ...(result.videoSeries?.topic ? { topic: result.videoSeries.topic } : {}),
+                    } as ImageNodeData["video"],
                   },
                 }
               : n,

@@ -1081,6 +1081,7 @@ export type VideoGenerateDone = {
   revisedPrompt?: string | null;
   elapsed?: number;
   video?: Record<string, unknown>;
+  videoSeries?: { topic?: string; chainIndex?: number } | null;
 };
 
 export async function postVideoGenerateStream(

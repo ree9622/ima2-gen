@@ -809,6 +809,8 @@
       "image-to-video": "Image → video (1 reference)",
       "reference-to-video": "Reference → video ({n} references)"
     },
+    "seriesTopicTitle": "Series topic",
+    "seriesTopicPlaceholder": "e.g. Korean travel vlog",
     "durationTitle": "Length",
     "resolutionTitle": "Resolution",
     "aspectTitle": "Aspect ratio"

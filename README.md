@@ -313,6 +313,15 @@ npm run build
 
 `npm run dev` builds the UI and starts the TypeScript server entry with `--watch` and verbose server diagnostics. `npm run typecheck`, `npm run build:server`, and `npm run build:cli` verify the TypeScript migration and package emit path. Node mode and Canvas Mode are part of the packaged UI by default.
 
+## Contributors
+
+- [@lidge-jun](https://github.com/lidge-jun) — maintainer
+- [@ree9622](https://github.com/ree9622) — moderation controls, Windows fixes, structured logging
+- [@Charley-Peng](https://github.com/Charley-Peng) — API cache fix (#74)
+- [@philiptaron](https://github.com/philiptaron) — Nix flake (#81)
+- [@aorying](https://github.com/aorying) — upstream validation error surfacing (informed TS migration direction)
+- [@PARKJONGMlN](https://github.com/PARKJONGMlN) — batch comparison matrix design (#80)
+
 ## License
 
 MIT

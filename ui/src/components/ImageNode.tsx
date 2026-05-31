@@ -166,6 +166,8 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
               searches: d.webSearchCalls,
             })
             : t("node.ready", { elapsed: d.elapsed ?? "?" }),
+          d.video?.duration ? `${d.video.duration}s` : null,
+          d.video?.resolution ?? null,
           formatReasoningLabel(d.reasoningEffort),
           getImageModelShortLabel(d.model),
         ].filter(Boolean).join(" · ");

@@ -713,6 +713,7 @@ export type ImageNodeData = {
   model?: string | null;
   size?: string | null;
   referenceImages?: string[];
+  video?: { duration?: number; resolution?: string; aspectRatio?: string } | null;
 };
 
 export type GraphNode = FlowNode<ImageNodeData>;
@@ -789,6 +790,7 @@ function mapSessionToGraph(session: SessionFull): {
       model: (d.model ?? null) as string | null,
       size: (d.size ?? null) as string | null,
       referenceImages: loadNodeRefs(session.id, n.id),
+      video: (d.video ?? null) as ImageNodeData["video"],
     };
     return {
       id: n.id,
@@ -3181,6 +3183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     pendingStartedAt: null,
                     elapsed: result.elapsed ?? undefined,
                     model: null,
+                    video: result.video as ImageNodeData["video"] ?? null,
                   },
                 }
               : n,

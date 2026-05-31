@@ -75,16 +75,18 @@ Veo 3.1, Veo 3, Kling 3.0, Kling 2.6, Seedance 2.0, Seedance 1.5, Wan 2.7, Wan 2
 
 ## Integration Recommendation
 
-| Provider | Ease | Models | Best For |
-|----------|------|--------|----------|
-| **Grok (current)** | ✅ Already done | 2 | Default, SuperGrok users |
-| **Runway REST API** | ✅ Easy (HTTP + API key) | 6 | Gen-4.5, real V2V, 1080p |
-| **Higgsfield CLI** | ⚠️ Medium (subprocess) | 17 | Multi-model access, Veo/Kling/Seedance |
+**모델은 Grok만 사용.** Runway/Higgsfield는 설계 참고용.
 
-### Priority:
-1. Runway REST API — proper HTTP integration, API key auth, real V2V
-2. Higgsfield CLI wrapper — subprocess-based, access to 17 models
-3. agbrowse CDP (Runway web) — zero credits on Explore mode (future)
+참고할 설계 패턴:
+1. Tool schema 구조 (discrete duration, startFrame/endFrame 분리, generateAudio)
+2. Async 워크플로우 (submit → poll → download, server-side blocking)
+3. 워크플로우 체이닝 (image→video, series, multi-shot)
+4. MCP 서버로 노출하는 방식
+
+**ima2의 방향**: ima2 자체를 MCP 서버로 만들어서 다른 agent가 호출 가능하게.
+- `ima2 mcp serve` → stdio/HTTP transport
+- Tools: `ima2_generate_video`, `ima2_generate_image`, `ima2_get_task`
+- 모델: Grok only (grok-imagine-video, grok-imagine-image)
 
 ---
 

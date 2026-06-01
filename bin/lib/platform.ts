@@ -81,19 +81,48 @@ export function openUrl(url: string): { ok: boolean; error?: string } {
  * Windows does NOT raise SIGTERM from the OS — SIGINT (Ctrl+C) and SIGBREAK
  * (Ctrl+Break) are the observable signals. We still register SIGTERM so that
  * Node-internal `child.kill("SIGTERM")` calls work in tests.
+ *
+ * Handlers may return a Promise — they run with a grace period (default 3s)
+ * before forceful exit, giving file handles and sockets time to close cleanly.
  */
-export function onShutdown(handler: (signal: NodeJS.Signals) => void) {
+const SHUTDOWN_GRACE_MS = 3_000;
+let shutdownStarted = false;
+
+export function onShutdown(handler: (signal: NodeJS.Signals) => void | Promise<void>) {
   const signals: NodeJS.Signals[] = isWin
     ? ["SIGINT", "SIGTERM", "SIGBREAK"]
     : ["SIGINT", "SIGTERM", "SIGHUP"];
   for (const sig of signals) {
     try {
-      process.on(sig, () => {
-        try { handler(sig); } finally { process.exit(0); }
+      process.on(sig, async () => {
+        if (shutdownStarted) return;
+        shutdownStarted = true;
+        const forceExit = setTimeout(() => process.exit(0), SHUTDOWN_GRACE_MS);
+        forceExit.unref?.();
+        try { await handler(sig); } catch {}
+        process.exit(0);
       });
     } catch {
       // Some signals aren't installable on certain platforms; ignore.
     }
+  }
+}
+
+/**
+ * Kill an entire process tree. On Windows, child.kill() only kills the
+ * immediate process, leaving grandchildren alive and holding file locks.
+ * taskkill /T /F kills the whole tree.
+ */
+export function killProcessTree(pid: number | undefined) {
+  if (!pid) return;
+  try {
+    if (isWin) {
+      execSync(`taskkill /T /F /PID ${pid}`, { stdio: "ignore" });
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+  } catch {
+    // Process already exited
   }
 }
 

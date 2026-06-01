@@ -25,6 +25,8 @@ import { config } from "./config.js";
 import { getServerPort, listenWithPortFallback } from "./lib/runtimePorts.js";
 import type { RuntimeContext, RuntimeContextOverrides, ApiKeySource } from "./lib/runtimeContext.js";
 
+import { closeDb } from "./lib/db.js";
+import { stopAgentQueueWorker } from "./lib/agentQueueWorker.js";
 import { errInfo } from "./lib/errInfo.js";
 
 type BootRuntimeContext = RuntimeContext & {
@@ -251,16 +253,23 @@ export async function startServer(overrides: StartServerOverrides = {}) {
       })
     : null;
 
-  onShutdown(() => {
+  let server: import("node:net").Server;
+
+  onShutdown(async () => {
     unadvertise(ctx);
     try { oauthChild?.stop?.(); } catch {}
     try { oauthChild?.kill?.(); } catch {}
     try { grokChild?.stop?.(); } catch {}
     try { grokChild?.kill?.(); } catch {}
+    stopAgentQueueWorker();
+    await new Promise<void>((resolve) => {
+      if (server) server.close(() => resolve()); else resolve();
+    });
+    closeDb();
   });
   process.on("exit", () => unadvertise(ctx));
 
-  const server = await listenWithPortFallback(app, ctx.config.server.port, {
+  server = await listenWithPortFallback(app, ctx.config.server.port, {
     host: ctx.config.server.host,
     label: "server",
     onFallback: ({ requestedPort, actualPort }: { requestedPort: number; actualPort: number }) => {

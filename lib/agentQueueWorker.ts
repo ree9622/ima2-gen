@@ -28,6 +28,13 @@ export function ensureAgentQueueWorker(ctx: RuntimeContext) {
   void tickAgentQueueWorker(ctx);
 }
 
+export function stopAgentQueueWorker() {
+  if (workerTimer) {
+    clearInterval(workerTimer);
+    workerTimer = null;
+  }
+}
+
 export async function tickAgentQueueWorker(ctx: RuntimeContext) {
   if (ticking) return;
   ticking = true;

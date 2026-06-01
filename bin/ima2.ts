@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { spawn, execSync } from "child_process";
 import { confirmDestructiveAction } from "./lib/destructive-confirm.js";
 import { doctor } from "./commands/doctor.js";
-import { openUrl, resolveBin } from "./lib/platform.js";
+import { openUrl, resolveBin, killProcessTree } from "./lib/platform.js";
 import { maybePromptGithubStar } from "./lib/star-prompt.js";
 import { ensureFreshUiDist } from "./lib/ui-build.js";
 import { detectCodexAuth } from "../lib/codexDetect.js";
@@ -208,8 +208,8 @@ async function serve(serveArgs: string[] = []) {
 
   child.on("exit", (code) => process.exit(code));
 
-  process.on("SIGINT", () => child.kill("SIGINT"));
-  process.on("SIGTERM", () => child.kill("SIGTERM"));
+  process.on("SIGINT", () => killProcessTree(child.pid));
+  process.on("SIGTERM", () => killProcessTree(child.pid));
 }
 
 async function showStatus() {

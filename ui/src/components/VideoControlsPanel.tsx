@@ -3,6 +3,8 @@ import { useI18n } from "../i18n";
 import { OptionGroup } from "./OptionGroup";
 import { deriveVideoModeUI, MAX_REF2V_DURATION_UI } from "../lib/imageModels";
 import { ACTIVE_VIDEO_PROMPT_GUIDANCE, continuitySummary } from "../lib/videoContinuity";
+import { GrokPlannerSelect } from "./settings/GrokPlannerSelect";
+import { ReasoningEffortSelect } from "./ReasoningEffortSelect";
 import type { VideoResolutionUI } from "../types";
 
 const RES_ITEMS = [
@@ -34,16 +36,20 @@ export function VideoControlsPanel() {
         <strong>{t("video.modeLabel")}</strong>
         <span>{t(`video.mode.${mode}`, { n: refCount })}</span>
       </div>
-      <div className="provider-compat-note" role="note">
-        <strong>Active prompt</strong>
-        <span>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</span>
-      </div>
       {summary ? (
         <div className="provider-compat-note" role="note">
           <strong>Continuity</strong>
           <span>{summary}</span>
         </div>
       ) : null}
+      <div className="option-group">
+        <div className="section-title">{t("video.plannerModelTitle") ?? "Planner Model"}</div>
+        <GrokPlannerSelect />
+      </div>
+      <div className="option-group">
+        <div className="section-title">{t("video.reasoningEffortTitle") ?? "Reasoning Effort"}</div>
+        <ReasoningEffortSelect />
+      </div>
       <div className="option-group">
         <div className="section-title">{t("video.seriesTopicTitle") ?? "시리즈 주제"}</div>
         <input
@@ -81,6 +87,10 @@ export function VideoControlsPanel() {
         value={aspect}
         onChange={setAspect}
       />
+      <div className="provider-compat-note" role="note" style={{ marginTop: 8 }}>
+        <strong>Active prompt</strong>
+        <span>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</span>
+      </div>
     </div>
   );
 }

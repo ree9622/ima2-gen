@@ -814,6 +814,8 @@
     }
   },
   "video": {
+    "plannerModelTitle": "Planner Model",
+    "reasoningEffortTitle": "Reasoning Effort",
     "modeLabel": "Video mode",
     "mode": {
       "text-to-video": "Text → video (no reference images)",

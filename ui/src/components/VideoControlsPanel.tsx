@@ -4,7 +4,6 @@ import { useI18n } from "../i18n";
 import { OptionGroup } from "./OptionGroup";
 import { deriveVideoModeUI, MAX_REF2V_DURATION_UI } from "../lib/imageModels";
 import { ACTIVE_VIDEO_PROMPT_GUIDANCE, continuitySummary } from "../lib/videoContinuity";
-import { REASONING_EFFORT_OPTIONS, type ReasoningEffort } from "../lib/reasoning";
 import type { VideoResolutionUI } from "../types";
 
 interface PlannerConfig { model: string; options: string[]; }
@@ -28,8 +27,6 @@ export function VideoControlsPanel() {
   const videoTopic = useAppStore((s) => s.videoTopic);
   const setVideoTopic = useAppStore((s) => s.setVideoTopic);
   const continuity = useAppStore((s) => s.videoContinuityLineage);
-  const reasoningEffort = useAppStore((s) => s.reasoningEffort);
-  const setReasoningEffort = useAppStore((s) => s.setReasoningEffort);
   const maxDuration = refCount >= 2 ? MAX_REF2V_DURATION_UI : 15;
   const mode = deriveVideoModeUI(refCount);
   const summary = continuitySummary(continuity);
@@ -101,8 +98,8 @@ export function VideoControlsPanel() {
         value={aspect}
         onChange={setAspect}
       />
-      <div className="video-controls__pills">
-        {plannerConfig && (
+      {plannerConfig && (
+        <div className="video-controls__pills">
           <select
             className="video-controls__pill"
             value={plannerConfig.model}
@@ -113,18 +110,8 @@ export function VideoControlsPanel() {
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
-        )}
-        <select
-          className="video-controls__pill"
-          value={reasoningEffort}
-          onChange={(e) => setReasoningEffort(e.target.value as ReasoningEffort)}
-          aria-label={t("video.reasoningEffortTitle")}
-        >
-          {REASONING_EFFORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.shortLabel}</option>
-          ))}
-        </select>
-      </div>
+        </div>
+      )}
       <div className="provider-compat-note" role="note" style={{ marginTop: 8 }}>
         <strong>Active prompt</strong>
         <span>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</span>

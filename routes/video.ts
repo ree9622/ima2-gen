@@ -148,7 +148,13 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const onEvent = (ev: GrokVideoEvent) => {
         if (ev.phase === "submitted") {
           setJobPhase(requestId, "streaming");
-          sendSse(res, "submitted", { requestId, xaiVideoRequestId: ev.xaiVideoRequestId });
+          sendSse(res, "submitted", {
+            requestId,
+            xaiVideoRequestId: ev.xaiVideoRequestId,
+            requestedModel: ev.requestedModel,
+            effectiveModel: ev.effectiveModel,
+            modelFallback: ev.modelFallback ?? null,
+          });
         } else if (ev.phase === "progress") {
           sendSse(res, "progress", { requestId, progress: typeof ev.progress === "number" ? ev.progress / 100 : null, stalled: Boolean(ev.stalled) });
         } else {
@@ -189,7 +195,10 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         userPrompt: prompt,
         revisedPrompt: result.revisedPrompt,
         provider: "grok",
-        model: modelCheck.model,
+        model: result.effectiveModel,
+        requestedModel: result.requestedModel,
+        effectiveModel: result.effectiveModel,
+        modelFallback: result.modelFallback,
         createdAt: Date.now(),
         elapsed,
         usage: result.usage,
@@ -200,6 +209,9 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
           aspectRatio: result.aspectRatio,
           sourceImageFilename: sourceFilename,
           xaiVideoRequestId: result.xaiVideoRequestId,
+          requestedModel: result.requestedModel,
+          effectiveModel: result.effectiveModel,
+          modelFallback: result.modelFallback,
         },
         ...(topic ? { videoSeries: { topic, chainIndex: chain.length } } : {}),
       };
@@ -216,6 +228,9 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         revisedPrompt: result.revisedPrompt,
         elapsed,
         usage: result.usage,
+        requestedModel: result.requestedModel,
+        effectiveModel: result.effectiveModel,
+        modelFallback: result.modelFallback,
         video: meta.video,
         ...(meta.videoSeries ? { videoSeries: meta.videoSeries } : {}),
       });

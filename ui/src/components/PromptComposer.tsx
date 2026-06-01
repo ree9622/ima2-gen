@@ -3,12 +3,15 @@ import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { SavePromptPopover } from "./SavePromptPopover";
 import { WebSearchToggle } from "./WebSearchToggle";
+import { extractLastFrame, isVideoItem } from "../lib/videoMedia";
 
 const MAX_REFS = 5;
 
 type PromptComposerProps = {
   variant?: "sidebar" | "bottom";
 };
+
+type InternalRefDragItem = { image: string; url?: string; filename?: string };
 
 function parseCssPixelValue(value: string): number | null {
   const parsed = Number.parseFloat(value);
@@ -66,6 +69,15 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
     await addReferences(files);
   };
 
+  const attachInternalReference = async (item: InternalRefDragItem): Promise<void> => {
+    if (isVideoItem(item)) {
+      const frameDataUrl = await extractLastFrame(item.image || item.url || "");
+      useAppStore.getState().addReferenceDataUrl(frameDataUrl);
+      return;
+    }
+    await useAppStore.getState().useImageAsReference(item as any);
+  };
+
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
@@ -73,8 +85,8 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
     const refData = e.dataTransfer.getData("application/ima2-ref");
     if (refData) {
       try {
-        const item = JSON.parse(refData) as { image: string; filename?: string };
-        void useAppStore.getState().useImageAsReference(item as any);
+        const item = JSON.parse(refData) as InternalRefDragItem;
+        void attachInternalReference(item);
       } catch { /* ignore malformed */ }
       return;
     }

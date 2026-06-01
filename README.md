@@ -92,7 +92,7 @@ Image generation can run through the local Codex/ChatGPT OAuth path, a configure
 
 If no provider is specified, the app keeps the current OAuth/default behavior. API-key generation defaults to `gpt-5.4-mini`, `low` reasoning, and `1024x1024` unless the request passes validated model, reasoning, size, or web-search options. Grok defaults to `grok-imagine-image`; `quality: "high"` promotes the final image call to `grok-imagine-image-quality`.
 
-Grok video generation uses `grok-imagine-video` (default) or `grok-imagine-video-1.5-preview`. Three modes are auto-detected from reference count: text-to-video (0 refs), image-to-video (1 ref), and reference-to-video (2–7 refs, max 10s duration). Video controls include duration (1–15s), resolution (480p, 720p), and aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto).
+Grok video generation uses `grok-imagine-video` (default) or `grok-imagine-video-1.5-preview`. Three modes are auto-detected from reference count: text-to-video (0 refs), image-to-video (1 ref), and reference-to-video (2–7 refs, max 10s duration). `grok-imagine-video-1.5-preview` supports image-to-video but not `reference_images` Ref2V, so 2+ refs use `grok-imagine-video` as the effective model. Video edit and extension are also base-model only. Video controls include duration (1–15s), resolution (480p, 720p), and aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto).
 
 ![Settings workspace showing OAuth active and API key provider available.](assets/screenshots/settings-oauth-generation.png)
 

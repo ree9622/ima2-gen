@@ -295,6 +295,8 @@ ima2 video "cinematic" --ref a.png --ref b.png      # reference-to-video (max 7)
 | 1 | image-to-video | 15s |
 | 2-7 | reference-to-video | 10s |
 
+`grok-imagine-video-1.5-preview` supports image-to-video but does not support `reference_images` Ref2V. For 2+ references, use `grok-imagine-video` and keep duration at 10s or less. ima2 may auto-retry a rejected 1.5 Ref2V request with the base model; read `effectiveModel` and `modelFallback` from the final result before naming or reporting the output.
+
 ### Parameters
 
 | Flag | Values | Default |
@@ -332,7 +334,7 @@ ima2 serve          # server must be running
 ### Output
 
 SSE streaming events: `planning` → `submitted` → `progress` (0-100%) → `done`.
-With `--json`, prints the final result object to stdout.
+The `submitted` and `done` payloads include `requestedModel`, `effectiveModel`, and `modelFallback` so agents can report when a requested 1.5-preview Ref2V job actually ran on `grok-imagine-video`. With `--json`, prints the final result object to stdout.
 
 ### Discover Valid Parameters
 
@@ -438,6 +440,7 @@ done
 ### Limitations
 
 - Max 15 seconds per clip (extend adds 2-10s more)
+- Reference-to-video (2+ refs): max 10 seconds, max 7 refs, `grok-imagine-video` effective model
 - Max 720p resolution (no upscale API available)
 - Video edit/extend: grok-imagine-video only (1.5-preview not supported)
 - Video edit input: max 8.7 seconds
@@ -466,6 +469,8 @@ Constraints: grok-imagine-video only, input mp4 <=8.7s. Use `-o/--out` if you al
 ### Video Extension (Continue from Last Frame)
 
 Extend a video from its last frame using xAI's video extension endpoint. The output combines the source video and extension, but continuity quality is provider-dependent.
+
+Constraints: grok-imagine-video only, extension duration 2-10s. 1.5-preview is not supported for extension.
 
 ```bash
 # Generate initial clip
@@ -511,7 +516,7 @@ ima2 video "$ANALYSIS but in anime style" --ref reference.png
 
 ### Audio in Video (Prompt-Controlled)
 
-The API does not expose a separate audio on/off or audio-track control. You can include sound, music, or dialogue direction in the prompt, but audio behavior is provider-dependent and not guaranteed by a local ima2 parameter:
+The API does not expose a separate audio on/off or audio-track control. Treat audio as prompt-compiled: describe dialogue, music, no-music, room tone, or sound-effects-only behavior in the video prompt. Output is provider-dependent, but the prompt must be explicit when audio matters.
 
 ```bash
 # Explicit sound direction
@@ -523,9 +528,32 @@ ima2 video "timelapse of city at night, lo-fi hip hop background music"
 # Dialogue
 ima2 video "person speaking to camera: Hello world, welcome to my channel"
 
-# Silent/minimal
-ima2 video "quiet forest scene, only subtle wind and leaves rustling"
+# No music / room tone
+ima2 video "quiet forest scene, no background music, only subtle wind and leaves rustling"
+
+# Sound effects only
+ima2 video "no music, only footsteps, cloth movement, rain hits, and one radio click"
 ```
+
+For continuity clips, always define the final audio state: whether dialogue finishes before the cut, music resolves or continues, or a sound effect carries into the next clip.
+
+### Structured Video Prompt Template
+
+Use this structure for serious video generation, Ref2V, extension prompts, and multi-shot continuity. A static visual description is not enough.
+
+```text
+Scene Start: what the first frame already contains.
+Expected Motion: the exact A or B motion that must happen.
+Camera: pan, dolly, tracking, crane, handheld, static, or Shot Switch.
+Dialogue: speaker, exact line, timing, or "no dialogue".
+Music: style, swell/cut/resolve behavior, or "no background music".
+Sound Effects: room tone, footsteps, rain, machine hum, impact, etc.
+Ending Frame: final pose, composition, camera state.
+Continuity Handoff: final spoken line, music state, or sound cue for the next clip.
+Negative Constraints: no visible subtitles/text unless requested, preserve identity/style.
+```
+
+When creating a sequence, write both motions explicitly: "A motion" for the first clip and "B motion" for the continuation. For last-frame Ref2V, use ref 1 as identity/style and ref 2 as current state/last frame.
 
 ### End Frame Guidance (via Ref2V)
 

@@ -2,6 +2,7 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildVideoGenerationPayload,
+  buildGrokVideoPlannerPayload,
   downloadVideo,
   parseGrokVideoPlanPrompt,
   normalizeVideoPoll,
@@ -133,6 +134,22 @@ describe("Grok video adapter", () => {
     assert.equal(payload.aspect_ratio, "1:1");
     assert.deepEqual(payload.reference_images, [{ url: "data:image/png;base64,A" }, { url: "data:image/png;base64,B" }]);
     assert.equal("image" in payload, false);
+  });
+
+  it("video planner prompt asks for dialogue, audio, and ending-frame continuity", () => {
+    const payload = buildGrokVideoPlannerPayload("continue", {
+      model: "grok-imagine-video",
+      mode: "reference-to-video",
+      duration: 10,
+      resolution: "720p",
+      aspectRatio: "16:9",
+      referenceImageUrls: ["data:image/png;base64,A", "data:image/png;base64,B"],
+    });
+    const system = String(payload.messages[0].content);
+    assert.match(system, /Dialogue\/audio intent/);
+    assert.match(system, /Ending frame \/ continuity handoff/);
+    assert.match(system, /no background music/);
+    assert.match(system, /sound effects only/);
   });
 
   it("rejects I2V without a source image", () => {
@@ -311,6 +328,36 @@ describe("Grok video adapter", () => {
     assert.ok(VALID_GROK_VIDEO_MODELS.has("grok-imagine-video-1.5-preview"));
     const result = normalizeGrokVideoModel("grok-imagine-video-1.5-preview");
     assert.equal((result as any).model, "grok-imagine-video-1.5-preview");
+  });
+
+  it("reports requested and effective model when 1.5-preview falls back for Ref2V", async () => {
+    const starts: any[] = [];
+    globalThis.fetch = (async (input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes("/v1/responses")) return SEARCH_RES;
+      if (url.includes("/v1/chat/completions")) return plannerRes("reference motion");
+      if (url.includes("/v1/videos/generations")) {
+        const body = JSON.parse(init?.body || "{}");
+        starts.push(body);
+        if (starts.length === 1) return jsonRes({ error: "`reference_images` is not supported for this model." }, 400);
+        return jsonRes({ request_id: "vid-1" });
+      }
+      if (url.includes("/v1/videos/vid-1")) return jsonRes(DONE_POLL);
+      if (url.includes("vidgen.example")) return videoBytesRes();
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as any;
+    const result = await generateVideoViaGrok("clip", ctx(), {
+      model: "grok-imagine-video-1.5-preview",
+      plannedPrompt: "reference motion",
+      mode: "reference-to-video",
+      referenceImages: ["A", "B"],
+      duration: 10,
+    });
+    assert.equal(starts[0].model, "grok-imagine-video-1.5-preview");
+    assert.equal(starts[1].model, "grok-imagine-video");
+    assert.equal(result.requestedModel, "grok-imagine-video-1.5-preview");
+    assert.equal(result.effectiveModel, "grok-imagine-video");
+    assert.deepEqual(result.modelFallback, { from: "grok-imagine-video-1.5-preview", to: "grok-imagine-video" });
   });
 
   it("builds 1.5-preview I2V payload", () => {

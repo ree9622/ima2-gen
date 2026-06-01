@@ -149,13 +149,15 @@ Video mode is auto-detected from `--ref` count:
 | 1 | image-to-video |
 | 2–7 | reference-to-video (max 10s duration) |
 
+`grok-imagine-video-1.5-preview` supports image-to-video, but not `reference_images` reference-to-video. For 2+ refs, use `grok-imagine-video`; if ima2 auto-retries from 1.5-preview to the base model, read `effectiveModel` and `modelFallback` from the final JSON/SSE payload. Video edit and extension are also base-model only.
+
 SSE events: `planning` → `submitted` → `progress` (0–100%) → `done` or `error`.
 
 ```bash
 ima2 video "a cat playing piano"
 ima2 video "animate this" --ref photo.png --duration 10
 ima2 video "cinematic" --resolution 720p --aspect-ratio 16:9 -o out.mp4
-ima2 video "style transfer" --ref a.png --ref b.png --ref c.png --model grok-imagine-video-1.5-preview
+ima2 video "style transfer" --ref a.png --ref b.png --ref c.png --model grok-imagine-video
 ima2 video edit "make the lighting warm sunset" --video 1780226256355_50252101.mp4 -o edited.mp4
 ima2 video extend "camera slowly pulls back" --video 1780226256355_50252101.mp4 --duration 6
 ima2 video frame 1780226256355_50252101.mp4 --last -o lastframe.png

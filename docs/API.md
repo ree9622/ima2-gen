@@ -269,9 +269,9 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
 | Event | Data | Description |
 |---|---|---|
 | `planning` | `{ requestId }` | Preparing video generation |
-| `submitted` | `{ requestId, xaiVideoRequestId }` | Submitted to xAI |
+| `submitted` | `{ requestId, xaiVideoRequestId, requestedModel, effectiveModel, modelFallback }` | Submitted to xAI |
 | `progress` | `{ requestId, progress, stalled }` | Progress 0.0–1.0 |
-| `done` | `{ requestId, filename, url, mediaType, revisedPrompt, elapsed, usage, video }` | Video ready |
+| `done` | `{ requestId, filename, url, mediaType, revisedPrompt, elapsed, usage, requestedModel, effectiveModel, modelFallback, video }` | Video ready |
 | `error` | `{ error, code, status, requestId }` | Generation failed |
 
 **Video error codes**:

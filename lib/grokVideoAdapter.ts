@@ -24,6 +24,9 @@ export type GrokVideoPhase = "planning" | "submitted" | "progress";
 export interface GrokVideoEvent {
   phase: GrokVideoPhase;
   xaiVideoRequestId?: string;
+  requestedModel?: string;
+  effectiveModel?: string;
+  modelFallback?: { from: string; to: string } | null;
   progress?: number;
   stalled?: boolean;
 }
@@ -50,6 +53,9 @@ export interface GrokVideoGenerateResult {
   revisedPrompt: string;
   xaiVideoRequestId: string;
   webSearchCalls: number;
+  requestedModel: string;
+  effectiveModel: string;
+  modelFallback: { from: string; to: string } | null;
 }
 
 export interface GrokVideoOptions {
@@ -186,7 +192,9 @@ export function buildGrokVideoPlannerPayload(
           "2. Action/motion — precise verbs with intensity modifiers (crashes violently, drifts gently, sprints with all strength)",
           "3. Camera movement — use explicit cinematic terms (slow dolly in, tracking shot, crane up, pan left, static wide, drone shot flying through)",
           "4. Environment/atmosphere — setting, weather, ambient details",
-          "5. Lighting + mood — time of day, light quality, emotional tone",
+          "5. Dialogue/audio intent — exact spoken line timing, music, no music, or sound-effects-only direction",
+          "6. Ending frame / continuity handoff — final pose, camera state, last spoken words, and final sound cue",
+          "7. Lighting + mood — time of day, light quality, emotional tone",
           "",
           "RULES:",
           "- Write like a director calling shots on set. Every sentence should describe MOTION or CHANGE.",
@@ -195,6 +203,10 @@ export function buildGrokVideoPlannerPayload(
           "- Use degree adverbs to control intensity: quickly, violently, gently, with large amplitude, powerfully.",
           "- For multi-beat actions: list them sequentially (subject does X, then Y, camera switches to Z).",
           "- Use 'Shot Switch' keyword to indicate cut between different camera angles.",
+          "- If dialogue matters, include the exact line, speaker, and whether it finishes before the final cut.",
+          "- If music matters, specify the style and whether it swells, resolves, cuts out, or continues at the ending frame.",
+          "- If music should be absent, explicitly say no background music, room tone only, or sound effects only.",
+          "- For continuation workflows, state the intended final frame and final audio state so the next clip can continue cleanly.",
           "- The prompt MUST be in English. Exception: visible text/dialogue in the video must be kept in ORIGINAL language characters verbatim.",
           "- Do NOT use SD tags, keyword lists, or weighting syntax.",
           "- Keep prompts focused: one main action sequence. Overloading causes artifacts.",
@@ -457,7 +469,8 @@ export async function generateVideoViaGrok(prompt: string, ctx: RouteRuntimeCont
       throw e;
     }
   }
-  options.onEvent?.({ phase: "submitted", xaiVideoRequestId });
+  const modelFallback = effectiveModel === model ? null : { from: model, to: effectiveModel };
+  options.onEvent?.({ phase: "submitted", xaiVideoRequestId, requestedModel: model, effectiveModel, modelFallback });
   logEvent("grok", "video:submitted", { requestId: options.requestId, xaiVideoRequestId, mode: plan.mode });
   const poll = await pollVideoUntilDone(ctx, xaiVideoRequestId, options);
   if (!poll.videoUrl) throw grokError("Grok video done without a video url", 502, "GROK_VIDEO_EMPTY_RESPONSE");
@@ -476,5 +489,8 @@ export async function generateVideoViaGrok(prompt: string, ctx: RouteRuntimeCont
     revisedPrompt: plan.prompt,
     xaiVideoRequestId,
     webSearchCalls: plan.webSearchCalls,
+    requestedModel: model,
+    effectiveModel,
+    modelFallback,
   };
 }

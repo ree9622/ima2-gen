@@ -64,7 +64,19 @@ describe("gallery navigation UX contract", () => {
     assert.match(gallery, /GalleryImageTile/);
     assert.match(imageTile, /itemRef: \(node: HTMLElement \| null\) => void/);
     assert.match(imageTile, /onSelect: \(item: GenerateItem\) => void/);
+    assert.match(imageTile, /draggable/);
+    assert.match(imageTile, /application\/ima2-ref/);
     assert.match(navigation, /export function getGalleryItemKey/);
+  });
+
+  it("drops dragged video items as last-frame references instead of raw video references", () => {
+    const composer = readSource("ui/src/components/PromptComposer.tsx");
+
+    assert.match(composer, /application\/ima2-ref/);
+    assert.match(composer, /isVideoItem\(item\)/);
+    assert.match(composer, /extractLastFrame/);
+    assert.match(composer, /addReferenceDataUrl\(frameDataUrl\)/);
+    assert.match(composer, /useImageAsReference\(item as any\)/);
   });
 
   it("keeps canvas versions internal instead of showing them in gallery surfaces", () => {

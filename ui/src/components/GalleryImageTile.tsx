@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import type { DragEvent, MouseEvent } from "react";
 import type { GenerateItem } from "../types";
 import { isVideoItem } from "../lib/videoMedia";
 
@@ -15,6 +15,11 @@ type GalleryImageTileProps = {
 };
 
 export function GalleryImageTile({ item, active, itemRef, onSelect, onDelete, onToggleFavorite, t }: GalleryImageTileProps) {
+  const onDragStart = (event: DragEvent<HTMLButtonElement>) => {
+    event.dataTransfer.setData("application/ima2-ref", JSON.stringify({ image: item.url || item.image, filename: item.filename }));
+    event.dataTransfer.effectAllowed = "copy";
+  };
+
   return (
     <div
       ref={itemRef}
@@ -25,6 +30,8 @@ export function GalleryImageTile({ item, active, itemRef, onSelect, onDelete, on
         className={`gallery__tile${active ? " gallery__tile--active" : ""}`}
         onClick={() => onSelect(item)}
         title={item.prompt ?? ""}
+        draggable
+        onDragStart={onDragStart}
       >
         {isVideoItem(item) ? (
           <video

@@ -357,7 +357,10 @@ switch (command) {
     break;
   case "setup":
   case "login":
-    setup().then(() => console.log("  Done. Run 'ima2 serve' to start."));
+    setup().then(() => console.log("  Done. Run 'ima2 serve' to start.")).catch((e) => {
+      console.error(`Setup failed: ${e?.message || e}`);
+      process.exit(1);
+    });
     break;
   case "status":
     showStatus();

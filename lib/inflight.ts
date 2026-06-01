@@ -179,7 +179,7 @@ export function finishJob(requestId: string | null | undefined, options: any = {
   reapTerminalJobs();
 }
 
-function reapTerminalJobs() {
+export function reapTerminalJobs() {
   const now = Date.now();
   for (const [id, j] of terminalJobs) {
     if (now - j.finishedAt > config.inflight.terminalTtlMs) terminalJobs.delete(id);

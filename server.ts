@@ -27,6 +27,8 @@ import type { RuntimeContext, RuntimeContextOverrides, ApiKeySource } from "./li
 
 import { closeDb } from "./lib/db.js";
 import { stopAgentQueueWorker } from "./lib/agentQueueWorker.js";
+import { reapCardNewsJobs } from "./lib/cardNewsJobStore.js";
+import { reapTerminalJobs } from "./lib/inflight.js";
 import { errInfo } from "./lib/errInfo.js";
 
 type BootRuntimeContext = RuntimeContext & {
@@ -254,6 +256,7 @@ export async function startServer(overrides: StartServerOverrides = {}) {
     : null;
 
   let server: import("node:net").Server;
+  let reapTimer: NodeJS.Timeout;
 
   onShutdown(async () => {
     unadvertise(ctx);
@@ -262,6 +265,7 @@ export async function startServer(overrides: StartServerOverrides = {}) {
     try { grokChild?.stop?.(); } catch {}
     try { grokChild?.kill?.(); } catch {}
     stopAgentQueueWorker();
+    clearInterval(reapTimer);
     await new Promise<void>((resolve) => {
       if (server) server.close(() => resolve()); else resolve();
     });
@@ -292,6 +296,20 @@ export async function startServer(overrides: StartServerOverrides = {}) {
   server.on("error", (err: NodeJS.ErrnoException) => {
     console.error("[server] Failed to start:", err?.message || err);
     process.exit(1);
+  });
+
+  reapTimer = setInterval(() => {
+    reapTerminalJobs();
+    reapCardNewsJobs();
+  }, 60_000);
+  reapTimer.unref?.();
+
+  process.on("uncaughtException", (err) => {
+    console.error("[fatal] uncaughtException:", err);
+    process.exit(1);
+  });
+  process.on("unhandledRejection", (reason) => {
+    console.error("[fatal] unhandledRejection:", reason);
   });
 
   return { app, server, oauthChild, ctx };

@@ -899,13 +899,9 @@ body {
 }
 
 .web-search-toggle--compact {
-  width: 28px;
-  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  padding: 0;
 }
 
 .web-search-toggle:hover {

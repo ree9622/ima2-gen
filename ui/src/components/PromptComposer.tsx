@@ -297,7 +297,6 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
-          <span>{t("prompt.attach")}</span>
         </button>
         <button
           type="button"
@@ -310,7 +309,6 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
             <polyline points="23 4 23 10 17 10" />
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
-          <span>{t("prompt.continue")}</span>
         </button>
         <button
           type="button"
@@ -341,7 +339,6 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
           aria-pressed={isDirectMode}
         >
           <span aria-hidden="true" style={{ fontWeight: 700, fontSize: 11 }}>1:1</span>
-          <span>{t("prompt.directMode")}</span>
         </button>
         <WebSearchToggle variant="compact" />
         <div style={{ position: "relative" }}>
@@ -356,7 +353,6 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
-            <span>{t("promptLibrary.save")}</span>
           </button>
           {saveOpen && (
             <SavePromptPopover

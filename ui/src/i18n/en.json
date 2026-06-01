@@ -821,6 +821,10 @@
   "sidebar": {
     "appName": "Image Generator",
     "imageModelLabel": "Model",
+    "imageSectionLabel": "Image",
+    "gptImageSubLabel": "GPT-IMAGE-2",
+    "grokImageSubLabel": "Grok Imagine",
+    "videoSectionLabel": "Video",
     "imageModelAria": "Choose image model",
     "quickSettingsAria": "Choose model and reasoning effort. Current model {model}, reasoning {effort}",
     "quickSettingsModelOnlyAria": "Choose image model. Current model {model}",

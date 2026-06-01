@@ -2,7 +2,7 @@ import type { ImageModel } from "../types";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IMAGE_MODEL_OPTIONS, UNSUPPORTED_IMAGE_MODELS, VIDEO_MODEL_OPTIONS } from "../lib/imageModels";
+import { IMAGE_MODEL_OPTIONS, OPENAI_IMAGE_MODEL_OPTIONS, GROK_IMAGE_MODEL_OPTIONS, UNSUPPORTED_IMAGE_MODELS, VIDEO_MODEL_OPTIONS } from "../lib/imageModels";
 import { REASONING_EFFORT_OPTIONS, type ReasoningEffort } from "../lib/reasoning";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
@@ -194,9 +194,10 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
               zIndex: 160,
             }}
           >
-            <div className="image-model-select__section" role="group" aria-label={t("sidebar.imageModelLabel")}>
-              <div className="image-model-select__section-title">{t("sidebar.imageModelLabel")}</div>
-              {modelOptions.map((option, index) => (
+            <div className="image-model-select__section" role="group" aria-label={t("sidebar.imageSectionLabel")}>
+              <div className="image-model-select__section-title">{t("sidebar.imageSectionLabel")}</div>
+              <div className="image-model-select__subsection-title">{t("sidebar.gptImageSubLabel")}</div>
+              {OPENAI_IMAGE_MODEL_OPTIONS.map((option, index) => (
                 <button
                   key={option.value}
                   ref={(node) => {
@@ -216,9 +217,30 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
                   <small>{t(option.fullLabelKey)}</small>
                 </button>
               ))}
+              <div className="image-model-select__subsection-title">{t("sidebar.grokImageSubLabel")}</div>
+              {GROK_IMAGE_MODEL_OPTIONS.map((option, index) => (
+                <button
+                  key={option.value}
+                  ref={(node) => {
+                    menuItemRefs.current[OPENAI_IMAGE_MODEL_OPTIONS.length + index] = node;
+                  }}
+                  type="button"
+                  className={`image-model-select__item${option.value === imageModel && !videoModelSelected ? " is-active" : ""}`}
+                  role="menuitemradio"
+                  aria-checked={option.value === imageModel && !videoModelSelected}
+                  tabIndex={-1}
+                  onClick={() => {
+                    setImageModel(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <span>{option.shortLabel}</span>
+                  <small>{t(option.fullLabelKey)}</small>
+                </button>
+              ))}
             </div>
-            <div className="image-model-select__section" role="group" aria-label={t("sidebar.videoModelLabel")}>
-              <div className="image-model-select__section-title">{t("sidebar.videoModelLabel")}</div>
+            <div className="image-model-select__section" role="group" aria-label={t("sidebar.videoSectionLabel")}>
+              <div className="image-model-select__section-title">{t("sidebar.videoSectionLabel")}</div>
               {VIDEO_MODEL_OPTIONS.map((option, index) => (
                 <button
                   key={option.value}

@@ -1776,6 +1776,14 @@ body {
   text-transform: uppercase;
 }
 
+.image-model-select__subsection-title {
+  padding: 2px 8px 1px 16px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  opacity: 0.7;
+}
+
 .image-model-select__item {
   width: 100%;
   display: flex;

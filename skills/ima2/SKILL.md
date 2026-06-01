@@ -324,7 +324,14 @@ ima2 video "episode 2: commute" --topic "daily-vlog"
 
 ### Planning Layer
 
-Prompts are NOT sent directly to the video model. A Grok planner (grok-4.3) rewrites your prompt with web search context for better results. The `revisedPrompt` in the response shows what was actually sent.
+Prompts are NOT sent directly to the video model. A Grok planner rewrites your prompt with web search context for better results. The `revisedPrompt` in the response shows what was actually sent. Default planner model is `grok-composer-2.5-fast` (configurable in settings UI).
+
+Override the planner model per-request:
+
+```bash
+ima2 video "prompt" --planner-model grok-4.3
+ima2 video "prompt" --planner-model grok-composer-2.5-fast
+```
 
 ### Grok 4.3 Prompt Surfaces
 
@@ -393,12 +400,22 @@ ima2 capabilities --json | jq '.valid.videoModels'
 
 Generate a high-quality still image first, then animate it. This produces better results than text-to-video alone because the video model has a concrete visual anchor.
 
-```bash
-# Step 1: Generate the key frame
-ima2 gen "cinematic wide shot of a mountain lake at sunset, 16:9" --size 1792x1024 -o keyframe.png
+**Critical rule for i2v**: Compose ALL characters and the environment together in ONE image. Do NOT use individual portrait refs for i2v — the video model needs a single composed scene to animate from.
 
-# Step 2: Animate from that frame
-ima2 video "gentle water ripples, clouds drifting slowly, birds flying in distance" --ref keyframe.png --duration 10 --aspect-ratio 16:9
+**ref2v vs i2v decision**:
+
+| Scenario | Use | Why |
+|----------|-----|-----|
+| Need 2+ character identity lock from separate refs | ref2v (`grok-imagine-video`, max 7 refs, max 10s) | Refs lock character appearance |
+| Single composed scene with all elements | i2v (`1.5-preview` or base, 1 ref) | Better motion quality from composed start |
+| Continue from previous video | `video continue` (last frame as i2v ref) | Lineage metadata preserved |
+
+```bash
+# Multi-character scene: compose BOTH characters in one image first
+ima2 gen "cinematic wide shot of Bruce Lee in yellow tracksuit facing Elon Musk in dark gi, underground fight arena, dramatic lighting, 16:9" --quality high --size 1792x1024 -o scene.png
+
+# Then animate from the composed scene
+ima2 video "Bruce throws a rapid jeet kune do combination" --ref scene.png --duration 10 --resolution 720p --aspect-ratio 16:9
 ```
 
 #### Multi-Shot Video (connected scenes)
@@ -420,6 +437,31 @@ ima2 video "close-up of rain drops on a neon sign reflection" \
 ```
 
 The planner receives previous prompts from the same topic as continuity context. This is best-effort prompt guidance, not a guarantee that subjects, palette, or style will remain identical. For branch-local continuation, use `ima2 video continue` instead.
+
+#### Storyboard-to-Video Chaining (image→video→lastframe loop)
+
+For maximum control, generate each keyframe as a GPT Image 2 still, animate it, extract the last frame, and use it as the anchor for the next keyframe:
+
+```bash
+# Step 1: Generate composed keyframe
+ima2 gen "Bruce and Elon face off in underground arena, dramatic lighting" --quality high --size 1792x1024 -o frame1.png
+
+# Step 2: Animate (i2v, 10s clip)
+ima2 video "Bruce throws JKD combination" --ref frame1.png --duration 10 --resolution 720p
+
+# Step 3: Continue from last frame (sequential, not parallel)
+CLIP1=$(ima2 ls -n 1 --json | jq -r '.items[0].filename')
+ima2 video continue "Elon counterattacks with haymaker" --video "$CLIP1" --duration 10
+
+# Repeat: each clip's last frame seeds the next
+```
+
+**GPT Image 2 storyboard prompting rules** (from production research):
+- Copy character visual descriptions **verbatim** across all frame prompts — do not paraphrase
+- First frame is the **anchor**: all subsequent frames inherit its composition, lighting, and character designs
+- Change **one variable per step**: shot scale, action, or camera — keep everything else constant
+- Use the `images.edit` API with `image[]` array or Responses API `input_image` content blocks for multi-ref
+- Thinking mode can produce up to 8 consistent frames from one prompt
 
 #### Video Continuation (extend/sequel)
 

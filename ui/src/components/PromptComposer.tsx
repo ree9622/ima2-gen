@@ -341,10 +341,10 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
           <span aria-hidden="true" style={{ fontWeight: 700, fontSize: 11 }}>1:1</span>
         </button>
         <WebSearchToggle variant="compact" />
-        <div style={{ position: "relative" }}>
+        <div className="composer__tool-wrap">
           <button
             type="button"
-            className="composer__tool"
+            className="composer__tool composer__tool--full"
             onClick={() => setSaveOpen((v) => !v)}
             disabled={!prompt.trim()}
             title={t("promptLibrary.saveTitle")}

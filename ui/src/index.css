@@ -2696,6 +2696,12 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.composer__tool-wrap {
+  position: relative;
+}
+.composer__tool--full {
+  width: 100%;
+}
 .composer__tool svg {
   flex-shrink: 0;
 }

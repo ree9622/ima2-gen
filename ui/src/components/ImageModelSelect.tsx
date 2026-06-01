@@ -30,6 +30,8 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   const provider = useAppStore((s) => s.provider);
   const reasoningEffort = useAppStore((s) => s.reasoningEffort);
   const setReasoningEffort = useAppStore((s) => s.setReasoningEffort);
+  const quality = useAppStore((s) => s.quality);
+  const sizePreset = useAppStore((s) => s.sizePreset);
   const id = variant === "settings" ? "settings-image-model" : "sidebar-image-model";
   const modelOptions = IMAGE_MODEL_OPTIONS;
   const current = modelOptions.find((option) => option.value === imageModel)
@@ -37,6 +39,10 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   const currentReasoning = REASONING_EFFORT_OPTIONS.find((option) => option.value === reasoningEffort)
     ?? REASONING_EFFORT_OPTIONS[0];
   const isGrok = provider === "grok";
+
+  const shortQuality = quality === "medium" ? "med" : quality === "low" ? "low" : quality;
+  const shortSize = sizePreset === "1024x1024" ? "1024²" : sizePreset === "1536x1024" ? "1536×1024" : sizePreset === "1024x1536" ? "1024×1536" : sizePreset === "auto" ? "auto" : sizePreset;
+  const argsLabel = `{${shortQuality} · ${shortSize}}`;
 
   const onChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setImageModel(event.target.value as ImageModel);
@@ -160,7 +166,7 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
           ref={triggerRef}
           id={id}
           type="button"
-          className="image-model-select__trigger"
+          className="image-model-select__trigger image-model-select__trigger--pill"
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={isGrok
@@ -171,13 +177,19 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
             })}
           onClick={() => setOpen((next) => !next)}
         >
-          <span className="image-model-select__trigger-model">{videoModelSelected ? (VIDEO_MODEL_OPTIONS.find((o) => o.value === videoModelSelected)?.shortLabel ?? VIDEO_MODEL_OPTIONS[0].shortLabel) : current.shortLabel}</span>
-          {isGrok ? null : (
-            <>
-              <span className="image-model-select__trigger-separator" aria-hidden="true">·</span>
-              <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
-            </>
-          )}
+          <span className="image-model-select__trigger-top">
+            <span className="image-model-select__trigger-model">{videoModelSelected ? (VIDEO_MODEL_OPTIONS.find((o) => o.value === videoModelSelected)?.shortLabel ?? VIDEO_MODEL_OPTIONS[0].shortLabel) : current.shortLabel}</span>
+            {isGrok ? null : (
+              <>
+                <span className="image-model-select__trigger-separator" aria-hidden="true">·</span>
+                <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
+              </>
+            )}
+            <span className="image-model-select__trigger-chevron" aria-hidden="true">▾</span>
+          </span>
+          <span className="image-model-select__trigger-args">
+            {argsLabel}
+          </span>
         </button>
         {open ? createPortal(
           <div

@@ -285,6 +285,9 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
         </div>
       )}
 
+      <div className="composer__hint-row">
+        <span className="composer__hint">{t("prompt.hint")}</span>
+      </div>
       <div className="composer__toolbar">
         <button
           type="button"
@@ -327,6 +330,7 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
           </svg>
           <span className="sr-only">Video</span>
         </button>
+        <div className="composer__toolbar-break" />
         <button
           type="button"
           className={`composer__tool${isDirectMode ? " composer__tool--on" : ""}`}
@@ -359,7 +363,6 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
             />
           )}
         </div>
-        <span className="composer__hint">{t("prompt.hint")}</span>
       </div>
 
       {dragOver && (

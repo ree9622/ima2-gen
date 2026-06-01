@@ -1,6 +1,7 @@
 import type { DragEvent, MouseEvent } from "react";
 import type { GenerateItem } from "../types";
 import { isVideoItem } from "../lib/videoMedia";
+import { buildVideoDragPayload } from "../lib/videoContinuity";
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -16,7 +17,7 @@ type GalleryImageTileProps = {
 
 export function GalleryImageTile({ item, active, itemRef, onSelect, onDelete, onToggleFavorite, t }: GalleryImageTileProps) {
   const onDragStart = (event: DragEvent<HTMLButtonElement>) => {
-    event.dataTransfer.setData("application/ima2-ref", JSON.stringify({ image: item.url || item.image, filename: item.filename }));
+    event.dataTransfer.setData("application/ima2-ref", JSON.stringify(isVideoItem(item) ? buildVideoDragPayload(item) : { image: item.url || item.image, filename: item.filename }));
     event.dataTransfer.effectAllowed = "copy";
   };
 

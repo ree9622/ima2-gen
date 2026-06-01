@@ -219,6 +219,10 @@ export function postEdit(payload: GenerateRequest & { mask?: string }): Promise<
 export type HistoryItem = {
   filename: string;
   url: string;
+  mediaType?: "image" | "video" | string;
+  video?: Record<string, unknown> | null;
+  videoSeries?: { topic?: string; chainIndex?: number } | null;
+  videoContinuity?: import("../types").VideoContinuityLineage | null;
   createdAt: number;
   prompt: string | null;
   userPrompt?: string | null;
@@ -1063,6 +1067,8 @@ export type VideoGenerateRequest = {
   sourceFilename?: string;
   referenceImages?: string[];
   referenceFilenames?: string[];
+  continueFromVideo?: string;
+  continuityLineage?: import("../types").VideoContinuityLineage | null;
   duration?: number;
   resolution?: string;
   aspectRatio?: string;
@@ -1082,6 +1088,7 @@ export type VideoGenerateDone = {
   elapsed?: number;
   video?: Record<string, unknown>;
   videoSeries?: { topic?: string; chainIndex?: number } | null;
+  videoContinuity?: import("../types").VideoContinuityLineage | null;
 };
 
 export async function postVideoGenerateStream(

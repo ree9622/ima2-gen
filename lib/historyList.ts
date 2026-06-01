@@ -37,6 +37,7 @@ export async function listHistoryRows(baseDir = config.storage.generatedDir) {
       mediaType: meta?.mediaType || (/\.mp4$/i.test(name) ? "video" : "image"),
       video: meta?.video || null,
       videoSeries: meta?.videoSeries || null,
+      videoContinuity: meta?.videoContinuity || null,
       createdAt: meta?.createdAt || st?.mtimeMs || 0,
       prompt: meta?.prompt || null,
       userPrompt: meta?.userPrompt || meta?.prompt || null,

@@ -2,11 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createServer } from "node:http";
-import { access, mkdir, mkdtemp, rm, readdir, readFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { config } from "../config.js";
 import { registerVideoRoutes, saveGeneratedVideoArtifact } from "../routes/video.ts";
+
+const execFileAsync = promisify(execFile);
+let ffmpegAvailable: Promise<boolean> | null = null;
 
 function listen(server): Promise<string> {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
@@ -14,6 +19,23 @@ function listen(server): Promise<string> {
 
 function fakeMp4Bytes() {
   return Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
+}
+
+function hasFfmpeg(): Promise<boolean> {
+  ffmpegAvailable ??= execFileAsync("ffmpeg", ["-version"], { timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  return ffmpegAvailable;
+}
+
+async function makeTinyMp4(path: string): Promise<void> {
+  await execFileAsync("ffmpeg", [
+    "-y",
+    "-f", "lavfi",
+    "-i", "color=c=green:s=64x64:d=1",
+    "-pix_fmt", "yuv420p",
+    path,
+  ]);
 }
 
 // Mock progrok upstream: search -> planner -> start -> poll(done) -> download.
@@ -105,6 +127,8 @@ test("/api/video/generate streams progress and saves mp4 + sidecar", async () =>
     assert.match(done.data.filename, /\.mp4$/);
     assert.equal(done.data.mediaType, "video");
     assert.equal(done.data.video.xaiVideoRequestId, "vid-xyz");
+    assert.equal(done.data.videoContinuity.entries.length, 1);
+    assert.equal(done.data.videoContinuity.entries[0].revisedPrompt, "english clip");
     assert.equal(done.data.requestedModel, "grok-imagine-video");
     assert.equal(done.data.effectiveModel, "grok-imagine-video");
     assert.equal(done.data.modelFallback, null);
@@ -121,6 +145,7 @@ test("/api/video/generate streams progress and saves mp4 + sidecar", async () =>
     assert.equal(sidecar.video.requestedModel, "grok-imagine-video");
     assert.equal(sidecar.video.effectiveModel, "grok-imagine-video");
     assert.equal(sidecar.video.modelFallback, null);
+    assert.equal(sidecar.videoContinuity.entries[0].revisedPrompt, "english clip");
   } finally {
     await new Promise((r) => server.close(r));
     await new Promise((r) => proxy.close(r));
@@ -201,6 +226,50 @@ test("saveGeneratedVideoArtifact removes mp4 when sidecar write fails", async ()
   }
 });
 
+test("/api/video/generate continueFromVideo extracts parent frame and stores branch lineage", async () => {
+  if (!(await hasFfmpeg())) return;
+  const proxy = makeProxy();
+  const proxyUrl = await listen(proxy);
+  const proxyPort = Number(new URL(proxyUrl).port);
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-route-continue-"));
+  const parent = "parent.mp4";
+  await makeTinyMp4(join(generatedDir, parent));
+  await writeFile(join(generatedDir, `${parent}.json`), JSON.stringify({
+    kind: "video",
+    mediaType: "video",
+    prompt: "first user prompt",
+    userPrompt: "first user prompt",
+    revisedPrompt: "First revised video prompt with rain ending.",
+    createdAt: 1,
+  }));
+  const { server, url } = await videoApp(generatedDir, proxyPort);
+  try {
+    const res = await fetch(`${url}/api/video/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "continue from the last frame, footsteps only, no dialogue, end on closed door",
+        provider: "grok",
+        continueFromVideo: parent,
+        duration: 1,
+        resolution: "480p",
+        requestId: "req_video_continue",
+      }),
+    });
+    const done = parseSse(await res.text()).find((e) => e.event === "done");
+    assert.ok(done, "has done");
+    assert.equal(done.data.videoContinuity.entries.length, 2);
+    assert.equal(done.data.videoContinuity.entries[0].revisedPrompt, "First revised video prompt with rain ending.");
+    assert.equal(done.data.videoContinuity.entries[1].revisedPrompt, "english clip");
+    const sidecar = JSON.parse(await readFile(join(generatedDir, `${done.data.filename}.json`), "utf8"));
+    assert.equal(sidecar.videoContinuity.entries.length, 2);
+  } finally {
+    await new Promise((r) => server.close(r));
+    await new Promise((r) => proxy.close(r));
+    await rm(generatedDir, { recursive: true, force: true });
+  }
+});
+
 test("/api/video/generate rejects non-grok provider and bad params", async () => {
   const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-route-"));
   const { server, url } = await videoApp(generatedDir, 18645);
@@ -209,7 +278,9 @@ test("/api/video/generate rejects non-grok provider and bad params", async () =>
     assert.equal(badProvider.find((e) => e.event === "error")?.data.code, "VIDEO_PROVIDER_UNSUPPORTED");
 
     const noPrompt = parseSse(await (await fetch(`${url}/api/video/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "grok" }) })).text());
-    assert.equal(noPrompt.find((e) => e.event === "error")?.data.code, "PROMPT_REQUIRED");
+    const promptError = noPrompt.find((e) => e.event === "error")?.data;
+    assert.equal(promptError.code, "PROMPT_REQUIRED");
+    assert.match(promptError.guidance, /Active video prompt required/);
 
     const badRes = parseSse(await (await fetch(`${url}/api/video/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: "x", provider: "grok", resolution: "8k" }) })).text());
     assert.equal(badRes.find((e) => e.event === "error")?.data.code, "INVALID_VIDEO_RESOLUTION");

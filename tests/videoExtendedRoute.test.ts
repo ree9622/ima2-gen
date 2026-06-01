@@ -172,6 +172,9 @@ test("/api/video/edit rejects whitespace prompt and unsafe generated-file inputs
       body: JSON.stringify({ prompt: "   ", videoUrl: "https://vidgen.example/input.mp4" }),
     });
     assert.equal(blank.status, 400);
+    const blankJson = await blank.json();
+    assert.equal(blankJson.code, "PROMPT_REQUIRED");
+    assert.match(blankJson.guidance, /Active video prompt required/);
 
     const sidecar = await fetch(`${url}/api/video/edit`, {
       method: "POST",

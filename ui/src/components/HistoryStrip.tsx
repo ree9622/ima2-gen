@@ -3,6 +3,7 @@ import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { handleHorizontalWheel } from "../lib/horizontalWheel";
 import { isVideoItem } from "../lib/videoMedia";
+import { buildVideoDragPayload } from "../lib/videoContinuity";
 import {
   getGalleryItemKey,
   isGalleryVisibleItem,
@@ -68,7 +69,7 @@ export function HistoryStrip() {
               onClick={() => selectHistory(item)}
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData("application/ima2-ref", JSON.stringify({ image: item.url || item.image, filename: item.filename }));
+                e.dataTransfer.setData("application/ima2-ref", JSON.stringify(buildVideoDragPayload(item)));
                 e.dataTransfer.effectAllowed = "copy";
               }}
             />

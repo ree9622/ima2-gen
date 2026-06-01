@@ -194,6 +194,7 @@ Node sidecar metadata and `/api/history` rows expose `refsCount`, a numeric coun
 
 ## Change Log
 
+- 2026-06-01: Documented video parent continuation behavior: when a node's parent is a generated `.mp4`, Node mode extracts the parent last frame, sends `continueFromVideo`, and carries parent `videoContinuity` so child clips branch from the previous `revisedPrompt` lineage instead of restarting from a prompt-only context.
 - 2026-04-24: Documented node-local reference inputs, parked classic references, and the child/edit reference guard.
 - 2026-04-24: Documented partial-image SSE streaming, requestId recovery, and pending-node glow.
 - 2026-04-24: Added conflict reload recovery notes for neutral graph-version copy and requestId-first node repair.

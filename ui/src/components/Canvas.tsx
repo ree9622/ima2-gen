@@ -18,6 +18,7 @@ import { useI18n } from "../i18n";
 import { isEditableTarget } from "../lib/domEvents";
 import { getImageModelShortLabel } from "../lib/imageModels";
 import { isVideoItem } from "../lib/videoMedia";
+import { continuitySummary } from "../lib/videoContinuity";
 import { formatReasoningLabel } from "../lib/reasoning";
 import type { GenerateItem } from "../types";
 import {
@@ -249,6 +250,7 @@ export function Canvas() {
                   (currentImage as any).video?.duration ? `${(currentImage as any).video.duration}s clip` : null,
                   (currentImage as any).video?.resolution ?? null,
                   (currentImage as any).video?.aspectRatio ?? null,
+                  continuitySummary(currentImage.videoContinuity),
                   displayModel,
                   currentImage.provider ?? null,
                 ]

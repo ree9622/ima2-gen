@@ -312,7 +312,10 @@ ima2 video "cinematic" --ref a.png --ref b.png      # reference-to-video (max 7)
 
 ### Series Continuity (--topic)
 
-Use `--topic` to chain multiple video generations under a theme. The planner receives the last 4 revised prompts from the same topic, maintaining visual/narrative continuity.
+`--topic` is legacy/best-effort series context. Prefer branch-local artifact
+continuity with `ima2 video continue`, Classic "Continue here", gallery video
+drag, or Node parent-video generation. Those flows use the previous generated
+video's last frame plus its stored `revisedPrompt` lineage.
 
 ```bash
 ima2 video "episode 1: morning routine" --topic "daily-vlog"
@@ -322,6 +325,41 @@ ima2 video "episode 2: commute" --topic "daily-vlog"
 ### Planning Layer
 
 Prompts are NOT sent directly to the video model. A Grok planner (grok-4.3) rewrites your prompt with web search context for better results. The `revisedPrompt` in the response shows what was actually sent.
+
+### Grok 4.3 Prompt Surfaces
+
+| Surface | Files | Responsibility |
+|---------|-------|----------------|
+| Image search/planner | `lib/grokImageAdapter.ts` | Web-search context and final image prompt for Grok image generation/editing. |
+| Video planner | `lib/grokVideoAdapter.ts` | Final video prompt for T2V/I2V/Ref2V, including continuity lineage when present. |
+| Video analyzer | `routes/videoExtended.ts` | First/last-frame analysis prompt for recreating or continuing an existing generated video. |
+| Agent/runtime prompt use | `lib/agentRuntime.ts`, card/template planner modules | Higher-level orchestration surfaces that may create image/video prompt inputs but do not replace the video planner contract. |
+
+For video, the Grok 4.3 planner must produce one compact English prompt with:
+core subject, expected action/motion, camera/composition, environment/style,
+dialogue/audio intent, ending frame/continuity handoff, and constraints. If
+`videoContinuity` exists, the lineage is authoritative context: continue from
+the latest clip's final frame and final audio/dialogue state without restarting
+the scene.
+
+### Active Video Prompt Requirement
+
+Blank video prompts are blocked. Weak natural-language prompts are allowed, but
+agents should always write an active prompt that includes:
+
+- visual flow: what changes on screen
+- motion flow: subject and camera motion
+- sound flow: music style, no music, room tone, or sound-effects-only
+- dialogue flow: exact line or explicit no-dialogue
+- ending frame: final pose, camera state, last spoken words, and final sound cue
+
+Template:
+
+```text
+From the attached last frame, <subject/action> moves from A to B while the
+camera <movement>. Sound: <music/no music/SFX/room tone>. Dialogue: <line or no
+dialogue>. End on <final frame and final audio state>.
+```
 
 ### Prerequisites
 
@@ -374,7 +412,7 @@ ima2 video "close-up of rain drops on a neon sign reflection" \
   --topic "tokyo-night" --duration 5
 ```
 
-The planner receives previous prompts from the same topic as continuity context. This is best-effort prompt guidance, not a guarantee that subjects, palette, or style will remain identical.
+The planner receives previous prompts from the same topic as continuity context. This is best-effort prompt guidance, not a guarantee that subjects, palette, or style will remain identical. For branch-local continuation, use `ima2 video continue` instead.
 
 #### Video Continuation (extend/sequel)
 
@@ -387,12 +425,20 @@ LAST=$(ima2 ls -n 1 --json | jq -r '.items[0].filename')
 # True extension keeps the original clip and appends new motion
 ima2 video extend "the camera slowly pulls back revealing the full scene" --video "$LAST" --duration 6
 
-# Last-frame I2V continuation is a separate workflow
-ima2 video frame "$LAST" --last -o lastframe.png
-ima2 video "the camera slowly pulls back revealing the full scene" --ref lastframe.png
+# Branch-local sequel keeps revisedPrompt lineage and starts from the last frame
+ima2 video continue "from the last frame, the camera slowly pulls back, no music, footsteps echo, end on a still wide shot" --video "$LAST"
 ```
 
-Or in the UI: click "자식" on a video node. The current UI uses a derived last-frame image-to-video flow, not the `/api/video/extend` endpoint.
+Or in the UI: use "Continue here" on a video, drag a video from gallery/history
+to the prompt composer, or create a child from a video node. These flows attach
+the previous video's last frame and carry a branch-local `videoContinuity`
+lineage stack. The stack stores up to 4 revised prompts using
+`keep-start-plus-latest-3`: start clip is preserved, and the newest three clips
+stay in context.
+
+`ima2 video extend` is xAI native extension: it returns original+extension as a
+combined artifact. `ima2 video continue` is ima2 branch continuation: it creates
+a new clip from the generated video's last frame and persists lineage metadata.
 
 #### Marketing/Product Video
 

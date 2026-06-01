@@ -198,7 +198,7 @@ Logs intentionally use counts rather than sensitive values: `promptChars`, `refs
 - 2026-05-06: Bumped package metadata to ima2-gen 1.1.10. Added `npm run typecheck:tests` (`tsconfig.tests.json`) and `npm run test:inventory` (`scripts/classify-tests.mjs --check --fail-js-runtime`) as pre-publish gates and updated the `prepublishOnly` chain accordingly. Added env vars `IMA2_API_IMAGE_MODEL_DEFAULT`, `IMA2_API_REASONING_EFFORT`, `IMA2_API_IMAGE_SIZE`, `IMA2_API_ALLOW_WEB_SEARCH` (API-key Responses defaults, #49) and `IMA2_OAUTH_MASKED_EDIT_ENABLED` (#31 masked-edit feature flag). Noted the `lib/oauthProxy.ts` → `lib/oauthProxy/*` subtree split (#50) — no env-var or publish-file change.
 - 2026-05-13: Added `skills/` to the package contract for #62 and documented `IMA2_REASONING_EFFORT` as the OAuth/default reasoning env override exposed by `ima2 defaults`.
 - 2026-05-30: Updated the package version snapshot to `ima2-gen` 1.1.14 (re-grounding pass). Agent Mode (`routes/agent.ts` + `lib/agent*.ts`) and the prompt builder (`routes/promptBuilder.ts`) ship inside the existing `routes/` and `lib/` publish paths; see `[[00-structure-hub]]` and `[[03-server-api]]` for the added runtime surface since 1.1.10.
-- 2026-05-30: Updated the package version snapshot to `ima2-gen` 1.1.15 and added bundled progrok/Grok environment variables, `IMA2_NO_GROK_PROXY`, generation/status timeouts, and image-only release scope.
+- 2026-06-01: Updated the package/runtime note for shipped Grok video support: progrok-backed video generation, edit, extension, frame extraction, analysis, and branch-local continuation are in the runtime scope; the older image-only wording no longer applies.
 
 Previous document: `[[05-node-mode]]`
 

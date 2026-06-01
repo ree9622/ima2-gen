@@ -25,6 +25,7 @@ import type {
   ThemePreference,
   UIMode,
   VideoResolutionUI,
+  VideoContinuityLineage,
 } from "../types";
 import { THEME_FAMILIES } from "../types";
 import { isMultiResponse } from "../types";
@@ -139,6 +140,7 @@ import {
 import { compareSequenceItems, getSidebarHistoryShortcutTarget } from "../lib/history/sidebarHistory";
 import { resolveWorkspaceSettings } from "../lib/workspaceProfile";
 import { isVideoUrl, extractLastFrame } from "../lib/videoMedia";
+import { ACTIVE_VIDEO_PROMPT_GUIDANCE, buildVideoContinuityFromItem } from "../lib/videoContinuity";
 
 export type GalleryScope = "current-session" | "all";
 
@@ -578,6 +580,10 @@ function mapHistoryItem(it: Awaited<ReturnType<typeof getHistory>>["items"][numb
   return {
     image: it.url,
     url: it.url,
+    mediaType: it.mediaType,
+    video: it.video ?? null,
+    videoSeries: it.videoSeries ?? null,
+    videoContinuity: it.videoContinuity ?? null,
     filename: it.filename,
     thumb: it.url,
     prompt: it.prompt ?? undefined,
@@ -714,6 +720,7 @@ export type ImageNodeData = {
   size?: string | null;
   referenceImages?: string[];
   video?: { duration?: number; resolution?: string; aspectRatio?: string; topic?: string } | null;
+  videoContinuity?: VideoContinuityLineage | null;
 };
 
 export type GraphNode = FlowNode<ImageNodeData>;
@@ -1073,12 +1080,14 @@ type AppState = {
   videoResolution: VideoResolutionUI;
   videoAspectRatio: string;
   videoTopic: string;
+  videoContinuityLineage: VideoContinuityLineage | null;
   videoProgress: number | null;
   selectVideoModel: (model?: string) => void;
   setVideoDuration: (n: number) => void;
   setVideoResolution: (r: VideoResolutionUI) => void;
   setVideoAspectRatio: (a: string) => void;
   setVideoTopic: (topic: string) => void;
+  setVideoContinuityLineage: (lineage: VideoContinuityLineage | null) => void;
   activeVideoRefCount: () => number;
   runVideoGenerate: (nodeId?: string) => Promise<void>;
   animateImage: (filename: string, prompt?: string) => Promise<void>;
@@ -1471,13 +1480,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ metadataRestore: null });
   },
   removeReference: (index) => {
-    set((s) => ({
-      referenceImages: s.referenceImages.filter((_, i) => i !== index),
-      canvasReferenceImage:
-        s.referenceImages[index] === s.canvasReferenceImage ? null : s.canvasReferenceImage,
-    }));
+    set((s) => {
+      const referenceImages = s.referenceImages.filter((_, i) => i !== index);
+      const clearContinuity = referenceImages.length === 0;
+      const insertedPrompts = clearContinuity
+        ? s.insertedPrompts.filter((prompt) => !prompt.id.startsWith("video-continuity:"))
+        : s.insertedPrompts;
+      if (insertedPrompts.length !== s.insertedPrompts.length) {
+        saveGenerationDefaultsPatch({ insertedPrompts });
+      }
+      return {
+        referenceImages,
+        insertedPrompts,
+        videoContinuityLineage: clearContinuity ? null : s.videoContinuityLineage,
+        canvasReferenceImage:
+          s.referenceImages[index] === s.canvasReferenceImage ? null : s.canvasReferenceImage,
+      };
+    });
   },
-  clearReferences: () => set({ referenceImages: [], canvasReferenceImage: null }),
+  clearReferences: () => {
+    const insertedPrompts = get().insertedPrompts.filter((prompt) => !prompt.id.startsWith("video-continuity:"));
+    if (insertedPrompts.length !== get().insertedPrompts.length) {
+      saveGenerationDefaultsPatch({ insertedPrompts });
+    }
+    set({ referenceImages: [], canvasReferenceImage: null, videoContinuityLineage: null, insertedPrompts });
+  },
   attachCanvasVersionReference: async (item) => {
     let dataUrl: string;
     try {
@@ -3082,6 +3109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   videoResolution: "480p",
   videoAspectRatio: "auto",
   videoTopic: "",
+  videoContinuityLineage: null,
   videoProgress: null,
   selectVideoModel: (model) => {
     set({ videoModelSelected: model || "grok-imagine-video" });
@@ -3091,6 +3119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setVideoResolution: (videoResolution) => set({ videoResolution }),
   setVideoAspectRatio: (videoAspectRatio) => set({ videoAspectRatio }),
   setVideoTopic: (videoTopic) => set({ videoTopic }),
+  setVideoContinuityLineage: (videoContinuityLineage) => set({ videoContinuityLineage }),
   activeVideoRefCount: () => {
     const s = get();
     if (s.uiMode === "node") {
@@ -3105,11 +3134,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const refs = node ? (node.data.referenceImages ?? []) : get().referenceImages;
     const mode = deriveVideoModeUI(refs.length);
     const prompt = node ? node.data.prompt.trim() : composePrompt(get().prompt, get().insertedPrompts);
-    if (!prompt) return;
+    if (!prompt.trim()) {
+      get().showToast(ACTIVE_VIDEO_PROMPT_GUIDANCE, true);
+      return;
+    }
 
     // For node mode: use parent node's image as sourceImage if no explicit refs
     let parentSourceFilename: string | undefined;
     let parentVideoFrameRef: string | undefined;
+    let parentVideoContinuity: VideoContinuityLineage | null = node ? node.data.videoContinuity ?? null : get().videoContinuityLineage;
+    let continueFromVideo: string | undefined;
     if (node && refs.length === 0 && node.data.parentServerNodeId) {
       const parentNode = get().graphNodes.find(
         (n) => n.data.serverNodeId === node.data.parentServerNodeId,
@@ -3119,6 +3153,15 @@ export const useAppStore = create<AppState>((set, get) => ({
           // V2V: extract last frame from parent video
           try {
             parentVideoFrameRef = await extractLastFrame(parentNode.data.imageUrl);
+            parentVideoContinuity = parentNode.data.videoContinuity ?? buildVideoContinuityFromItem({
+              filename: parentNode.data.imageUrl.replace(/^\/generated\//, ""),
+              prompt: parentNode.data.prompt,
+              userPrompt: parentNode.data.prompt,
+              revisedPrompt: parentNode.data.prompt,
+              createdAt: Date.now(),
+              videoContinuity: null,
+            });
+            continueFromVideo = parentNode.data.imageUrl.replace(/^\/generated\//, "");
           } catch { /* fallback to T2V */ }
         } else {
           parentSourceFilename = parentNode.data.imageUrl.replace(/^\/generated\//, "");
@@ -3157,6 +3200,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           referenceImages: refs.length >= 2 ? refs : undefined,
           sourceImage: refs.length === 1 ? refs[0] : parentVideoFrameRef,
           sourceFilename: refs.length === 0 && !parentVideoFrameRef ? parentSourceFilename : undefined,
+          continueFromVideo,
+          continuityLineage: parentVideoContinuity,
           duration: clampVideoDurationUI(get().videoDuration, mode),
           resolution: get().videoResolution,
           aspectRatio: get().videoAspectRatio,
@@ -3188,6 +3233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     pendingStartedAt: null,
                     elapsed: result.elapsed ?? undefined,
                     model: null,
+                    videoContinuity: result.videoContinuity ?? parentVideoContinuity,
                     video: {
                       ...(result.video as Record<string, unknown> ?? {}),
                       ...(result.videoSeries?.topic ? { topic: result.videoSeries.topic } : {}),
@@ -3220,7 +3266,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   animateImage: async (filename, prompt) => {
-    const p = prompt?.trim() || "Animate this image with subtle, natural motion.";
+    const p = prompt?.trim();
+    if (!p) {
+      get().showToast(ACTIVE_VIDEO_PROMPT_GUIDANCE, true);
+      throw new Error(ACTIVE_VIDEO_PROMPT_GUIDANCE);
+    }
     const startedAt = Date.now();
     const flightId = `vid_${startedAt}_${Math.random().toString(36).slice(2, 6)}`;
     const nextInFlight: PersistedInFlight[] = [
@@ -3304,7 +3354,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       const insertedPrompts = state.insertedPrompts.filter((prompt) => prompt.id !== id);
       saveGenerationDefaultsPatch({ insertedPrompts });
-      return { insertedPrompts };
+      return {
+        insertedPrompts,
+        videoContinuityLineage: id.startsWith("video-continuity:")
+          ? null
+          : state.videoContinuityLineage,
+      };
     }),
   moveInsertedPromptInComposer: (id, direction) =>
     set((state) => {
@@ -3335,7 +3390,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   clearInsertedPrompts: () => {
     saveGenerationDefaultsPatch({ insertedPrompts: [] });
-    set({ insertedPrompts: [] });
+    set({ insertedPrompts: [], videoContinuityLineage: null });
   },
 
   selectHistory: (item) => {

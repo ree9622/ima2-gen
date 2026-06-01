@@ -65,6 +65,7 @@ describe("ima2 video CLI contracts", () => {
     assert.match(stdout, /ima2 video edit/);
     assert.match(stdout, /ima2 video edit <prompt> --video <url\|file_id\|generated-file>/);
     assert.match(stdout, /ima2 video extend <prompt> --video <url\|file_id\|generated-file> \[--duration 6\]/);
+    assert.match(stdout, /ima2 video continue <prompt> --video <generated-file>/);
     assert.match(stdout, /ima2 video frame/);
     assert.match(stdout, /ima2 video analyze <generated-file>/);
     assert.match(stdout, /--duration <1\.\.15>[\s\S]*Duration in seconds\. Default: 5/);
@@ -76,7 +77,7 @@ describe("ima2 video CLI contracts", () => {
   it("rejects invalid generate and extend durations before network calls", async () => {
     const noPrompt = await runCLI(["video"]);
     assert.equal(noPrompt.code, 2);
-    assert.match(noPrompt.stderr, /prompt is required/);
+    assert.match(noPrompt.stderr, /Active video prompt required/);
 
     const badGenerate = await runCLI(["video", "clip", "--duration", "6abc"]);
     assert.equal(badGenerate.code, 2);
@@ -102,6 +103,37 @@ describe("ima2 video CLI contracts", () => {
     const unknown = await runCLI(["video", "clip", "--duraton", "5"]);
     assert.equal(unknown.code, 2);
     assert.match(unknown.stderr, /unknown option: --duraton/);
+
+    const noContinuePrompt = await runCLI(["video", "continue", "--video", "sample.mp4"]);
+    assert.equal(noContinuePrompt.code, 2);
+    assert.match(noContinuePrompt.stderr, /Active video prompt required/);
+  });
+
+  it("sends continueFromVideo for video continue", async () => {
+    let body = "";
+    const server = makeServer((req, res) => {
+      if (req.url?.startsWith("/api/video/generate")) {
+        req.on("data", (d) => (body += d));
+        req.on("end", () => {
+          res.writeHead(200, { "Content-Type": "text/event-stream" });
+          res.end('event: done\ndata: {"requestId":"r","filename":"out.mp4","url":"/generated/out.mp4","mediaType":"video"}\n\n');
+        });
+        return;
+      }
+      if (req.url?.startsWith("/generated/out.mp4")) {
+        res.writeHead(200, { "Content-Type": "video/mp4" });
+        res.end("mp4");
+        return;
+      }
+      res.writeHead(404).end();
+    });
+    const base = await listen(server);
+    const result = await runCLI(["video", "continue", "camera pans left, rain sound fades, no dialogue, end on a close-up", "--video", "parent.mp4", "--server", base, "--json"]);
+    assert.equal(result.code, 0);
+    const parsed = JSON.parse(body);
+    assert.equal(parsed.continueFromVideo, "parent.mp4");
+    assert.equal(parsed.resolution, "720p");
+    assert.match(parsed.prompt, /camera pans left/);
   });
 
   it("passes edit/extend timeout to fetch", async () => {

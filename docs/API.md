@@ -234,6 +234,8 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
   "sourceImage": "<base64>",
   "referenceImages": ["<base64>", "<base64>"],
   "referenceFilenames": ["existing-file.png"],
+  "continueFromVideo": "1780226256355_50252101.mp4",
+  "continuityLineage": { "lineageId": "optional-client-hint", "entries": [] },
   "sessionId": "optional",
   "requestId": "optional-client-id"
 }
@@ -263,6 +265,54 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
 | `sourceFilename` | string | — | Existing generated file for image-to-video |
 | `referenceImages` | string[] | — | Base64 images for reference-to-video |
 | `referenceFilenames` | string[] | — | Existing generated files for reference-to-video |
+| `continueFromVideo` | string | — | Generated `.mp4` parent; server extracts its last frame and rebuilds lineage from sidecar |
+| `continuityLineage` | object | — | Optional client hint; used only when `continueFromVideo` is absent |
+
+Blank prompts return `PROMPT_REQUIRED` with a `guidance` string. The active
+prompt should describe visual flow, motion flow, sound/music/no-music,
+dialogue/no-dialogue, and ending frame.
+
+When `continueFromVideo` is present, the server treats the generated `.mp4`
+sidecar as authoritative. Client `continuityLineage` cannot override it. The
+saved child sidecar includes `videoContinuity`, a branch-local max-4 stack using
+`keep-start-plus-latest-3` retention.
+
+`videoContinuity` shape:
+
+```json
+{
+  "lineageId": "lineage:parent",
+  "parentFilename": "parent.mp4",
+  "sourceFrame": "last",
+  "maxEntries": 4,
+  "retention": "keep-start-plus-latest-3",
+  "entries": [
+    {
+      "id": "clip:parent.mp4",
+      "ordinal": 1,
+      "role": "start",
+      "filename": "parent.mp4",
+      "userPrompt": "original user prompt",
+      "revisedPrompt": "planner prompt actually sent to Grok video",
+      "createdAt": 1780300000000
+    }
+  ]
+}
+```
+
+Entry `role` is `start`, `ancestor`, `parent`, or `current`. The first clip is
+kept as the start anchor; later generations keep only the latest three entries.
+`lineageId` uses the generated video basename without the `.mp4` extension.
+This metadata is stored in the generated `.mp4.json` sidecar and returned in
+history rows and video `done` events; `/generated/*.json` remains private.
+
+Grok prompt surfaces used by video APIs:
+
+| Surface | Model | Responsibility |
+|---|---|---|
+| Video planner | `grok-4.3` | Converts user prompt, search context, refs, and optional continuity lineage into the final English video prompt. It must structure core subject, action/motion, camera/composition, environment/style, dialogue/audio, ending-frame handoff, and constraints. |
+| Video generation | xAI video model | Receives the planner prompt plus `sourceImage` or `referenceImages` when present. |
+| Video analysis | `grok-4.3` | Reads first/last frame images from `/api/video/analyze` and returns recreation/continuation guidance. |
 
 **SSE events**:
 
@@ -271,8 +321,8 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
 | `planning` | `{ requestId }` | Preparing video generation |
 | `submitted` | `{ requestId, xaiVideoRequestId, requestedModel, effectiveModel, modelFallback }` | Submitted to xAI |
 | `progress` | `{ requestId, progress, stalled }` | Progress 0.0–1.0 |
-| `done` | `{ requestId, filename, url, mediaType, revisedPrompt, elapsed, usage, requestedModel, effectiveModel, modelFallback, video }` | Video ready |
-| `error` | `{ error, code, status, requestId }` | Generation failed |
+| `done` | `{ requestId, filename, url, mediaType, revisedPrompt, elapsed, usage, requestedModel, effectiveModel, modelFallback, video, videoContinuity }` | Video ready |
+| `error` | `{ error, code, status, requestId, guidance? }` | Generation failed |
 
 **Video error codes**:
 
@@ -286,6 +336,7 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
 | `INVALID_VIDEO_DURATION` | Duration not 1–15 integer |
 | `GROK_VIDEO_REF_TOO_MANY` | More than 7 reference images |
 | `GROK_VIDEO_FAILED` | Upstream xAI video generation failed |
+| `GROK_VIDEO_FRAME_FAILED` | Server could not extract the parent video's last frame |
 
 ### `POST /api/video/edit`
 
@@ -418,6 +469,7 @@ Most server routes under `/api/*` have a CLI wrapper. The exception is **Agent M
 | `POST /api/edit` | `ima2 edit` |
 | `POST /api/generate/multimode` (SSE) | `ima2 multimode` |
 | `POST /api/video/generate` (SSE) | `ima2 video` |
+| `POST /api/video/generate` with `continueFromVideo` | `ima2 video continue` |
 | `POST /api/video/edit` | `ima2 video edit` |
 | `POST /api/video/extend` | `ima2 video extend` |
 | `GET /api/video/frame` | `ima2 video frame` |

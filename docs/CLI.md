@@ -114,6 +114,7 @@ Multimode-specific flags include `--max-images <1..8>`, `--ref <file>` (repeatab
 | `ima2 video <prompt>` | Generate a video via Grok (SSE streaming with progress) |
 | `ima2 video edit <prompt> --video <value>` | Edit an existing video (V2V); saves the result as a generated video artifact |
 | `ima2 video extend <prompt> --video <value> [--duration 6]` | Extend an existing video from its last frame |
+| `ima2 video continue <prompt> --video <generated-file>` | Generate a new clip from a generated video's last frame with branch-local `revisedPrompt` lineage |
 | `ima2 video frame <generated-file> [--last] [-o frame.png]` | Extract a PNG frame from a generated `.mp4` |
 | `ima2 video analyze <generated-file>` | Analyze first/last frames from a generated `.mp4` with Grok 4.3 vision |
 
@@ -131,6 +132,12 @@ Video generate flags:
 | `--timeout <sec>` | Timeout in seconds (default: 600) |
 | `--session <id>` | Session ID |
 
+Blank video prompts are rejected. Prompts should include visual flow, camera or
+subject motion, sound/no-music intent, dialogue/no-dialogue intent, and ending
+frame. Example: `from the last frame, she turns toward camera, rain grows
+louder, no background music, says "기다려", end on a still close-up after the
+line finishes`.
+
 Video edit/extend flags:
 
 | Flag | Meaning |
@@ -140,6 +147,16 @@ Video edit/extend flags:
 | `-o, --out <file>` | Download the edited or extended video to a file |
 | `--json` | Print JSON result |
 | `--timeout <sec>` | Timeout in seconds (default: 600) |
+
+Video continue flags:
+
+| Flag | Meaning |
+|---|---|
+| `--video <generated-file>` | Parent generated `.mp4`; server extracts its last frame |
+| `--duration <1..15>` | New clip duration (default: 5) |
+| `--resolution <480p\|720p>` | New clip resolution (default: 720p) |
+| `--aspect-ratio <ratio\|auto>` | New clip aspect ratio |
+| `--model <name>` | Optional video generation model |
 
 Video mode is auto-detected from `--ref` count:
 
@@ -160,11 +177,23 @@ ima2 video "cinematic" --resolution 720p --aspect-ratio 16:9 -o out.mp4
 ima2 video "style transfer" --ref a.png --ref b.png --ref c.png --model grok-imagine-video
 ima2 video edit "make the lighting warm sunset" --video 1780226256355_50252101.mp4 -o edited.mp4
 ima2 video extend "camera slowly pulls back" --video 1780226256355_50252101.mp4 --duration 6
+ima2 video continue "from the last frame, the actor crosses the room, footsteps only, no dialogue, end on the door closing" --video 1780226256355_50252101.mp4
 ima2 video frame 1780226256355_50252101.mp4 --last -o lastframe.png
 ima2 video analyze 1780226256355_50252101.mp4 --json
 ```
 
-Edit/extend accept HTTPS URLs, xAI `file_id`, `data:video/*` URLs, or generated `.mp4` filenames. Generated-file inputs are limited to real `.mp4` files under the generated directory. `ima2 video analyze` and `ima2 video frame` intentionally accept generated `.mp4` files only; remote analysis URLs are rejected so the server does not fetch arbitrary URLs through `ffmpeg`.
+Edit/extend accept HTTPS URLs, xAI `file_id`, `data:video/*` URLs, or generated `.mp4` filenames. Generated-file inputs are limited to real `.mp4` files under the generated directory. `ima2 video continue`, `ima2 video analyze`, and `ima2 video frame` intentionally accept generated `.mp4` files only; remote analysis URLs are rejected so the server does not fetch arbitrary URLs through `ffmpeg`.
+
+`ima2 video continue` differs from `ima2 video extend`: `extend` calls xAI's
+native extension endpoint and returns a combined original+extension video.
+`continue` calls ima2 generation with the parent video's server-extracted last
+frame and persists a `videoContinuity` stack of up to four `revisedPrompt`
+entries (`keep-start-plus-latest-3`) for future continuations.
+
+JSON output note: `ima2 video --json` wraps the final result with local
+download fields such as `ok`, `path`, and `filename`. `ima2 video continue
+--json` prints the server SSE `done` payload directly, including `filename`,
+`url`, `video`, `revisedPrompt`, and `videoContinuity`.
 
 ## Diagnostics
 

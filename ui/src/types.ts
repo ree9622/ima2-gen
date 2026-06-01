@@ -31,6 +31,25 @@ export type ComposerInsertedPromptSnapshot = {
   placement: "before" | "after";
 };
 
+export type VideoContinuityEntry = {
+  id: string;
+  ordinal: number;
+  role: "start" | "ancestor" | "parent" | "current";
+  filename: string | null;
+  userPrompt: string | null;
+  revisedPrompt: string;
+  createdAt: number;
+};
+
+export type VideoContinuityLineage = {
+  lineageId: string;
+  parentFilename: string | null;
+  sourceFrame: "last" | null;
+  maxEntries: 4;
+  retention: "keep-start-plus-latest-3";
+  entries: VideoContinuityEntry[];
+};
+
 export type SizePreset =
   | "1024x1024"
   | "1536x1024"
@@ -50,6 +69,10 @@ export type SizePreset =
 export type GenerateItem = {
   image: string;
   url?: string;
+  mediaType?: "image" | "video" | string;
+  video?: Record<string, unknown> | null;
+  videoSeries?: { topic?: string; chainIndex?: number } | null;
+  videoContinuity?: VideoContinuityLineage | null;
   canvasMergedAt?: number;
   canvasVersion?: boolean;
   canvasSourceFilename?: string | null;

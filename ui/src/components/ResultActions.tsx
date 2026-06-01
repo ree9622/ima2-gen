@@ -3,6 +3,7 @@ import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { exportImageToComfy } from "../lib/api";
 import { isVideoItem, extractLastFrame } from "../lib/videoMedia";
+import { buildContinuityPromptChip, buildVideoContinuityFromItem } from "../lib/videoContinuity";
 import type { GenerateItem } from "../types";
 
 interface ResultActionsProps {
@@ -101,13 +102,16 @@ export function ResultActions({
 
   const newFromHere = async () => {
     const hasPrompt = Boolean(actionImage.prompt);
-    if (hasPrompt) setPrompt(actionImage.prompt as string);
+    if (hasPrompt && !isVideoItem(actionImage)) setPrompt(actionImage.prompt as string);
     try {
       if (isVideoItem(actionImage)) {
         const frameDataUrl = await extractLastFrame(actionImage.image);
         useAppStore.getState().addReferenceDataUrl(frameDataUrl);
+        const lineage = buildVideoContinuityFromItem(actionImage);
+        useAppStore.getState().setVideoContinuityLineage(lineage);
+        if (lineage) insertPromptToComposer(buildContinuityPromptChip(lineage));
         // Load video series topic if present
-        const meta = (actionImage as any).videoSeries;
+        const meta = actionImage.videoSeries;
         if (meta?.topic) {
           useAppStore.getState().setVideoTopic(meta.topic);
         }

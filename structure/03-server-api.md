@@ -52,7 +52,7 @@ graph TD
 
 `/api/billing` reports `apiKeySource` as `"none"`, `"env"`, or `"config"`. API-key generation requires a configured key and returns `API_KEY_REQUIRED` before upstream when `provider: "api"` is requested without one.
 
-The live generation/edit provider can be OAuth, API-key, or Grok based. OAuth and API-key paths use the Responses API `image_generation` tool through a shared image adapter; only the endpoint/auth boundary differs. The Grok path uses the bundled progrok xAI proxy: classic, Node, and Agent generation first run mandatory xAI Web Search through `/v1/responses`, then call `grok-4.3` with a forced local `generate_image` function, then the server executes xAI `/v1/images/generations`. When Grok references, a Node parent image, or an Agent current image are attached, the planner also receives those images as multimodal inputs and the final step switches to xAI `/v1/images/edits` with the same reference images so i2i context survives the planner phase.
+The live generation/edit provider can be OAuth, API-key, or Grok based. OAuth and API-key paths use the Responses API `image_generation` tool through a shared image adapter; only the endpoint/auth boundary differs. The Grok path uses the bundled progrok xAI proxy: classic, Node, and Agent generation first run mandatory xAI Web Search through `/v1/responses`, then call `grok-4.3` with a forced local `generate_image` function, then the server executes xAI `/v1/images/generations`. When Grok references, a Node parent image, or an Agent current image are attached, the planner also receives those images as multimodal inputs and the final step switches to xAI `/v1/images/edits` with the same reference images so i2i context survives the planner phase. Grok video uses separate routes: `/api/video/generate` for T2V/I2V/Ref2V plus branch-local continuation, `/api/video/edit`, `/api/video/extend`, `/api/video/frame`, and `/api/video/analyze`.
 
 Storage endpoints are local-support helpers. `/api/storage/open-generated-dir` never accepts a browser-supplied path; it opens `ctx.config.storage.generatedDir` only.
 
@@ -89,6 +89,24 @@ Multimode is SSE-only. The route now saves and sends each final image as it arri
 Masked edits are sent as mask/selection guidance; callers should not treat them as pixel-perfect inpainting. The OAuth path additionally honours a feature flag, `config.oauth.maskedEditEnabled` (env: `IMA2_OAUTH_MASKED_EDIT_ENABLED`, default off) — when a mask is present and the flag is disabled, `lib/oauthProxy/generators.ts` rejects the request before calling upstream so masked edits stay opt-in until #31 ships in full. `tests/oauth-masked-edit-contract.test.js` covers the flag.
 
 Prompt assembly for the OAuth path injects a short safety intent policy (`SAFETY_INTENT_POLICY` from `lib/promptSafetyPolicy.ts`) into the `lib/oauthProxy/prompts.ts` builder for generate/edit/multimode. The same constant is reused by the API-key Responses adapter so both providers send the same intent guardrails.
+
+## Video Runtime
+
+| Method | Path | Body / query | Response |
+|---|---|---|---|
+| `POST` | `/api/video/generate` | SSE body with `prompt`, optional refs, `duration`, `resolution`, `aspectRatio`, `continueFromVideo`, `continuityLineage` | SSE `planning`, `submitted`, `progress`, `done`, `error` |
+| `POST` | `/api/video/edit` | `{ prompt, videoUrl, model? }` | Blocking JSON result saved as generated `.mp4` |
+| `POST` | `/api/video/extend` | `{ prompt, videoUrl, duration?, model? }` | Blocking JSON original+extension artifact |
+| `GET` | `/api/video/frame` | `file`, `position` | PNG frame |
+| `POST` | `/api/video/analyze` | `{ videoUrl }` generated `.mp4` | Grok 4.3 first/last-frame analysis |
+
+Blank video prompts return `PROMPT_REQUIRED` and include active prompt guidance:
+visual flow, motion flow, sound/no-music, dialogue/no-dialogue, and ending
+frame. `/api/video/generate` stores `videoContinuity` in the `.mp4.json`
+sidecar and returns it in `done`. When `continueFromVideo` is present, the
+server validates the generated `.mp4`, extracts its last frame, reads the parent
+sidecar, and treats that sidecar lineage as authoritative over any client hint.
+Lineage keeps at most four entries with start preserved plus the latest three.
 
 ## History And Asset Lifecycle
 
@@ -337,7 +355,7 @@ Node retry diagnostics include safe context such as `operation`, `clientNodeId`,
 - 2026-05-13: Added `/api/capabilities` as the agent-facing runtime metadata endpoint for #62.
 - 2026-05-29: Persisted per-image `elapsed` (numeric seconds) and `reasoningEffort` in sidecar + embedded XMP and exposed both through `/api/history` for Classic, Canvas edit, and Node modes (#79, forward-fix; older items stay blank). Classic/edit `elapsed` responses are now numeric.
 - 2026-05-30: Documented the Agent Mode API (`/api/agent/*` — sessions, turns, durable queue, compact, manifest, tools; backed by `lib/agentStore.ts`, `lib/agentQueueStore.ts`, `lib/agentQueueWorker.ts`, `lib/agentRuntime.ts`) and the Prompt Builder endpoint (`POST /api/prompt-builder/chat`). Re-grounded the API map against current code at ima2-gen 1.1.14.
-- 2026-05-30: Updated the API map for ima2-gen 1.1.15: Grok Classic/Node/Agent provider path, `GET /api/grok/status`, prompt-builder CLI wrapper `ima2 prompt build`, and the image-only/no-video runtime scope.
+- 2026-06-01: Updated the API map for Grok video runtime: generation/edit/extension/frame/analyze, active prompt guidance, `continueFromVideo`, and `videoContinuity` sidecar/SSE contracts.
 
 Previous document: `[[02-command-reference]]`
 

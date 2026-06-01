@@ -7,6 +7,7 @@ import { aspectToCanvas, generateWhiteCanvasB64 } from "./grokVideoCanvas.js";
 import { downloadVideo } from "./grokVideoDownload.js";
 import type { VideoAspectRatio, VideoMode, VideoResolution } from "./imageModels.js";
 import { MAX_REF2V_REFERENCES } from "./imageModels.js";
+import { formatVideoContinuityForPlanner, type VideoContinuityLineage } from "./videoContinuity.js";
 
 export { downloadVideo } from "./grokVideoDownload.js";
 
@@ -71,6 +72,7 @@ export interface GrokVideoOptions {
   requestId?: string;
   plannedPrompt?: string;
   webSearchCalls?: number;
+  continuityLineage?: VideoContinuityLineage | null;
   onEvent?: (ev: GrokVideoEvent) => void;
 }
 
@@ -142,7 +144,7 @@ const FAILED_CODE_MAP: Record<string, { code: string; status: number }> = {
 
 export function buildGrokVideoPlannerPayload(
   prompt: string,
-  opts: { model: string; mode: VideoMode; duration: number; resolution: VideoResolution; aspectRatio: VideoAspectRatio; plannerModel?: string; searchSummary?: string; sourceImageUrl?: string; referenceImageUrls?: string[] },
+  opts: { model: string; mode: VideoMode; duration: number; resolution: VideoResolution; aspectRatio: VideoAspectRatio; plannerModel?: string; searchSummary?: string; sourceImageUrl?: string; referenceImageUrls?: string[]; continuityLineage?: VideoContinuityLineage | null },
 ) {
   const isI2V = opts.mode === "image-to-video";
   const isRef2V = opts.mode === "reference-to-video";
@@ -151,6 +153,7 @@ export function buildGrokVideoPlannerPayload(
     : isI2V
     ? "This is image-to-video: preserve subject identity and composition unless asked otherwise, and use the source image as the first frame / starting point."
     : "This is text-to-video: describe motion, camera, and action clearly.";
+  const lineageText = formatVideoContinuityForPlanner(opts.continuityLineage);
   const userContent: any[] = [
     {
       type: "text",
@@ -158,10 +161,10 @@ export function buildGrokVideoPlannerPayload(
         `Selected video model: ${opts.model}. Mode: ${opts.mode}.`,
         `Requested duration: ${opts.duration}s, resolution: ${opts.resolution}, aspect ratio: ${opts.aspectRatio}.`,
         continuity,
+        lineageText ? `Authoritative continuation context:\n${lineageText}` : "Authoritative continuation context: none.",
         opts.searchSummary ? `Mandatory web-search brief:\n${opts.searchSummary}` : "Mandatory web-search brief: unavailable.",
         "Return the generate_video.prompt argument in English only, except for exact visible text the user explicitly requested.",
-        "",
-        "User prompt:",
+        "\nUser prompt:",
         prompt,
       ].join("\n"),
     },
@@ -206,7 +209,7 @@ export function buildGrokVideoPlannerPayload(
           "- If dialogue matters, include the exact line, speaker, and whether it finishes before the final cut.",
           "- If music matters, specify the style and whether it swells, resolves, cuts out, or continues at the ending frame.",
           "- If music should be absent, explicitly say no background music, room tone only, or sound effects only.",
-          "- For continuation workflows, state the intended final frame and final audio state so the next clip can continue cleanly.",
+          "- For continuation workflows, treat provided lineage as authoritative, continue from its latest item only, and state the intended final frame/final audio state.",
           "- The prompt MUST be in English. Exception: visible text/dialogue in the video must be kept in ORIGINAL language characters verbatim.",
           "- Do NOT use SD tags, keyword lists, or weighting syntax.",
           "- Keep prompts focused: one main action sequence. Overloading causes artifacts.",
@@ -290,6 +293,7 @@ export async function planGrokVideo(prompt: string, ctx: RouteRuntimeContext, op
     searchSummary: search.summary,
     sourceImageUrl: options.sourceImage ? sourceImageUrl(options.sourceImage, options.sourceMime) : undefined,
     referenceImageUrls,
+    continuityLineage: options.continuityLineage,
   });
   const { url, headers } = videoEndpoint(ctx, "/v1/chat/completions");
   const { combinedSignal, timer } = withTimeoutSignal(options.signal, cfg.plannerTimeoutMs);

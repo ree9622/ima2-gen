@@ -60,6 +60,7 @@ The CLI surface was expanded to near-feature-parity with the server API in #45 (
 | `ima2 gen <prompt>` | `POST /api/generate` | Generate image(s) from a prompt and optional references |
 | `ima2 edit <file>` | `POST /api/edit` | Edit an existing image with a prompt |
 | `ima2 multimode <spec>` | `POST /api/generate/multimode` | Run a multimode generation sequence |
+| `ima2 video <prompt>` | `POST /api/video/generate` | Grok video generation, reference-to-video, and branch-local continuation |
 | `ima2 node <subcommand>` | `/api/node/*` | Node-mode generate/show/list (graph-aware) |
 | `ima2 session <subcommand>` | `/api/sessions*` | List/load/save/rename/delete sessions and style sheets |
 | `ima2 history <subcommand>` | `/api/history*` | List, show, favorite, restore, soft-delete, permanent-delete history items |
@@ -112,6 +113,23 @@ The CLI surface was expanded to near-feature-parity with the server API in #45 (
 Web-search note: `--web-search` and `--no-web-search` set the request-level `webSearchEnabled` field. For `provider: "api"`, the request still respects the global API-provider gate (`IMA2_API_ALLOW_WEB_SEARCH` / `apiProvider.allowWebSearch`); a globally disabled API web-search setting cannot be re-enabled by one CLI call.
 
 Provider override semantics: `api` forces the API-key Responses path, `oauth` forces the local OAuth proxy path, `grok` forces the bundled progrok xAI path, and `auto` preserves route default behavior. Grok Classic and Node route through mandatory xAI Web Search, `grok-4.3` planning, and xAI Images API; requests with references use xAI `/v1/images/edits` to preserve image-to-image context.
+
+## `video` Options
+
+| Command | Role |
+|---|---|
+| `ima2 video <prompt>` | Generate T2V/I2V/Ref2V through Grok video |
+| `ima2 video continue <prompt> --video <generated-file>` | Extract the parent generated video's last frame and create a new branch-local continuation clip |
+| `ima2 video edit <prompt> --video <value>` | xAI native V2V edit; base video model only |
+| `ima2 video extend <prompt> --video <value>` | xAI native extension; returns original+extension combined |
+| `ima2 video frame <generated-file>` | Extract a PNG frame from a generated `.mp4` |
+| `ima2 video analyze <generated-file>` | Analyze first/last frames through Grok 4.3 vision |
+
+Video prompts cannot be blank. Agents should include visual flow, motion flow,
+sound/no-music, dialogue/no-dialogue, and the ending frame. `continue` differs
+from `extend`: `continue` persists `videoContinuity` lineage metadata and starts
+a fresh generated clip from the last frame; `extend` calls xAI's native
+extension endpoint.
 
 ## `edit` Options
 

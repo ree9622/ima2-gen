@@ -54,6 +54,8 @@ routes/
   prompts.ts            prompt CRUD/folders/import/export
   promptImport.ts       curated/discovery/folder/preview/commit import routes
   cardNews.ts           dev-gated /api/cardnews/*
+  video.ts              POST /api/video/generate SSE
+  videoExtended.ts      video edit/extend/frame/analyze helpers
   index.ts              route registration hub
 ```
 
@@ -66,6 +68,8 @@ routes/
 | `routes/generate.ts` | 439 | Classic generation API, model validation, reference validation, provider/web-search/reasoning-effort plumbing, cancellation, upstream validation pass-through, sidecar save |
 | `routes/edit.ts` | 281 | Edit API, mask validation, cancellation, OAuth/API edit response save, provider/web-search/reasoning-effort plumbing |
 | `routes/multimode.ts` | 458 | `POST /api/generate/multimode` SSE orchestrator: multimode inflight state, incremental final-image save/send, partial timeout, cancellation, provider/web-search/reasoning-effort plumbing |
+| `routes/video.ts` | 300 | `POST /api/video/generate` SSE: Grok video T2V/I2V/Ref2V, active prompt guard, continuation lineage, sidecar persistence |
+| `routes/videoExtended.ts` | 284 | Video edit, extension, frame extraction, and Grok 4.3 first/last-frame analysis |
 | `routes/nodes.ts` | 523 | Node generation API, explicit context/search policy, SSE partial/error streaming, child references, safe retry diagnostics, cancellation, node sidecar save, node fetch |
 | `routes/sessions.ts` | 317 | SQLite-backed session list/load/save/rename/delete, style-sheet get/put/enable/extract, graph save |
 | `routes/history.ts` | 221 | History list, cursor pagination, favorites-only filtering, grouped gallery, soft delete (OS trash), restore, gallery favorite toggle, permanent delete |
@@ -104,6 +108,7 @@ routes/
 | `bin/commands/ls.ts` | 64 | History list client (legacy alias); supports session and server-side favorites filtering via `favoritesOnly=1` |
 | `bin/commands/ps.ts` | 81 | Inflight job list client, including optional terminal job snapshots; accepts arbitrary `kind` and documents `classic|node|multimode` |
 | `bin/commands/show.ts` | 48 | Single history item display/reveal client |
+| `bin/commands/video.ts` | 442 | Video CLI surface: generate, edit, extend, frame, analyze, and branch-local `continue` |
 | `bin/commands/ping.ts` | 28 | Server health probe client |
 | `bin/lib/client.ts` | 100 | Server discovery, HTTP request wrapper, response normalization |
 | `bin/lib/platform.ts` | 97 | Browser-open and binary-resolution helpers |
@@ -128,6 +133,9 @@ routes/
 | `lib/errorClassify.ts` | 100 | Upstream/OAuth error classifier for stable error codes, including provider validation errors |
 | `lib/generationErrors.ts` | 121 | Generation error normalization, retry classification, status mapping |
 | `lib/historyList.ts` | 168 | History reconstruction from generated assets, sidecars, embedded XMP metadata fallback, session-aware rows |
+| `lib/videoContinuity.ts` | n/a | Video active-prompt guard, generated video sidecar lineage read/normalize/append, max-4 continuity retention, planner context formatting |
+| `lib/videoFrameExtract.ts` | n/a | Generated-dir-safe MP4 validation and ffmpeg frame extraction for video frame/analyze/continue workflows |
+| `lib/grokVideoAdapter.ts` | 500 | Grok video planner and xAI video generation adapter, including continuity-aware prompt planning and model fallback metadata |
 | `lib/localImportStore.ts` | 110 | Validates raw PNG/JPEG/WebP body, writes timestamped `imported-*` to generated/, embeds XMP metadata, returns GenerateItem-shaped row |
 | `lib/storageMigration.ts` | 284 | Legacy generated-folder scan and migration support |
 | `lib/runtimePorts.ts` | 93 | Port probing, fallback binding, and OAuth ready URL parsing |
@@ -372,6 +380,16 @@ The `tests/` directory now contains roughly 125 `*.test.js` / `*.test.mjs` / `*.
 - [ ] If UI components are split, update the component table and frontend doc.
 - [ ] If tests are added, update the test map and `06-infra-operations`.
 
+## Prompt Surface Inventory
+
+| File | Function / surface | Model | Role | Continuity impact |
+|---|---|---|---|---|
+| `lib/grokImageAdapter.ts` | `buildGrokPlannerPayload`, `buildGrokSearchPayload` | `grok-4.3` | Image planner/search | Document only in this phase |
+| `lib/grokVideoAdapter.ts` | `buildGrokVideoPlannerPayload`, `planGrokVideo` | `grok-4.3` | Video planner | Receives numbered `videoContinuity` lineage and active audio/dialogue/ending-frame prompt guidance |
+| `routes/videoExtended.ts` | `/api/video/analyze` first/last-frame prompt | `grok-4.3` | Video analysis | Documents first/last-frame inferred motion; does not mutate lineage |
+| `lib/agentRuntime.ts` | video generation caller/delegator | — | Calls generation surfaces | Not a Grok 4.3 prompt owner |
+| `lib/cardNewsPlannerPrompt.ts` | card-news JSON planner prompt | non-Grok planner | Separate planning surface | Not counted as Grok 4.3 |
+
 ## Change Log
 
 - 2026-04-23: Created the first working-tree file and responsibility map.
@@ -387,7 +405,7 @@ The `tests/` directory now contains roughly 125 `*.test.js` / `*.test.mjs` / `*.
 - 2026-04-30: Closed out the TypeScript migration — switched core/route/lib/bin tables from `.js` to `.ts` source paths and updated line counts. Added `routes/multimode.ts`, `routes/annotations.ts`, `routes/canvasVersions.ts`, `routes/comfy.ts`, `lib/canvasVersionStore.ts`, `lib/comfyBridge.ts`, `lib/pngInfo.ts`, `lib/systemTrash.ts`, `bin/lib/sse.ts`, `bin/lib/browser-id.ts`. Documented the CLI feature-parity #45 surface (annotate, canvas-versions, cardnews, comfy, config, history, inflight, metadata, multimode, node, oauth, prompt, providers, session, storage, billing). Added the `ui/src/components/canvas-mode/*` subtree (~3300 lines), mobile shell components, multimode preview, web-search/reasoning controls, and `ui/src/lib/canvas/*`. Bumped `useAppStore.ts` to 3555, `index.css` to 5780, `lib/oauthProxy.ts` to 986, `lib/api.ts` to 992, hooks total to 882, i18n to 1811. Refreshed test map intro to reflect ~114 tests with new canvas-mode/multimode/import/comfy contracts.
 - 2026-05-06: Replaced the monolithic `lib/oauthProxy.ts` row with the `lib/oauthProxy/*` subtree (`generators`, `streams`, `prompts`, `references`, `runtime`, `errors`, `types`, `index`); kept `lib/oauthProxy.ts` as a re-export shim. Added `lib/promptSafetyPolicy.ts`, `lib/responsesImageAdapter.ts`, `lib/providerOptions.ts`, `lib/runtimeContext.ts`, `lib/errInfo.ts`. Added `ui/src/store/persistenceRegistry.ts` as the single source of truth for `ima2.*` localStorage keys (#43) and bumped `ui/src/store/useAppStore.ts` to 3715 lines to cover gallery scope (#42). Refreshed the test-map intro to ~125 entries listing `api-provider-parity`, `oauth-masked-edit`, `gallery-session-scope`, `gallery-shortcuts-visible-domain`, `settings-persistence`, `toast-stack`, `node-generation-lock`, `mobile-generate-entry`, `prompt-import-search-ux`, and the inflight-reload pair (#47).
 - 2026-05-30: Re-grounded the route table against current code at ima2-gen 1.1.14. Added `routes/capabilities.ts` (`GET /api/capabilities`), `routes/agent.ts` (Agent Mode — sessions/turns/durable queue, no CLI), and `routes/promptBuilder.ts` (`POST /api/prompt-builder/chat`); refreshed the `routes/index.ts` registration list and corrected `routes/generate.ts` (439) and `routes/multimode.ts` (458) line counts.
-- 2026-05-30: Updated the map for the 1.1.15 Grok publish surface: prompt builder is now documented with `ima2 prompt build`, and the structure set tracks Grok Classic/Node/Agent image support plus no-video runtime scope.
+- 2026-06-01: Updated the map for Grok video runtime: `routes/video.ts`, `routes/videoExtended.ts`, `lib/videoContinuity.ts`, `lib/videoFrameExtract.ts`, `ima2 video continue`, and Grok 4.3 prompt surface inventory.
 
 Previous document: `[[00-structure-hub]]`
 

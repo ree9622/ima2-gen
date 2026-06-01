@@ -2,6 +2,7 @@ import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { OptionGroup } from "./OptionGroup";
 import { deriveVideoModeUI, MAX_REF2V_DURATION_UI } from "../lib/imageModels";
+import { ACTIVE_VIDEO_PROMPT_GUIDANCE, continuitySummary } from "../lib/videoContinuity";
 import type { VideoResolutionUI } from "../types";
 
 const RES_ITEMS = [
@@ -22,8 +23,10 @@ export function VideoControlsPanel() {
   const setAspect = useAppStore((s) => s.setVideoAspectRatio);
   const videoTopic = useAppStore((s) => s.videoTopic);
   const setVideoTopic = useAppStore((s) => s.setVideoTopic);
+  const continuity = useAppStore((s) => s.videoContinuityLineage);
   const maxDuration = refCount >= 2 ? MAX_REF2V_DURATION_UI : 15;
   const mode = deriveVideoModeUI(refCount);
+  const summary = continuitySummary(continuity);
 
   return (
     <div className="right-panel-settings video-controls">
@@ -31,6 +34,16 @@ export function VideoControlsPanel() {
         <strong>{t("video.modeLabel")}</strong>
         <span>{t(`video.mode.${mode}`, { n: refCount })}</span>
       </div>
+      <div className="provider-compat-note" role="note">
+        <strong>Active prompt</strong>
+        <span>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</span>
+      </div>
+      {summary ? (
+        <div className="provider-compat-note" role="note">
+          <strong>Continuity</strong>
+          <span>{summary}</span>
+        </div>
+      ) : null}
       <div className="option-group">
         <div className="section-title">{t("video.seriesTopicTitle") ?? "시리즈 주제"}</div>
         <input

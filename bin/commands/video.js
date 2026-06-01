@@ -8,6 +8,7 @@ import { basename, dirname, join } from "node:path";
 const VALID_RESOLUTIONS = new Set(["480p", "720p"]);
 const VALID_ASPECT_RATIOS = new Set(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "auto"]);
 const VALID_MODELS = new Set(["grok-imagine-video", "grok-imagine-video-1.5-preview"]);
+const ACTIVE_VIDEO_PROMPT_GUIDANCE = "Active video prompt required: describe visual flow, motion flow, sound/no-music intent, dialogue/no-dialogue intent, and the desired ending frame.";
 function parseIntegerFlag(value, fallback, label) {
     const raw = value === undefined ? String(fallback) : String(value);
     if (!/^\d+$/.test(raw))
@@ -72,6 +73,7 @@ const HELP = `
   ima2 video <prompt...> [options]
   ima2 video edit <prompt> --video <url|file_id|generated-file>
   ima2 video extend <prompt> --video <url|file_id|generated-file> [--duration 6]
+  ima2 video continue <prompt> --video <generated-file>
   ima2 video frame <file> [--last] [-o output.png]
   ima2 video analyze <generated-file>
 
@@ -81,6 +83,7 @@ const HELP = `
     (default)   Generate video (T2V / I2V / Ref2V)
     edit        Edit existing video with text prompt (V2V)
     extend      Continue video from last frame
+    continue    Generate a new I2V clip from a generated video's last frame with lineage
     frame       Extract a frame from video (requires ffmpeg on server)
     analyze     Analyze video with Grok 4.3 vision
 
@@ -112,6 +115,7 @@ const HELP = `
     ima2 video "animate this" --ref photo.png --duration 10
     ima2 video edit "make it sunset" --video https://vidgen.x.ai/.../clip.mp4
     ima2 video extend "camera pulls back" --video https://vidgen.x.ai/.../clip.mp4 --duration 5
+    ima2 video continue "she turns back as the music cuts to room tone" --video 1780226256355_50252101.mp4
     ima2 video frame 1780226256355_50252101.mp4 --last -o lastframe.png
     ima2 video analyze 1780226256355_50252101.mp4
 `;
@@ -121,6 +125,8 @@ export default async function videoCmd(argv) {
         return videoEditCmd(argv.slice(1));
     if (sub === "extend")
         return videoExtendCmd(argv.slice(1));
+    if (sub === "continue")
+        return videoContinueCmd(argv.slice(1));
     if (sub === "frame")
         return videoFrameCmd(argv.slice(1));
     if (sub === "analyze")
@@ -132,8 +138,8 @@ export default async function videoCmd(argv) {
         return;
     }
     const prompt = args.positional.join(" ");
-    if (!prompt)
-        die(2, "prompt is required");
+    if (!prompt.trim())
+        die(2, ACTIVE_VIDEO_PROMPT_GUIDANCE);
     const duration = parseIntegerFlag(args.duration, 5, "--duration");
     if (duration < 1 || duration > 15)
         die(2, "--duration must be between 1 and 15");
@@ -225,7 +231,7 @@ export default async function videoCmd(argv) {
                 case "error":
                     if (!args.json && lastProgress >= 0)
                         process.stdout.write("\n");
-                    die(1, `video error: ${ev.data.error || ev.data}${ev.data.code ? ` (${ev.data.code})` : ""}`);
+                    die(1, `video error: ${ev.data.error || ev.data}${ev.data.guidance ? `\n${ev.data.guidance}` : ""}${ev.data.code ? ` (${ev.data.code})` : ""}`);
             }
         }
     }
@@ -288,6 +294,36 @@ function renderBar(pct) {
     const filled = Math.round((pct / 100) * width);
     return color.green("█".repeat(filled)) + color.dim("░".repeat(width - filled));
 }
+async function runVideoGenerateRequest(serverBase, body, timeout, silent) {
+    let doneData = null;
+    let lastProgress = -1;
+    for await (const ev of streamSse(`${serverBase}/api/video/generate`, {
+        body: { provider: "grok", ...body },
+        signal: timeoutSignal(timeout),
+        headers: typeof body.requestId === "string" ? { "X-Request-Id": body.requestId } : undefined,
+    })) {
+        if (ev.event === "progress") {
+            const pct = typeof ev.data.progress === "number" ? Math.round(ev.data.progress * 100) : null;
+            if (pct !== null && pct !== lastProgress && !silent) {
+                process.stdout.write(`\r  ${renderBar(pct)} ${pct}%`);
+                lastProgress = pct;
+            }
+        }
+        else if (ev.event === "done") {
+            if (!silent && lastProgress >= 0)
+                process.stdout.write("\n");
+            doneData = ev.data;
+        }
+        else if (ev.event === "error") {
+            if (!silent && lastProgress >= 0)
+                process.stdout.write("\n");
+            die(1, `video error: ${ev.data.error || ev.data}${ev.data.guidance ? `\n${ev.data.guidance}` : ""}${ev.data.code ? ` (${ev.data.code})` : ""}`);
+        }
+    }
+    if (!doneData)
+        die(1, "server did not return a video result");
+    return doneData;
+}
 // --- Subcommands ---
 async function videoEditCmd(argv) {
     const spec = { flags: { video: { type: "string" }, out: { short: "o", type: "string" }, output: { type: "string" }, json: { type: "boolean" }, timeout: { type: "string", default: "600" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };
@@ -298,8 +334,8 @@ async function videoEditCmd(argv) {
         return;
     }
     const prompt = args.positional.join(" ");
-    if (!prompt)
-        die(2, "prompt is required");
+    if (!prompt.trim())
+        die(2, ACTIVE_VIDEO_PROMPT_GUIDANCE);
     if (!args.video)
         die(2, "--video <url> is required");
     parseTimeoutSeconds(args.timeout);
@@ -334,8 +370,8 @@ async function videoExtendCmd(argv) {
         return;
     }
     const prompt = args.positional.join(" ");
-    if (!prompt)
-        die(2, "prompt is required");
+    if (!prompt.trim())
+        die(2, ACTIVE_VIDEO_PROMPT_GUIDANCE);
     if (!args.video)
         die(2, "--video <url> is required");
     const duration = parseIntegerFlag(args.duration, 6, "--duration");
@@ -363,6 +399,74 @@ async function videoExtendCmd(argv) {
     else {
         out(color.green("✓ ") + `Extended video (${data.duration}s): ${data.url}`);
     }
+}
+async function videoContinueCmd(argv) {
+    const spec = {
+        flags: {
+            video: { type: "string" },
+            duration: { type: "string", default: "5" },
+            resolution: { type: "string", default: "720p" },
+            "aspect-ratio": { type: "string", default: "auto" },
+            model: { type: "string" },
+            out: { short: "o", type: "string" },
+            output: { type: "string" },
+            json: { type: "boolean" },
+            timeout: { type: "string", default: "600" },
+            server: { type: "string" },
+            help: { short: "h", type: "boolean" },
+        },
+    };
+    const args = parseArgs(argv, spec);
+    rejectUnknownFlags(args);
+    if (args.help) {
+        out(`  ima2 video continue <prompt> --video <generated-file>\n\n  Generate a new clip from a generated video's last frame and carry branch-local revisedPrompt lineage.\n\n  Prompt must describe visual flow, motion, sound/music/no-music, dialogue/no-dialogue, and ending frame.\n\n  Options:\n        --video <file>                 Generated .mp4 filename (required)\n        --duration <1..15>             Default: 5\n        --resolution <480p|720p>       Default: 720p\n        --aspect-ratio <ratio|auto>    Default: auto\n        --model <name>                 grok-imagine-video, grok-imagine-video-1.5-preview\n    -o, --out <file>                   Download continued video to file\n        --output <file>                Alias for --out\n        --json                         Print JSON result\n        --timeout <sec>                Default: 600\n        --server <url>                 Override server URL`);
+        return;
+    }
+    const prompt = args.positional.join(" ");
+    if (!prompt.trim())
+        die(2, ACTIVE_VIDEO_PROMPT_GUIDANCE);
+    if (!args.video)
+        die(2, "--video <generated-file> is required");
+    const duration = parseIntegerFlag(args.duration, 5, "--duration");
+    if (duration < 1 || duration > 15)
+        die(2, "--duration must be between 1 and 15");
+    const resolution = String(args.resolution);
+    if (!VALID_RESOLUTIONS.has(resolution))
+        die(2, "--resolution must be one of: 480p, 720p");
+    const aspectRatio = String(args["aspect-ratio"]);
+    if (!VALID_ASPECT_RATIOS.has(aspectRatio))
+        die(2, "--aspect-ratio must be one of: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto");
+    if (args.model && !VALID_MODELS.has(String(args.model))) {
+        die(2, "--model must be one of: grok-imagine-video, grok-imagine-video-1.5-preview");
+    }
+    parseTimeoutSeconds(args.timeout);
+    let server;
+    try {
+        server = await resolveServer({ serverFlag: args.server });
+    }
+    catch (e) {
+        die(exitCodeForError(e), e.message);
+        throw e;
+    }
+    const requestId = `req_cli_video_continue_${Date.now().toString(36)}`;
+    const body = {
+        prompt,
+        requestId,
+        duration,
+        resolution,
+        aspectRatio,
+        continueFromVideo: args.video,
+    };
+    if (args.model)
+        body.model = args.model;
+    const data = await runVideoGenerateRequest(server.base, body, args.timeout, Boolean(args.json));
+    const outPath = (args.out || args.output);
+    if (outPath)
+        await downloadReturnedVideo(server.base, data, outPath, timeoutSignal(args.timeout));
+    if (args.json)
+        out(JSON.stringify(data, null, 2));
+    else
+        out(color.green("✓ ") + `Continued video: ${data.url}`);
 }
 async function videoFrameCmd(argv) {
     const spec = { flags: { last: { type: "boolean" }, position: { type: "string" }, out: { type: "string" }, output: { short: "o", type: "string" }, timeout: { type: "string", default: "60" }, server: { type: "string" }, help: { short: "h", type: "boolean" } } };

@@ -9,6 +9,17 @@ import { invalidateHistoryIndex } from "../lib/historyIndex.js";
 import { generateVideoViaGrok, type GrokVideoEvent } from "../lib/grokVideoAdapter.js";
 import { getVideoSeriesChain } from "../lib/videoSeriesChain.js";
 import {
+  ACTIVE_VIDEO_PROMPT_GUIDANCE,
+  appendVideoContinuityEntry,
+  lineageFromVideoMetadata,
+  normalizeVideoContinuityLineage,
+  readVideoSidecar,
+  requireActiveVideoPrompt,
+  safeGeneratedVideoFilename,
+  type VideoContinuityLineage,
+} from "../lib/videoContinuity.js";
+import { extractGeneratedVideoFrameB64 } from "../lib/videoFrameExtract.js";
+import {
   normalizeGrokVideoModel,
   normalizeVideoResolution,
   normalizeVideoAspectRatio,
@@ -55,6 +66,7 @@ async function resolveSourceImage(
   if (typeof sourceFilename === "string" && sourceFilename) {
     const safe = sourceFilename.replace(/^\/+/, "");
     if (safe.includes("..")) throw { status: 400, code: "GROK_VIDEO_INVALID_MODE", message: "invalid source filename" };
+    if (/\.mp4$/i.test(safe)) throw { status: 400, code: "GROK_VIDEO_INVALID_MODE", message: "use continueFromVideo for generated video continuation" };
     const buf = await readFile(join(ctx.config.storage.generatedDir, safe));
     return { b64: buf.toString("base64"), filename: safe };
   }
@@ -85,12 +97,12 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
-    const fail = (status: number | undefined, code: string, error: string) => {
+    const fail = (status: number | undefined, code: string, error: string, extra: Record<string, unknown> = {}) => {
       const httpStatus = status ?? 500;
       finishStatus = "error";
       finishHttpStatus = httpStatus;
       finishErrorCode = code;
-      sendSse(res, "error", { error, code, status: httpStatus, requestId });
+      sendSse(res, "error", { error, code, status: httpStatus, requestId, ...extra });
     };
 
     try {
@@ -100,7 +112,8 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
 
       if (provider !== "grok") return fail(400, "VIDEO_PROVIDER_UNSUPPORTED", "video generation requires provider 'grok'");
-      if (typeof prompt !== "string" || !prompt.trim()) return fail(400, "PROMPT_REQUIRED", "Prompt is required");
+      const activePrompt = requireActiveVideoPrompt(prompt);
+      if (!activePrompt) return fail(400, "PROMPT_REQUIRED", "Prompt is required", { guidance: ACTIVE_VIDEO_PROMPT_GUIDANCE });
 
       const modelCheck = normalizeGrokVideoModel(rawModel);
       if (isNormalizeError(modelCheck)) return fail(modelCheck.status, modelCheck.code, modelCheck.error);
@@ -112,6 +125,20 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       if (isNormalizeError(aspectCheck)) return fail(aspectCheck.status, aspectCheck.code, aspectCheck.error);
 
       // Resolve reference inputs: base64 list + existing-file list + legacy single source.
+      let parentLineage: VideoContinuityLineage | null = null;
+      let continueFromVideoFilename: string | null = null;
+      if (typeof req.body?.continueFromVideo === "string" && req.body.continueFromVideo.trim()) {
+        try {
+          continueFromVideoFilename = safeGeneratedVideoFilename(req.body.continueFromVideo);
+          const parentMeta = await readVideoSidecar(ctx.config.storage.generatedDir, continueFromVideoFilename);
+          parentLineage = lineageFromVideoMetadata(continueFromVideoFilename, parentMeta);
+        } catch (e: any) {
+          return fail(e?.status || 400, "GROK_VIDEO_INVALID_MODE", e?.message || "invalid continuation video");
+        }
+      } else {
+        parentLineage = normalizeVideoContinuityLineage(req.body?.continuityLineage);
+      }
+
       const refInputs: Array<{ image?: unknown; filename?: unknown }> = [
         ...toArray(req.body?.referenceImages).map((image) => ({ image })),
         ...toArray(req.body?.referenceFilenames).map((filename) => ({ filename })),
@@ -119,6 +146,13 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
           ? [{ image: req.body?.sourceImage, filename: req.body?.sourceFilename }]
           : []),
       ];
+      if (continueFromVideoFilename && !req.body?.sourceImage && !req.body?.sourceFilename) {
+        try {
+          refInputs.push({ image: await extractGeneratedVideoFrameB64(ctx.config.storage.generatedDir, continueFromVideoFilename) });
+        } catch (e: any) {
+          return fail(e?.status || 500, "GROK_VIDEO_FRAME_FAILED", e?.message || "failed to extract continuation frame");
+        }
+      }
       let resolved: Array<{ b64: string; filename: string | null }>;
       try {
         const all = await Promise.all(refInputs.map((r) => resolveSourceImage(ctx, r.image, r.filename)));
@@ -136,7 +170,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       startJob({
         requestId,
         kind: "video",
-        prompt,
+        prompt: activePrompt,
         meta: { kind: "video", sessionId, clientNodeId, model: modelCheck.model, mode, duration, resolution: resolutionCheck.resolution },
       });
       registerJobAbortController(requestId, cancelController);
@@ -164,10 +198,10 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       };
 
       // Build prompt with series chain context
-      const chain = topic ? await getVideoSeriesChain(ctx.config.storage.generatedDir, topic) : [];
+      const chain = !parentLineage && topic ? await getVideoSeriesChain(ctx.config.storage.generatedDir, topic) : [];
       const effectivePrompt = chain.length > 0
-        ? `[Series topic: ${topic}]\n[Previous prompts in series:\n${chain.map((p, i) => `${i + 1}. ${p}`).join("\n")}\n]\n\n${prompt}`
-        : prompt;
+        ? `[Series topic: ${topic}]\n[Previous prompts in series:\n${chain.map((p, i) => `${i + 1}. ${p}`).join("\n")}\n]\n\n${activePrompt}`
+        : activePrompt;
 
       const result = await generateVideoViaGrok(effectivePrompt, ctx, {
         model: modelCheck.model,
@@ -179,20 +213,27 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         referenceImages,
         signal: cancelController.signal,
         requestId,
+        continuityLineage: parentLineage,
         onEvent,
       });
 
       const rand = randomBytes(ctx.config.ids.generatedHexBytes).toString("hex");
       const filename = `${Date.now()}_${rand}.mp4`;
       const elapsed = +((Date.now() - startTime) / 1000).toFixed(1);
+      const videoContinuity = appendVideoContinuityEntry(parentLineage, {
+        filename,
+        userPrompt: activePrompt,
+        revisedPrompt: result.revisedPrompt,
+        createdAt: Date.now(),
+      });
       const meta = {
         kind: "video",
         mediaType: "video",
         requestId,
         sessionId,
         clientNodeId,
-        prompt,
-        userPrompt: prompt,
+        prompt: activePrompt,
+        userPrompt: activePrompt,
         revisedPrompt: result.revisedPrompt,
         provider: "grok",
         model: result.effectiveModel,
@@ -213,6 +254,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
           effectiveModel: result.effectiveModel,
           modelFallback: result.modelFallback,
         },
+        videoContinuity,
         ...(topic ? { videoSeries: { topic, chainIndex: chain.length } } : {}),
       };
       await saveGeneratedVideoArtifact(ctx, filename, result.videoBuffer, meta);
@@ -232,6 +274,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         effectiveModel: result.effectiveModel,
         modelFallback: result.modelFallback,
         video: meta.video,
+        videoContinuity,
         ...(meta.videoSeries ? { videoSeries: meta.videoSeries } : {}),
       });
     } catch (e) {

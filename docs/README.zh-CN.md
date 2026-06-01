@@ -10,33 +10,23 @@
 
 `ima2-gen` 是一个本地 AI 工作室，只需免费 ChatGPT 和 SuperGrok 即可生成图像和视频。
 
-用 `npx` 启动，通过 ChatGPT 或 Grok OAuth 登录即可开始生成图像和视频。无需 API 密钥，节点分支、multimode 批量、Grok Video、Canvas Mode 全部可用。
+全局安装后，通过 ChatGPT 或 Grok OAuth 登录即可开始生成图像和视频。无需 API 密钥，节点分支、multimode 批量、Grok Video、Canvas Mode 全部可用。
 
 ![显示 prompt 输入区、生成图片、模型标签和结果元数据的 ima2-gen classic 界面](../assets/screenshots/classic-generate-light.png)
 
 ## 快速开始
 
 ```bash
-npx ima2-gen serve
+npm install -g ima2-gen
+ima2 setup
+ima2 serve
 ```
 
 然后打开 `http://localhost:3333`。
 
-如果还没有登录 Codex：
-
-```bash
-npx @openai/codex login
-npx ima2-gen serve
-```
-
 如果 `3333` 已经被占用，server 会绑定下一个可用端口，并把实际 URL 写入 `~/.ima2/server.json`。不要假设端口固定，请使用终端输出的 URL 或 `ima2 open`。
 
-也可以全局安装：
-
-```bash
-npm install -g ima2-gen
-ima2 serve
-```
+> **想用 npx 运行？** 请参阅 [NPX_QUICKSTART.md](NPX_QUICKSTART.md)。
 
 ## 能做什么
 
@@ -194,10 +184,10 @@ environment variables > ~/.ima2/config.json > built-in defaults
 先启动 `ima2 serve`，再检查 `~/.ima2/server.json`。也可以运行 `ima2 ping --server http://localhost:3333`。
 
 **OAuth 登录失败**
-运行 `npx @openai/codex login`，用 `ima2 status` 确认状态，然后重启 `ima2 serve`。
+重新运行 `ima2 setup`（选项 1），用 `ima2 status` 确认状态，然后重启 `ima2 serve`。
 
 **在代理/VPN 网络下反复出现 `fetch failed`**
-请先确认本地 OAuth proxy 可以访问。如果你的网络需要代理，请在代理客户端里开启 TUN/TURN 类似的转发模式，然后重试 `npx openai-oauth --port 10531`。如果仍然失败，请在运行 `ima2 serve` 或 `openai-oauth` 的同一个终端里设置 `HTTP_PROXY` 和 `HTTPS_PROXY`。
+请先确认本地 OAuth proxy 可以访问。如果你的网络需要代理，请在代理客户端里开启 TUN/TURN 类似的转发模式，然后重试 `openai-oauth --port 10531`。如果仍然失败，请在运行 `ima2 serve` 或 `openai-oauth` 的同一个终端里设置 `HTTP_PROXY` 和 `HTTPS_PROXY`。
 
 **生成图片时返回 `API_KEY_REQUIRED`**
 `provider: "api"` 请求没有可用 API key。请配置 API key，或切换到 OAuth provider。

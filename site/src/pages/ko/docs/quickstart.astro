@@ -14,12 +14,14 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
   <p class="docs-eyebrow">시작하기</p>
   <h1>빠른 시작</h1>
   <p class="lead">
-    <code>npx</code>로 실행하고 인증 방식을 고르면 바로 이미지와 영상을 만들 수 있습니다.
+    전역 설치 후 인증 방식을 고르면 바로 이미지와 영상을 만들 수 있습니다.
     기본 OAuth 경로에는 API 키가 필요 없습니다.
   </p>
 
-  <h2>실행</h2>
-  <pre><code>npx ima2-gen serve</code></pre>
+  <h2>설치 및 실행</h2>
+  <pre><code>npm install -g ima2-gen
+ima2 setup
+ima2 serve</code></pre>
   <p>그다음 <code>http://localhost:3333</code>을 엽니다.</p>
 
   <div class="docs-callout docs-callout-info">
@@ -37,15 +39,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
     <li><strong>API Key</strong> — OpenAI API 키 입력 (유료)</li>
   </ol>
   <p>영상 생성은 Grok OAuth(2번 또는 3번)가 필요합니다. 나중에 <code>ima2 grok login</code>으로 추가할 수도 있고, 이 명령은 manual-paste 흐름을 기본으로 씁니다.</p>
-
-  <h2>ChatGPT 로그인</h2>
-  <p>아직 ChatGPT OAuth에 로그인하지 않았다면:</p>
-  <pre><code>npx @openai/codex login
-npx ima2-gen serve</code></pre>
-
-  <h2>전역 설치</h2>
-  <pre><code>npm install -g ima2-gen
-ima2 serve</code></pre>
+  <p>GPT OAuth 토큰이 만료되면 <code>ima2 setup</code>을 다시 실행하세요(옵션 1).</p>
   <div class="docs-callout docs-callout-warn">
     <strong>Windows 업데이트 주의.</strong> 전역 설치를 업데이트하기 전에 실행 중인
     <code>ima2 serve</code>를 종료하세요. npm이 <code>EBUSY</code> 또는

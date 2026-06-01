@@ -11,7 +11,7 @@ For Korean, see [FAQ.ko.md](FAQ.ko.md).
 | Symptom | Try first |
 |---|---|
 | The server is unreachable | Run `ima2 serve`, then `ima2 ping`. |
-| GPT OAuth login fails | Run `npx @openai/codex login`, then restart `ima2 serve`. |
+| GPT OAuth login fails | Re-run `ima2 setup` (option 1), then restart `ima2 serve`. |
 | API key provider says `API_KEY_REQUIRED` | Configure an API key, or switch back to the GPT OAuth provider. |
 | Old gallery images look missing | Run `ima2 doctor`, then see [Recover Old Generated Images](RECOVER_OLD_IMAGES.md). |
 | `gpt-5.5` fails | Update Codex CLI first, then try `gpt-5.4` as the stable fallback. |
@@ -27,22 +27,17 @@ For Korean, see [FAQ.ko.md](FAQ.ko.md).
 
 Use Node.js 20 or newer. The package declares Node `>=20`, and the README badge follows that requirement.
 
-### Should I use `npx` or a global install?
+### How do I install?
 
-Both are supported.
-
-```bash
-npx ima2-gen serve
-```
-
-or:
+Install globally with npm:
 
 ```bash
 npm install -g ima2-gen
+ima2 setup
 ima2 serve
 ```
 
-If an old global install behaves strangely, update first:
+If an old install behaves strangely, update first:
 
 ```bash
 npm install -g ima2-gen@latest
@@ -91,7 +86,7 @@ It means `ima2-gen` found a valid API key. API-key mode can generate, edit, run 
 Yes. `ima2-gen` checks for an existing Codex login and uses the local GPT OAuth path. If detection fails or the token expires, run:
 
 ```bash
-npx @openai/codex login
+ima2 setup     # re-run option 1 (GPT OAuth)
 ima2 doctor
 ```
 
@@ -102,7 +97,7 @@ Then restart `ima2 serve`.
 Your Codex/ChatGPT OAuth session needs to be refreshed.
 
 ```bash
-npx @openai/codex login
+ima2 setup     # re-run option 1 (GPT OAuth)
 ima2 serve
 ```
 
@@ -323,7 +318,7 @@ This usually means the local OAuth proxy cannot reach the upstream service throu
 Try:
 
 ```bash
-npx openai-oauth --port 10531
+openai-oauth --port 10531
 ```
 
 If your network requires a proxy, enable your proxy client's TUN/TURN-style mode so terminal processes can use it. On Windows, also temporarily disable auto-start DNS or fragmentation bypass tools such as SecretDNS and retry. If that is not enough, set the proxy variables in the same terminal that runs `openai-oauth` or `ima2 serve`:
@@ -348,7 +343,7 @@ ima2 doctor
 ima2 status
 ima2 ping
 ima2 ps
-npx @openai/codex login
+ima2 setup
 npm install -g ima2-gen@latest
 ```
 

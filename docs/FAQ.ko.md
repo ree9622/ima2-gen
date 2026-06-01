@@ -11,7 +11,7 @@ English version: [FAQ.md](FAQ.md)
 | 증상 | 먼저 해볼 것 |
 |---|---|
 | 서버에 연결되지 않음 | `ima2 serve`를 켠 뒤 `ima2 ping`을 실행합니다. |
-| GPT OAuth 로그인이 안 됨 | `npx @openai/codex login`을 실행하고 `ima2 serve`를 다시 시작합니다. |
+| GPT OAuth 로그인이 안 됨 | `ima2 setup`을 다시 실행하고(옵션 1) `ima2 serve`를 다시 시작합니다. |
 | API key provider가 `API_KEY_REQUIRED`를 반환함 | API 키를 설정하거나 GPT OAuth 공급자로 다시 전환합니다. |
 | 업데이트 후 예전 이미지가 안 보임 | `ima2 doctor`를 실행한 뒤 [예전 이미지 복구 안내](RECOVER_OLD_IMAGES.md)를 확인합니다. |
 | `gpt-5.5`만 실패함 | Codex CLI를 업데이트하고, 안정 대안으로 `gpt-5.4`를 사용합니다. |
@@ -27,22 +27,17 @@ English version: [FAQ.md](FAQ.md)
 
 Node.js 20 이상을 권장합니다. 패키지 요구사항은 Node `>=20`입니다.
 
-### `npx`와 전역 설치 중 무엇을 쓰면 되나요?
+### 어떻게 설치하나요?
 
-둘 다 가능합니다.
-
-```bash
-npx ima2-gen serve
-```
-
-또는:
+npm 전역 설치를 권장합니다.
 
 ```bash
 npm install -g ima2-gen
+ima2 setup
 ima2 serve
 ```
 
-예전 전역 설치가 이상하게 동작하면 먼저 최신 버전으로 올려 주세요.
+예전 설치가 이상하게 동작하면 먼저 최신 버전으로 올려 주세요.
 
 ```bash
 npm install -g ima2-gen@latest
@@ -85,7 +80,7 @@ API 키를 설정하면 이미지 생성 엔드포인트도 `provider: "api"`로
 네. `ima2-gen`은 기존 Codex 로그인 상태를 확인하고 로컬 GPT OAuth 경로를 사용합니다. 감지에 실패하거나 토큰이 만료되면 다음을 실행하세요.
 
 ```bash
-npx @openai/codex login
+ima2 setup     # 옵션 1 (GPT OAuth) 다시 실행
 ima2 doctor
 ```
 
@@ -96,7 +91,7 @@ ima2 doctor
 Codex/ChatGPT OAuth 세션을 다시 로그인해야 합니다.
 
 ```bash
-npx @openai/codex login
+ima2 setup     # 옵션 1 (GPT OAuth) 다시 실행
 ima2 serve
 ```
 
@@ -312,7 +307,7 @@ generated base64는 공유하지 마세요.
 먼저 시도하세요.
 
 ```bash
-npx openai-oauth --port 10531
+openai-oauth --port 10531
 ```
 
 프록시가 필요한 네트워크라면 터미널 프로세스도 프록시를 타도록 프록시 클라이언트의 TUN/TURN류 모드를 켜세요. Windows에서는 SecretDNS처럼 부팅 때 자동 실행되는 DNS/파편화 우회 프로그램도 잠시 끄고 재시도해 보세요. 그래도 안 되면 `openai-oauth` 또는 `ima2 serve`를 실행하는 같은 터미널에 프록시 환경 변수를 설정합니다.
@@ -337,7 +332,7 @@ ima2 doctor
 ima2 status
 ima2 ping
 ima2 ps
-npx @openai/codex login
+ima2 setup
 npm install -g ima2-gen@latest
 ```
 

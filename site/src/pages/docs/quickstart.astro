@@ -14,12 +14,14 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   <p class="docs-eyebrow">Getting Started</p>
   <h1>Quickstart</h1>
   <p class="lead">
-    Run it with <code>npx</code>, choose your auth method, and start generating images and videos.
+    Install globally, choose your auth method, and start generating images and videos.
     No API key required for the default OAuth paths.
   </p>
 
-  <h2>Run it</h2>
-  <pre><code>npx ima2-gen serve</code></pre>
+  <h2>Install and run</h2>
+  <pre><code>npm install -g ima2-gen
+ima2 setup
+ima2 serve</code></pre>
   <p>Then open <code>http://localhost:3333</code>.</p>
 
   <div class="docs-callout docs-callout-info">
@@ -29,7 +31,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   </div>
 
   <h2>Setup (choose auth)</h2>
-  <p>Run <code>ima2 setup</code> to pick your authentication method:</p>
+  <p><code>ima2 setup</code> offers four authentication methods:</p>
   <ol>
     <li><strong>GPT OAuth</strong> — sign in with ChatGPT (free, images only)</li>
     <li><strong>Grok OAuth</strong> — sign in with xAI/Grok (images + video)</li>
@@ -37,15 +39,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     <li><strong>API Key</strong> — paste your OpenAI API key (paid)</li>
   </ol>
   <p>Video generation requires Grok OAuth (option 2 or 3). Add it later with <code>ima2 grok login</code>, which defaults to the manual-paste flow.</p>
-
-  <h2>Sign in with ChatGPT</h2>
-  <p>If ChatGPT OAuth is not logged in yet:</p>
-  <pre><code>npx @openai/codex login
-npx ima2-gen serve</code></pre>
-
-  <h2>Install globally</h2>
-  <pre><code>npm install -g ima2-gen
-ima2 serve</code></pre>
+  <p>If your GPT OAuth token expires, re-run <code>ima2 setup</code> (option 1) to refresh it.</p>
   <div class="docs-callout docs-callout-warn">
     <strong>Windows update note.</strong> Stop any running <code>ima2 serve</code> before updating a
     global install. If npm reports <code>EBUSY</code> or <code>resource busy or locked</code>, close

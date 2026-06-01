@@ -1038,7 +1038,7 @@
     },
     "authChatgptExpired": {
       "title": "Codex ChatGPT session expired",
-      "body": "Run `npx @openai/codex login` in your terminal, then reload this app.",
+      "body": "Run `ima2 setup` in your terminal (option 1), then reload this app.",
       "cta": "Reload"
     },
     "authApiKeyInvalid": {

@@ -29,7 +29,7 @@ const en: Dict = {
   'hero.h1.em': 'love.',
   'hero.sub':
     "An AI studio for the way you actually iterate. Generate images in Classic, fan out in Node, create videos with Grok, and clean up in Canvas. Free ChatGPT + SuperGrok is all you need.",
-  'hero.cta.cmd': 'npx ima2-gen serve',
+  'hero.cta.cmd': 'npm install -g ima2-gen && ima2 serve',
   'hero.cross.lang': '한국어 README →',
   'hero.shot.alt':
     'ima2-gen video playback with gallery sidebar showing generated images and videos.',
@@ -117,7 +117,7 @@ const en: Dict = {
   'install.tag': '06 · Get going',
   'install.h.before': 'One command. ',
   'install.h.em': 'Then iterate.',
-  'install.lede': 'Run it with npx. Sign in with ChatGPT or Grok. Start creating.',
+  'install.lede': 'Install globally. Sign in with ChatGPT or Grok. Start creating.',
   'install.badge.npm': 'npm v1.1.18',
   'install.badge.node': 'Node ≥20',
   'install.badge.mit': 'MIT',
@@ -227,7 +227,7 @@ const ko: Dict = {
   'hero.h1.em': '펼치기.',
   'hero.sub':
     '이미지 한 장으로 끝나지 않잖아요. Classic으로 만들고, Node로 방향을 나누고, Video로 움직이게 하고, Canvas로 마무리하세요. 무료 ChatGPT + SuperGrok이면 충분합니다.',
-  'hero.cta.cmd': 'npx ima2-gen serve',
+  'hero.cta.cmd': 'npm install -g ima2-gen && ima2 serve',
   'hero.cross.lang': 'English landing →',
   'hero.shot.alt':
     'ima2-gen 비디오 재생 화면 — 갤러리 사이드바에 생성된 이미지와 영상 목록.',

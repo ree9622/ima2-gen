@@ -10,33 +10,23 @@
 
 `ima2-gen` は、無料の ChatGPT と SuperGrok だけで画像と動画を作れるローカル AI スタジオです。
 
-`npx` で起動し、ChatGPT または Grok OAuth でログインすれば、すぐに画像・動画生成を始められます。API キー不要で、ノード分岐、multimode batch、Grok Video、Canvas Mode まで全機能が使えます。
+グローバルインストールし、ChatGPT または Grok OAuth でログインすれば、すぐに画像・動画生成を始められます。API キー不要で、ノード分岐、multimode batch、Grok Video、Canvas Mode まで全機能が使えます。
 
 ![プロンプト入力、生成画像、モデル表示、結果メタデータが見える ima2-gen classic 画面](../assets/screenshots/classic-generate-light.png)
 
 ## Quick Start
 
 ```bash
-npx ima2-gen serve
+npm install -g ima2-gen
+ima2 setup
+ima2 serve
 ```
 
 その後、`http://localhost:3333` を開きます。
 
-Codex にまだログインしていない場合:
-
-```bash
-npx @openai/codex login
-npx ima2-gen serve
-```
-
 `3333` がすでに使われている場合、次に空いているポートで起動し、実際の URL は `~/.ima2/server.json` に書き込まれます。ポートを決め打ちせず、terminal に表示された URL または `ima2 open` を使ってください。
 
-グローバルインストールもできます。
-
-```bash
-npm install -g ima2-gen
-ima2 serve
-```
+> **npx を使いたい場合は?** [NPX_QUICKSTART.md](NPX_QUICKSTART.md) を参照してください。
 
 ## できること
 
@@ -194,7 +184,7 @@ Endpoint 一覧は [API Reference](API.md) に分離しました。
 まず `ima2 serve` を起動し、`~/.ima2/server.json` を確認してください。`ima2 ping --server http://localhost:3333` も使えます。
 
 **OAuth login がうまくいかない**
-`npx @openai/codex login` を実行し、`ima2 status` を確認してから `ima2 serve` を再起動してください。
+`ima2 setup` を再実行（オプション 1）し、`ima2 status` を確認してから `ima2 serve` を再起動してください。
 
 **画像生成が `API_KEY_REQUIRED` で失敗する**
 `provider: "api"` request に使う API key が設定されていません。API key を設定するか OAuth provider に切り替えてください。

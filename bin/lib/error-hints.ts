@@ -8,7 +8,7 @@ const HINTS: Record<string, string> = {
   NETWORK_FAILED: "Network/proxy failed. This is not a moderation refusal.",
   SAFETY_REFUSAL: "The image backend refused this generation.",
   MODERATION_REFUSED: "The prompt or image was rejected by moderation.",
-  AUTH_CHATGPT_EXPIRED: "Run `npx @openai/codex login`, then restart `ima2 serve`.",
+  AUTH_CHATGPT_EXPIRED: "Re-run `ima2 setup` (option 1), then restart `ima2 serve`.",
   REF_TOO_LARGE: "Reference image is too large. Resize/compress it and retry.",
   REF_NOT_BASE64: "Reference payload is invalid. Use a normal PNG/JPEG/WebP file.",
 };

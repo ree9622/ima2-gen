@@ -1038,7 +1038,7 @@
     },
     "authChatgptExpired": {
       "title": "Codex ChatGPT 로그인이 만료됐어요",
-      "body": "터미널에서 `npx @openai/codex login`을 다시 실행한 뒤 앱을 새로고침해 주세요.",
+      "body": "터미널에서 `ima2 setup`을 다시 실행한 뒤(옵션 1) 앱을 새로고침해 주세요.",
       "cta": "새로고침"
     },
     "authApiKeyInvalid": {

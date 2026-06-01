@@ -12,33 +12,23 @@
 
 `ima2-gen`은 무료 ChatGPT와 SuperGrok만으로 이미지와 영상을 만드는 로컬 AI 스튜디오입니다.
 
-`npx` 한 줄로 실행하고, ChatGPT 또는 Grok OAuth로 로그인하면 바로 시작됩니다. API 키 없이 이미지 생성, 비디오 생성, 노드 분기, 멀티모드 배치, Canvas 정리까지 전부 가능합니다.
+전역 설치 후 ChatGPT 또는 Grok OAuth로 로그인하면 바로 시작됩니다. API 키 없이 이미지 생성, 비디오 생성, 노드 분기, 멀티모드 배치, Canvas 정리까지 전부 가능합니다.
 
 ![프롬프트 작성창, 생성 이미지, 모델 표시, 결과 메타데이터가 보이는 ima2-gen 클래식 생성 화면](../assets/screenshots/classic-generate-light.png)
 
 ## 빠른 시작
 
 ```bash
-npx ima2-gen serve
+npm install -g ima2-gen
+ima2 setup
+ima2 serve
 ```
 
 그다음 `http://localhost:3333`을 엽니다.
 
-Codex 로그인이 아직 없다면:
-
-```bash
-npx @openai/codex login
-npx ima2-gen serve
-```
-
 `3333`이 이미 사용 중이면 다음 사용 가능한 포트로 열리고 실제 URL은 `~/.ima2/server.json`에 기록됩니다. 포트를 추측하지 말고 터미널에 출력된 URL이나 `ima2 open`을 사용하세요.
 
-전역 설치도 가능합니다.
-
-```bash
-npm install -g ima2-gen
-ima2 serve
-```
+> **npx로 실행하고 싶다면?** [NPX_QUICKSTART.md](NPX_QUICKSTART.md)를 참고하세요.
 
 ### 설정
 
@@ -226,10 +216,10 @@ environment variables > ~/.ima2/config.json > built-in defaults
 `ima2 serve`를 먼저 실행하고 `~/.ima2/server.json`을 확인하세요. `ima2 ping --server http://localhost:3333`도 사용할 수 있습니다.
 
 **GPT OAuth 로그인이 안 돼요**
-`npx @openai/codex login`을 실행하고, `ima2 status`를 확인한 뒤 `ima2 serve`를 다시 시작하세요.
+`ima2 setup`을 다시 실행하고(옵션 1), `ima2 status`를 확인한 뒤 `ima2 serve`를 다시 시작하세요.
 
 **프록시/VPN 환경에서 `fetch failed`가 반복돼요**
-로컬 OAuth 프록시가 접근 가능한지 확인하세요. 프록시가 필요한 네트워크라면 프록시 클라이언트의 TUN/TURN류 모드를 켠 뒤 `npx openai-oauth --port 10531`을 다시 시도하세요. 그래도 실패하면 `ima2 serve` 또는 `openai-oauth`를 실행하는 같은 터미널에 `HTTP_PROXY`와 `HTTPS_PROXY`를 설정하세요.
+로컬 OAuth 프록시가 접근 가능한지 확인하세요. 프록시가 필요한 네트워크라면 프록시 클라이언트의 TUN/TURN류 모드를 켠 뒤 `openai-oauth --port 10531`을 다시 시도하세요. 그래도 실패하면 `ima2 serve` 또는 `openai-oauth`를 실행하는 같은 터미널에 `HTTP_PROXY`와 `HTTPS_PROXY`를 설정하세요.
 
 **이미지 생성이 `API_KEY_REQUIRED`로 실패해요**
 `provider: "api"` 요청에 사용할 API 키가 설정되어 있지 않다는 뜻입니다. API 키를 설정하거나 GPT OAuth 공급자로 전환하세요.

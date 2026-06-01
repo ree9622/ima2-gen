@@ -16,24 +16,19 @@
 
 `ima2-gen` is a local image generation studio for people who want the ChatGPT/Codex image workflow in a small desktop-like web app.
 
-Run it with `npx`, sign in with ChatGPT OAuth or Grok OAuth, and start generating images and videos. Iterate with history, references, node branches, multimode batches, Canvas Mode cleanup, and Grok Video generation. No API key required — free ChatGPT OAuth and SuperGrok subscription cover everything.
+Install globally, sign in with ChatGPT OAuth or Grok OAuth, and start generating images and videos. Iterate with history, references, node branches, multimode batches, Canvas Mode cleanup, and Grok Video generation. No API key required — free ChatGPT OAuth and SuperGrok subscription cover everything.
 
 ![ima2-gen video playback with gallery sidebar showing generated images and videos.](assets/screenshots/classic-generate-light.png)
 
 ## Quick Start
 
 ```bash
-npx ima2-gen serve
+npm install -g ima2-gen
+ima2 setup
+ima2 serve
 ```
 
 Then open `http://localhost:3333`.
-
-If Codex is not logged in yet:
-
-```bash
-npx @openai/codex login
-npx ima2-gen serve
-```
 
 To generate a video from the CLI:
 
@@ -44,12 +39,7 @@ ima2 video "animate this scene" --ref photo.png --duration 10
 
 If `3333` is already occupied, `ima2-gen` binds the next available port and writes the actual URL to `~/.ima2/server.json`. Use `ima2 open` or the URL printed in the terminal instead of assuming the port.
 
-You can also install it globally:
-
-```bash
-npm install -g ima2-gen
-ima2 serve
-```
+> **Using npx?** See [docs/NPX_QUICKSTART.md](docs/NPX_QUICKSTART.md) for the `npx ima2-gen serve` workflow.
 
 ### Setup
 
@@ -271,10 +261,10 @@ Useful references:
 Start `ima2 serve`, then check `~/.ima2/server.json`. You can also run `ima2 ping --server http://localhost:3333`.
 
 **GPT OAuth login does not work**
-Run `npx @openai/codex login`, confirm `ima2 status`, then restart `ima2 serve`.
+Re-run `ima2 setup` (option 1), confirm `ima2 status`, then restart `ima2 serve`.
 
 **`fetch failed` repeats on a proxy/VPN network**
-Check that the local OAuth proxy is reachable. On networks that require a proxy, enable your proxy client's TUN/TURN-style mode, then retry `npx openai-oauth --port 10531`. If it still fails, set `HTTP_PROXY` and `HTTPS_PROXY` in the same terminal that runs `ima2 serve` or `openai-oauth`. On Windows, also check for auto-start network interception tools, including DNS/fragmentation bypass tools such as SecretDNS, because they can break OAuth or streaming image responses even when the browser appears connected.
+Check that the local OAuth proxy is reachable. On networks that require a proxy, enable your proxy client's TUN/TURN-style mode, then retry `openai-oauth --port 10531`. If it still fails, set `HTTP_PROXY` and `HTTPS_PROXY` in the same terminal that runs `ima2 serve` or `openai-oauth`. On Windows, also check for auto-start network interception tools, including DNS/fragmentation bypass tools such as SecretDNS, because they can break OAuth or streaming image responses even when the browser appears connected.
 
 **Images fail with `API_KEY_REQUIRED`**
 Set `OPENAI_API_KEY` or configure an API key before using `provider: "api"`. The default GPT OAuth path still works without an API key.

@@ -68,7 +68,26 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       } = req.body;
       const storyboardActive = req.body?.storyboard === true;
       const storyboardPrefix = storyboardActive
-        ? "[STORYBOARD MODE] This image is part of a sequential storyboard. Maintain character visual descriptions verbatim from previous frames. Change only the action, shot scale, or camera angle — keep lighting, environment, and character design constant.\n\n"
+        ? [
+          "[STORYBOARD MODE — Sequential Keyframe Generation]",
+          "This image is a keyframe in a multi-shot storyboard sequence.",
+          "",
+          "CHARACTER LOCK:",
+          "- Copy the character's visual description VERBATIM from the reference/previous frame.",
+          "- Identify characters by 2-3 most distinctive visual identifiers (clothing color + physique + props), never by name alone.",
+          "- Do NOT rephrase, simplify, or drift from the established character design.",
+          "",
+          "SCENE CONTINUITY:",
+          "- Keep lighting direction, color palette, environment, and art style identical to prior frames.",
+          "- Change ONLY the action, shot scale, camera angle, or expression — nothing else.",
+          "- If a reference image is provided, treat it as the canonical visual anchor.",
+          "",
+          "COMPOSITION:",
+          "- Use descriptive caption format: shot type + subject action + environment + technical details + mood.",
+          "- Specify camera (e.g. medium shot, wide establishing, close-up) and any movement intent.",
+          "- Maintain consistent aspect ratio and framing style across the sequence.",
+          "",
+        ].join("\n") + "\n"
         : "";
       const composerPrompt = normalizeComposerPrompt(req.body?.composerPrompt);
       const composerInsertedPrompts = normalizeComposerInsertedPrompts(

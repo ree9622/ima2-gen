@@ -117,7 +117,28 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       if (provider !== "grok") return fail(400, "VIDEO_PROVIDER_UNSUPPORTED", "video generation requires provider 'grok'");
       const storyboardActive = req.body?.storyboard === true;
       const storyboardPrefix = storyboardActive
-        ? "[STORYBOARD MODE] This clip is part of a sequential storyboard. Continue from the previous frame's composition. Maintain character visual descriptions verbatim. Keep lighting and environment constant.\n\n"
+        ? [
+          "[STORYBOARD MODE — Sequential Video Clip]",
+          "This video clip is part of a multi-shot storyboard sequence.",
+          "",
+          "CHARACTER LOCK:",
+          "- Identify each character by VISUAL APPEARANCE (clothing, physique, position, props), not by name.",
+          "- Copy character descriptions verbatim from the previous clip's context. Do not rephrase.",
+          "",
+          "CONTINUITY:",
+          "- Continue from the previous frame's exact composition, pose, and spatial arrangement.",
+          "- Maintain lighting direction, color palette, environment, and style across shots.",
+          "- Describe only what CHANGES: action, camera movement, dialogue, sound.",
+          "",
+          "PROMPT STRUCTURE:",
+          "- Shot type + camera motion → subject action → environment → dialogue/audio → ending frame.",
+          "- Use cinematography terms: dolly, pan, tracking, crane, static, medium/wide/close-up.",
+          "- For dialogue: state who speaks (by appearance), exact line (original language), timing.",
+          "",
+          "ENDING FRAME:",
+          "- Every clip must end on a stable frame suitable for continuation to the next shot.",
+          "",
+        ].join("\n") + "\n"
         : "";
       const activePrompt = requireActiveVideoPrompt(prompt);
       if (!activePrompt) return fail(400, "PROMPT_REQUIRED", "Prompt is required", { guidance: ACTIVE_VIDEO_PROMPT_GUIDANCE });

@@ -147,6 +147,10 @@ export default async function videoCmd(argv) {
         die(2, "max 7 --ref attachments for video");
     if (refs.length >= 2 && duration > 10)
         die(2, "--duration must be between 1 and 10 when using 2 or more --ref attachments");
+    const timeoutSeconds = parseIntegerFlag(args.timeout, 600, "--timeout");
+    if (timeoutSeconds < 1)
+        die(2, "--timeout must be at least 1");
+    const timeoutMs = timeoutSeconds * 1000;
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });
@@ -159,10 +163,6 @@ export default async function videoCmd(argv) {
         const buf = await readFile(p);
         return buf.toString("base64");
     }));
-    const timeoutSeconds = parseIntegerFlag(args.timeout, 600, "--timeout");
-    if (timeoutSeconds < 1)
-        die(2, "--timeout must be at least 1");
-    const timeoutMs = timeoutSeconds * 1000;
     const requestId = `req_cli_video_${Date.now().toString(36)}`;
     const body = {
         prompt,

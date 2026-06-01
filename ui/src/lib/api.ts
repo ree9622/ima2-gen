@@ -1077,6 +1077,7 @@ export type VideoGenerateRequest = {
   clientNodeId?: string | null;
   clientRequestId?: string;
   requestId?: string;
+  storyboard?: boolean;
 };
 
 export type VideoGenerateDone = {

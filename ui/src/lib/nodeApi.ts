@@ -18,6 +18,7 @@ export type NodeGenerateRequest = {
   requestId?: string;
   sessionId?: string | null;
   clientNodeId?: string | null;
+  storyboard?: boolean;
 };
 
 export type NodeGenerateResponse = {

@@ -286,6 +286,7 @@
     "tokens": "{n} tokens",
     "open": "Open Canvas",
     "openAria": "Open image in canvas mode",
+    "dragToComposer": "Drag to composer as reference",
     "close": "Close Canvas",
     "blank": {
       "title": "Blank canvas",

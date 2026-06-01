@@ -25,6 +25,37 @@
   object-fit: contain;
 }
 
+.result-preview-frame {
+  position: relative;
+}
+
+.result-drag-handle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--text-dim);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.result-preview-frame:hover .result-drag-handle {
+  opacity: 1;
+}
+
+.result-drag-handle:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
 .result-prompt {
   flex: 0 0 auto;
   width: min(100%, 720px);

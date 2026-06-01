@@ -200,23 +200,37 @@ export function Canvas() {
             onPointerCancel={viewer.handlePointerUp}
           >
             {isVideoItem(currentImage) ? (
-              <video
-                className="result-img"
-                key={imageKey ?? undefined}
-                src={imageSrc}
-                controls
-                autoPlay
-                loop
-                playsInline
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("application/ima2-ref", JSON.stringify(buildVideoDragPayload(currentImage)));
-                  e.dataTransfer.effectAllowed = "copy";
-                }}
-                style={{
-                  transform: `translate(${viewer.pan.x}px, ${viewer.pan.y}px) scale(${viewer.zoom})`,
-                }}
-              />
+              <>
+                <video
+                  className="result-img"
+                  key={imageKey ?? undefined}
+                  src={imageSrc}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  style={{
+                    transform: `translate(${viewer.pan.x}px, ${viewer.pan.y}px) scale(${viewer.zoom})`,
+                  }}
+                />
+                <div
+                  className="result-drag-handle"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/ima2-ref", JSON.stringify(buildVideoDragPayload(currentImage)));
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
+                  title={t("canvas.dragToComposer")}
+                  aria-label={t("canvas.dragToComposer")}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                </div>
+              </>
             ) : (
               <img
                 className="result-img"

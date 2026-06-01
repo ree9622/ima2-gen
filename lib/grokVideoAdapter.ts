@@ -95,7 +95,7 @@ function videoConfig(ctx: RouteRuntimeContext): VideoConfig {
     startTimeoutMs: g.videoStartTimeoutMs || 60_000,
     pollIntervalMs: g.videoPollIntervalMs || 5_000,
     totalTimeoutMs: g.videoTimeoutMs || 900_000,
-    plannerModel: g.plannerModel || "grok-4.3",
+    plannerModel: g.plannerModel || "grok-composer-2.5-fast",
     plannerTimeoutMs: g.plannerTimeoutMs || 60_000,
   };
 }
@@ -180,7 +180,7 @@ export function buildGrokVideoPlannerPayload(
     }
   }
   return {
-    model: opts.plannerModel || "grok-4.3",
+    model: opts.plannerModel || "grok-composer-2.5-fast",
     stream: false,
     parallel_tool_calls: false,
     messages: [

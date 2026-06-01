@@ -941,7 +941,11 @@
     },
     "grokCompatibility": {
       "title": "Grok 호환성",
-      "body": "Grok 이미지 생성은 grok-4.3이 먼저 필수 웹 검색을 수행하고, 그 다음 텍스트와 첨부 이미지를 함께 보는 image-tool planner가 최종 이미지 프롬프트를 영어로 작성한 뒤 xAI Images API로 실행됩니다. 첨부 레퍼런스는 xAI 이미지 편집 경로로 유지되고, 크기는 aspect ratio/resolution으로 매핑됩니다. 출력 포맷·모더레이션·추론은 GPT OAuth/API 키 공급자에서만 사용됩니다."
+      "body": "Grok 이미지 생성은 먼저 필수 웹 검색을 수행하고, 그 다음 텍스트와 첨부 이미지를 함께 보는 image-tool planner가 최종 이미지 프롬프트를 영어로 작성한 뒤 xAI Images API로 실행됩니다. 첨부 레퍼런스는 xAI 이미지 편집 경로로 유지되고, 크기는 aspect ratio/resolution으로 매핑됩니다. 출력 포맷·모더레이션·추론은 GPT OAuth/API 키 공급자에서만 사용됩니다."
+    },
+    "grokPlanner": {
+      "title": "Grok planner 모델",
+      "body": "검색과 이미지/비디오 프롬프트 기획에 사용하는 모델입니다. grok-composer-2.5-fast가 더 빠르고 저렴하며, grok-4.3은 기존 기본값입니다."
     },
     "gallery": {
       "defaultScopeTitle": "기본 갤러리 보기",

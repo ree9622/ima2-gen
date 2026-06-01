@@ -9,6 +9,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { HistoryStripLayoutToggle } from "./HistoryStripLayoutToggle";
 import { WorkspaceProfileSettings } from "./settings/WorkspaceProfileSettings";
 import { QuotaCard } from "./settings/QuotaCard";
+import { GrokPlannerSelect } from "./settings/GrokPlannerSelect";
 import { useAppStore } from "../store/useAppStore";
 import type { GalleryScope } from "../store/useAppStore";
 import { useI18n } from "../i18n";
@@ -219,12 +220,15 @@ export function SettingsWorkspace() {
                 </div>
               </article>
               {provider === "grok" ? (
-                <article className="settings-row">
-                  <div className="settings-row__copy">
-                    <h4>{t("settings.grokCompatibility.title")}</h4>
-                    <p>{t("settings.grokCompatibility.body")}</p>
-                  </div>
-                </article>
+                <>
+                  <article className="settings-row">
+                    <div className="settings-row__copy">
+                      <h4>{t("settings.grokCompatibility.title")}</h4>
+                      <p>{t("settings.grokCompatibility.body")}</p>
+                    </div>
+                  </article>
+                  <GrokPlannerSelect />
+                </>
               ) : (
                 <>
                   <article className="settings-row">

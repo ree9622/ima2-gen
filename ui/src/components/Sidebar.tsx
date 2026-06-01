@@ -37,8 +37,8 @@ export function SidebarStack() {
       <div className="logo">
         <div className="logo-mark" aria-hidden="true" />
         <div className="logo-copy">
-          <div className="logo-title">ima2-gen</div>
-          <div className="logo-subtitle">gpt-image-2 studio</div>
+          <div className="logo-title">ima2</div>
+          <div className="logo-title logo-title--gen">gen</div>
         </div>
         <div className="logo-actions">
           <PromptLibraryButton />

@@ -593,22 +593,21 @@ body {
 
 .logo-title {
   color: var(--text);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.04em;
-  line-height: 1.05;
+  line-height: 1.0;
 }
 
-.logo-subtitle {
-  margin-top: 4px;
-  color: var(--text-dim);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.logo-title--gen {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .lang-toggle {
@@ -1666,7 +1665,7 @@ body {
   display: inline-flex;
   align-items: center;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .image-model-select__trigger {
@@ -1693,12 +1692,12 @@ body {
 .image-model-select__trigger--pill {
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 4px 10px;
+  gap: 2px;
+  padding: 5px 14px;
   border: 1.5px solid var(--blue);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--accent-soft);
-  min-width: 72px;
+  min-width: 90px;
   height: auto;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -1728,11 +1727,11 @@ body {
 
 .image-model-select__trigger-args {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-faint);
   letter-spacing: 0.02em;
   white-space: nowrap;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .image-model-select__trigger-separator {

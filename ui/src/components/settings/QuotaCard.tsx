@@ -28,7 +28,7 @@ function barColor(pct: number): string {
 function formatReset(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function CodexIcon() {

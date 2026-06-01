@@ -25,9 +25,8 @@ export async function continueFromItem(item: ContinueableItem): Promise<Continue
   const isVideo = isVideoItem(item as Pick<GenerateItem, "filename" | "url" | "image">);
   const hasPrompt = Boolean(item.prompt);
 
-  if (hasPrompt && !isVideo) {
-    store.setPrompt(item.prompt as string);
-  }
+  store.clearReferences();
+  store.setPrompt(hasPrompt && !isVideo ? (item.prompt as string) : "");
 
   if (isVideo) {
     const videoSrc = item.url || item.image;

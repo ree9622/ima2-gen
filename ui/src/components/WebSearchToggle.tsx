@@ -14,7 +14,7 @@ export function WebSearchToggle({ variant = "label" }: WebSearchToggleProps) {
   return (
     <button
       type="button"
-      className={`web-search-toggle web-search-toggle--${variant}${webSearchEnabled ? " is-active" : ""}`}
+      className={`${variant === "compact" ? "composer__tool " : ""}web-search-toggle web-search-toggle--${variant}${webSearchEnabled ? " is-active" : ""}`}
       onClick={() => setWebSearchEnabled(!webSearchEnabled)}
       aria-pressed={webSearchEnabled}
       aria-label={label}

@@ -214,6 +214,9 @@ async function serve(serveArgs: string[] = []) {
 
   process.on("SIGINT", () => killProcessTree(child.pid));
   process.on("SIGTERM", () => killProcessTree(child.pid));
+  if (process.platform === "win32") {
+    process.on("SIGBREAK", () => killProcessTree(child.pid));
+  }
 }
 
 async function showStatus() {

@@ -1,0 +1,13 @@
+# Exclude TypeScript source files from npm package (compiled .js files are published)
+**/*.ts
+!**/*.d.ts
+*.ts
+
+# Development
+site/
+scripts/
+devlog/
+tests/
+tsconfig*.json
+.github/
+.claude/

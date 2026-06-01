@@ -1903,7 +1903,8 @@ body {
   color: var(--text);
 }
 .right-panel-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
   padding: 3px;
   border: 1px solid var(--border);
@@ -1911,7 +1912,6 @@ body {
   background: var(--surface-2);
 }
 .right-panel-tabs__button {
-  flex: 1 1 0;
   min-width: 0;
   min-height: 30px;
   padding: 6px 8px;
@@ -1936,6 +1936,9 @@ body {
   background: var(--control-bg);
   color: var(--text);
   box-shadow: 0 1px 0 var(--hairline);
+}
+.right-panel-tabs__button--full {
+  grid-column: 1 / -1;
 }
 .right-panel-settings {
   display: flex;

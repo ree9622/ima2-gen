@@ -115,7 +115,7 @@ export function RightPanel() {
               type="button"
               role="tab"
               aria-selected={activeTab === "library"}
-              className={`right-panel-tabs__button${activeTab === "library" ? " active" : ""}`}
+              className={`right-panel-tabs__button right-panel-tabs__button--full${activeTab === "library" ? " active" : ""}`}
               onClick={() => setTab("library")}
             >
               {t("promptLibrary.title")}

@@ -76,6 +76,12 @@ jobs:
           if [ $EXIT_CODE -ne 0 ]; then
             echo "::warning::Server exited with non-zero code $EXIT_CODE (may be signal-based exit)"
           fi
+      - name: Verify install scripts in sync
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
+        run: |
+          diff scripts/install-mac.sh site/public/install-mac.sh
+          diff scripts/install-linux.sh site/public/install-linux.sh
+          diff scripts/install-windows.ps1 site/public/install-windows.ps1
       - name: Publish dry-run
         if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
         run: npm run publish:dry-run

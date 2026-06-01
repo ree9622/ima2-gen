@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { exportImageToComfy } from "../lib/api";
-import { isVideoItem, extractLastFrame } from "../lib/videoMedia";
-import { buildContinuityPromptChip, buildVideoContinuityFromItem } from "../lib/videoContinuity";
+import { isVideoItem } from "../lib/videoMedia";
+import { continueFromItem } from "../lib/continueFromItem";
 import type { GenerateItem } from "../types";
 
 interface ResultActionsProps {
@@ -28,9 +28,7 @@ export function ResultActions({
   const { t } = useI18n();
   const currentImage = useAppStore((s) => s.currentImage);
   const showToast = useAppStore((s) => s.showToast);
-  const setPrompt = useAppStore((s) => s.setPrompt);
   const insertPromptToComposer = useAppStore((s) => s.insertPromptToComposer);
-  const useImageAsReference = useAppStore((s) => s.useImageAsReference);
   const createRootNodeFromHistoryItem = useAppStore((s) => s.createRootNodeFromHistoryItem);
   const trashHistoryItem = useAppStore((s) => s.trashHistoryItem);
   const permanentlyDeleteHistoryItemByClick = useAppStore(
@@ -101,23 +99,9 @@ export function ResultActions({
   };
 
   const newFromHere = async () => {
-    const hasPrompt = Boolean(actionImage.prompt);
-    if (hasPrompt && !isVideoItem(actionImage)) setPrompt(actionImage.prompt as string);
+    let result = { ok: false, isVideo: false, hasPrompt: false };
     try {
-      if (isVideoItem(actionImage)) {
-        const frameDataUrl = await extractLastFrame(actionImage.image);
-        useAppStore.getState().addReferenceDataUrl(frameDataUrl);
-        const lineage = buildVideoContinuityFromItem(actionImage);
-        useAppStore.getState().setVideoContinuityLineage(lineage);
-        if (lineage) insertPromptToComposer(buildContinuityPromptChip(lineage));
-        // Load video series topic if present
-        const meta = actionImage.videoSeries;
-        if (meta?.topic) {
-          useAppStore.getState().setVideoTopic(meta.topic);
-        }
-      } else {
-        await useImageAsReference(actionImage);
-      }
+      result = await continueFromItem(actionImage);
     } catch {
       // non-fatal — fall back to prompt-only fork
     }
@@ -135,7 +119,7 @@ export function ResultActions({
       promptEl.focus();
       promptEl.setSelectionRange(promptEl.value.length, promptEl.value.length);
     }
-    showToast(t(hasPrompt ? "toast.forkStarted" : "toast.forkStartedNoPrompt"));
+    showToast(t(result.hasPrompt ? "toast.forkStarted" : "toast.forkStartedNoPrompt"));
   };
 
   const sendToComfyUI = async () => {

@@ -65,7 +65,7 @@ describe("canvas apply merged contract", () => {
     ].map(readSource).join("\n");
     assert.match(actions, /imageOverride\?: GenerateItem \| null/);
     assert.match(actions, /const actionImage = imageOverride \?\? currentImage/);
-    assert.match(actions, /useImageAsReference\(actionImage\)/);
+    assert.match(actions, /continueFromItem\(actionImage\)/);
     assert.match(actions, /CANVAS_MODE_PROMPT_ID/);
     assert.match(actions, /canvas-mode-context/);
     assert.match(actions, /CANVAS_MODE_PROMPT_NAME/);

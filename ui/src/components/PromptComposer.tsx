@@ -3,8 +3,8 @@ import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { SavePromptPopover } from "./SavePromptPopover";
 import { WebSearchToggle } from "./WebSearchToggle";
-import { extractLastFrame, isVideoItem } from "../lib/videoMedia";
-import { buildContinuityPromptChip, buildVideoContinuityFromItem, type VideoReferenceDragPayload } from "../lib/videoContinuity";
+import { continueFromItem } from "../lib/continueFromItem";
+import type { VideoReferenceDragPayload } from "../lib/videoContinuity";
 
 const MAX_REFS = 5;
 
@@ -32,7 +32,6 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   const addReferences = useAppStore((s) => s.addReferences);
   const readDroppedImageMetadata = useAppStore((s) => s.readDroppedImageMetadata);
   const removeReference = useAppStore((s) => s.removeReference);
-  const useCurrentAsReference = useAppStore((s) => s.useCurrentAsReference);
   const currentImage = useAppStore((s) => s.currentImage);
   const videoModelSelected = useAppStore((s) => s.videoModelSelected);
   const selectVideoModel = useAppStore((s) => s.selectVideoModel);
@@ -74,15 +73,9 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   };
 
   const attachInternalReference = async (item: InternalRefDragItem): Promise<void> => {
-    if (isVideoItem(item)) {
-      const frameDataUrl = await extractLastFrame(item.image || item.url || "");
-      useAppStore.getState().addReferenceDataUrl(frameDataUrl);
-      const lineage = buildVideoContinuityFromItem(item);
-      useAppStore.getState().setVideoContinuityLineage(lineage);
-      if (lineage) useAppStore.getState().insertPromptToComposer(buildContinuityPromptChip(lineage));
-      return;
-    }
-    await useAppStore.getState().useImageAsReference(item as any);
+    try {
+      await continueFromItem(item);
+    } catch { /* non-fatal for drag-drop */ }
   };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -309,7 +302,7 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
         <button
           type="button"
           className="composer__tool"
-          onClick={() => void useCurrentAsReference()}
+          onClick={() => currentImage && void continueFromItem(currentImage).catch(() => {})}
           disabled={!currentImage || !canAddMore}
           title={t("prompt.continueTitle")}
         >

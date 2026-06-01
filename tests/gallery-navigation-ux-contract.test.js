@@ -71,12 +71,14 @@ describe("gallery navigation UX contract", () => {
 
   it("drops dragged video items as last-frame references instead of raw video references", () => {
     const composer = readSource("ui/src/components/PromptComposer.tsx");
-
     assert.match(composer, /application\/ima2-ref/);
-    assert.match(composer, /isVideoItem\(item\)/);
-    assert.match(composer, /extractLastFrame/);
-    assert.match(composer, /addReferenceDataUrl\(frameDataUrl\)/);
-    assert.match(composer, /useImageAsReference\(item as any\)/);
+    assert.match(composer, /continueFromItem/);
+
+    const shared = readSource("ui/src/lib/continueFromItem.ts");
+    assert.match(shared, /isVideoItem/);
+    assert.match(shared, /extractLastFrame/);
+    assert.match(shared, /addReferenceDataUrl/);
+    assert.match(shared, /useImageAsReference/);
   });
 
   it("keeps canvas versions internal instead of showing them in gallery surfaces", () => {

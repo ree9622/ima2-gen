@@ -19,9 +19,11 @@ describe("video continuity UI contracts", () => {
     assert.match(read("ui/src/components/GalleryImageTile.tsx"), /buildVideoDragPayload/);
     assert.match(read("ui/src/components/HistoryStrip.tsx"), /buildVideoDragPayload/);
     const composer = read("ui/src/components/PromptComposer.tsx");
-    assert.match(composer, /buildVideoContinuityFromItem/);
-    assert.match(composer, /buildContinuityPromptChip/);
-    assert.match(composer, /setVideoContinuityLineage/);
+    assert.match(composer, /continueFromItem/);
+    const shared = read("ui/src/lib/continueFromItem.ts");
+    assert.match(shared, /buildVideoContinuityFromItem/);
+    assert.match(shared, /buildContinuityPromptChip/);
+    assert.match(shared, /setVideoContinuityLineage/);
   });
 
   it("shows pending and selected continuity metadata in the right surfaces", () => {

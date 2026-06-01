@@ -53,7 +53,7 @@ ima2 should therefore model references as typed `AssetRef` records and let adapt
 | Grok Imagine Video 1.5 Preview | A/B | through ima2 canvas fallback for T2V | yes | yes | no edit/extend | no public REST audio input found | yes | prompt-compiled | via ima2 frame workflow | no | Best used as I2V/Ref2V continuity generator |
 | Seedance 2.0 | A/B | yes | yes | yes | yes, video refs | yes, Seedance 2.0 series only in BytePlus docs | yes | audio-video joint generation | FLF2V in ComfyUI docs | edit/extend described publicly | Strong model for role-bearing multimodal ontology |
 | Runway Gen-4.5 | A | yes | yes | image as composition/style anchor | video-to-video via separate API surfaces, not Gen-4.5 I2V guide | separate sound/TTS/lip-sync/dubbing surfaces | tool-dependent | separate workflows | last-frame chaining recommended in help docs | API has multiple task types | Runway is tool-suite style, not one monolithic endpoint |
-| Kling 2.6 / 3.0 / O1 / Omni family | A/B/C | yes | yes | yes, official feature matrix mentions video reference / multi-image elements | yes in Omni / lip-sync / extend wrappers | lip-sync accepts audio; newer models claim native audio | yes in 2.6+ marketing/docs | separate lip-sync and/or unified Omni | model-dependent | extend/lip-sync endpoints in third-party docs | Strong evidence for separating generation vs lip-sync adapter |
+| Kling 2.6 / 3.0 / O1 / O3 4K / Omni family | A/B/C | yes | yes | yes, O3 wrapper docs expose element lists and image references | yes in O3 video edit, Omni, lip-sync, and extend wrappers | lip-sync accepts audio; O3 wrappers expose generated sound; newer models claim native audio | yes in 2.6+/O3 wrapper material | separate lip-sync and/or unified Omni | O3 wrappers expose start/end frame | extend/lip-sync/video-edit endpoints in third-party docs | Strong evidence for separating generation vs lip-sync adapter and modeling high-res provider constraints |
 | MiniMax / Hailuo | B/C | yes | yes | some API wrappers expose image mode | unclear / model-dependent | separate audio/TTS products exist | model-dependent | separate audio products likely | unclear | model-dependent | Needs more official API docs; community reports are weaker |
 | HappyHorse 1.0 | C/D | yes | yes | claimed | claimed | claimed | claimed joint audio-video | claimed multilingual lip-sync | claimed | claimed | Highly noisy: several SEO-like pages and Reddit warnings. Treat as research-only until official source is identified |
 | ComfyUI community workflows | C | yes | yes | yes via nodes/IPAdapter/etc. | yes via nodes | yes via nodes | workflow-dependent | via lip-sync nodes | yes | workflow-dependent | Valuable for workflow design, not provider claims |
@@ -118,12 +118,19 @@ Sources:
 - https://kling.ai/quickstart/klingai-video-3-omni-model-user-guide
 - https://klingapi.com/docs
 - https://fal.ai/docs/model-api-reference/video-generation-api/kling-video-lipsync
+- https://artlist.io/ai/models/kling-o3
+- https://wavespeed.ai/blog/posts/introducing-kwaivgi-kling-video-o3-4k-image-to-video-on-wavespeedai/
+- https://wavespeed.ai/blog/posts/introducing-kwaivgi-kling-video-o3-4k-text-to-video-on-wavespeedai/
 - https://arxiv.org/abs/2603.03160
 - https://arxiv.org/abs/2512.16776
 - https://ir.kuaishou.com/node/11111/pdf
 
 Findings:
 
+- Kling O3 4K exists in external model catalogs and wrapper docs. It is described as a Kuaishou/Kling model with text-to-video, image-to-video, video-to-video/editing, and up-to-4K output.
+- Artlist's Kling O3 page describes text prompts, images, video uploads, character images, start/end frames, video-to-video editing, targeted video editing, multi-shot continuity, 3-15 second durations, and 4K output.
+- WaveSpeed's Kling O3 4K Image-to-Video wrapper describes `image + prompt` as required inputs and optional `end_image`, `duration` 3-15 seconds, `sound`, `shot_type`, `multi_prompt`, and `element_list`.
+- WaveSpeed positions O3 4K as a native/high-resolution 4K model rather than a simple upscaler, but this is wrapper-level evidence, not official Kuaishou API contract evidence.
 - Official Kling UI docs describe lip-sync as a separate paid feature: generate a character video, then upload local voice/singing audio or use TTS.
 - Lip-sync supports generated Kling videos with a complete human face; audio can be cropped if longer than the video.
 - Third-party API docs expose text2video, image2video, extend, and lip-sync endpoints.
@@ -143,6 +150,9 @@ Implication for ima2:
 
 - `DialogueSpec.lipSync` must not be a boolean. It needs modes: `prompt-only`, `provider-native`, `post-process`.
 - `AudioSpec` must support uploaded audio refs separately from prompt music/sound guidance.
+- `FrameAnchor` must support both `first` and `last/targetEnd` because O3 wrapper docs expose start/end-frame style control.
+- `AssetRef` needs named reusable elements, not only anonymous files, because O3 wrapper docs expose element lists for character/object/style consistency.
+- `ContinuityJob.output` needs resolution tiers and provider caps because O3-style models expose 4K while Grok currently caps lower.
 - Quality gates should include face visibility when lip-sync is requested.
 
 ## MiniMax / Hailuo

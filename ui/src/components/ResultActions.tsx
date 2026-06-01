@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { exportImageToComfy } from "../lib/api";
-import { isVideoItem, extractFirstFrame, extractMidFrame, extractLastFrame } from "../lib/videoMedia";
+import { isVideoItem, extractFirstFrame, extractMidFrame } from "../lib/videoMedia";
 import { continueFromItem } from "../lib/continueFromItem";
 import type { GenerateItem } from "../types";
 

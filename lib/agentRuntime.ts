@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { atomicWriteJson } from "./atomicWrite.js";
 import { join } from "node:path";
 import { ulid } from "ulid";
 import { embedImageMetadataBestEffort } from "./imageMetadataStore.js";
@@ -395,7 +396,7 @@ async function persistAgentImage(
   const filePath = join(ctx.config.storage.generatedDir, filename);
   await writeFile(filePath, embedded.buffer);
   try {
-    await writeFile(`${filePath}.json`, JSON.stringify(meta));
+    await atomicWriteJson(`${filePath}.json`, meta);
   } catch (err) {
     await unlink(filePath).catch(() => {});
     throw err;
@@ -512,7 +513,7 @@ async function persistAgentVideo(
   const filePath = join(ctx.config.storage.generatedDir, filename);
   await writeFile(filePath, result.videoBuffer);
   try {
-    await writeFile(`${filePath}.json`, JSON.stringify(meta));
+    await atomicWriteJson(`${filePath}.json`, meta);
   } catch (err) {
     await unlink(filePath).catch(() => {});
     throw err;

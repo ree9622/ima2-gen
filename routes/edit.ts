@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "fs/promises";
+import { safeWriteSidecar } from "../lib/atomicWrite.js";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
@@ -269,7 +270,7 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         webSearchCalls,
         webSearchEnabled,
       };
-      await writeFile(join(ctx.config.storage.generatedDir, filename + ".json"), JSON.stringify(meta)).catch(() => {});
+      await safeWriteSidecar(join(ctx.config.storage.generatedDir, filename + ".json"), meta);
       invalidateHistoryIndex();
       finishHttpStatus = 200;
       finishMeta = { filename, imageChars: resultB64.length };

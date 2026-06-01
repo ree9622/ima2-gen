@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
+import { safeWriteSidecar, atomicWriteJson } from "../lib/atomicWrite.js";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
@@ -306,7 +307,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             });
           }
           await writeFile(join(ctx.config.storage.generatedDir, filename), embedded.buffer);
-          await writeFile(join(ctx.config.storage.generatedDir, filename + ".json"), JSON.stringify(meta)).catch(() => {});
+          await safeWriteSidecar(join(ctx.config.storage.generatedDir, filename + ".json"), meta);
           invalidateHistoryIndex();
           images.push({
             image: `data:${resultMime};base64,${r.value.b64}`,
@@ -392,9 +393,9 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             const sidecarPath = join(ctx.config.storage.generatedDir, filename + ".json");
             const sidecarMeta = JSON.parse(await readFile(sidecarPath, "utf-8"));
             sidecarMeta.elapsed = elapsed;
-            await writeFile(sidecarPath, JSON.stringify(sidecarMeta));
+            await atomicWriteJson(sidecarPath, sidecarMeta);
           } catch {
-            /* best-effort, matches the sidecar write .catch(() => {}) above */
+            /* best-effort elapsed patch */
           }
         }),
       );

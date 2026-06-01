@@ -1,4 +1,5 @@
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
+import { atomicWriteJson } from "../lib/atomicWrite.js";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
@@ -51,7 +52,7 @@ export async function saveGeneratedVideoArtifact(ctx: RuntimeContext, filename: 
   const filePath = join(ctx.config.storage.generatedDir, filename);
   await writeFile(filePath, buffer);
   try {
-    await writeFile(`${filePath}.json`, JSON.stringify(metadata));
+    await atomicWriteJson(`${filePath}.json`, metadata);
   } catch (err) {
     await unlink(filePath).catch(() => {});
     throw err;
@@ -65,7 +66,9 @@ async function resolveSourceImage(
 ): Promise<{ b64: string | null; filename: string | null }> {
   if (typeof sourceFilename === "string" && sourceFilename) {
     const safe = sourceFilename.replace(/^\/+/, "");
-    if (safe.includes("..")) throw { status: 400, code: "GROK_VIDEO_INVALID_MODE", message: "invalid source filename" };
+    if (safe.includes("..") || safe.includes("/") || safe.includes("\\")) {
+      throw { status: 400, code: "GROK_VIDEO_INVALID_MODE", message: "invalid source filename" };
+    }
     if (/\.mp4$/i.test(safe)) throw { status: 400, code: "GROK_VIDEO_INVALID_MODE", message: "use continueFromVideo for generated video continuation" };
     const buf = await readFile(join(ctx.config.storage.generatedDir, safe));
     return { b64: buf.toString("base64"), filename: safe };

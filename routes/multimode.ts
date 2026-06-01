@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "fs/promises";
+import { safeWriteSidecar } from "../lib/atomicWrite.js";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
@@ -268,7 +269,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
           version: ctx.packageVersion,
         });
         await writeFile(join(ctx.config.storage.generatedDir, filename), embedded.buffer);
-        await writeFile(join(ctx.config.storage.generatedDir, filename + ".json"), JSON.stringify(meta)).catch(() => {});
+        await safeWriteSidecar(join(ctx.config.storage.generatedDir, filename + ".json"), meta);
         invalidateHistoryIndex();
         const item = {
           image: `data:${resultMime};base64,${image.b64}`,

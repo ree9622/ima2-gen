@@ -104,10 +104,11 @@ export function registerHealthRoutes(app: Express, ctxRaw: RouteRuntimeContext) 
       const headers = { Authorization: `Bearer ${ctx.apiKey}`, "Content-Type": "application/json" };
       const start = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);
       const end = Math.floor(Date.now() / 1000);
+      const billingSignal = AbortSignal.timeout(10_000);
       const [subRes, usageRes, modelsRes] = await Promise.allSettled([
-        fetch(`https://api.openai.com/v1/organization/costs?start_time=${start}&end_time=${end}&bucket_width=1d&limit=31`, { headers }),
-        fetch("https://api.openai.com/dashboard/billing/credit_grants", { headers }),
-        fetch("https://api.openai.com/v1/models", { headers }),
+        fetch(`https://api.openai.com/v1/organization/costs?start_time=${start}&end_time=${end}&bucket_width=1d&limit=31`, { headers, signal: billingSignal }),
+        fetch("https://api.openai.com/dashboard/billing/credit_grants", { headers, signal: billingSignal }),
+        fetch("https://api.openai.com/v1/models", { headers, signal: billingSignal }),
       ]);
 
       const billing: Record<string, unknown> = { apiKeySource: ctx.apiKeySource ?? "env" };

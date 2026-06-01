@@ -891,6 +891,14 @@
         "checking": "Checking"
       }
     },
+    "quota": {
+      "eyebrow": "Usage quota",
+      "title": "Rate limits",
+      "codexNotLoggedIn": "Not logged in",
+      "fetchError": "Could not load quota",
+      "noData": "No usage data",
+      "grokUsageLink": "View Grok usage →"
+    },
     "imageModel": {
       "title": "Image model",
       "body": "Choose the image model used for future generations. Selecting a Grok model switches the provider to Grok.",

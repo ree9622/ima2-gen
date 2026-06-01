@@ -16,6 +16,7 @@ import "./styles/agent-workspace.css";
 import "./styles/agent-workspace-panels.css";
 import "./styles/agent-workspace-image.css";
 import "./styles/agent-workspace-sidebar.css";
+import "./styles/quota-card.css";
 import App from "./App";
 
 function canonicalizeLocalhostOrigin(): boolean {

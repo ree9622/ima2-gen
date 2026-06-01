@@ -1,0 +1,75 @@
+.quota-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.quota-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.quota-card__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.quota-card__account {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.quota-card__loading,
+.quota-card__hint {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.quota-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1;
+}
+
+.quota-bar + .quota-bar {
+  margin-top: 6px;
+}
+
+.quota-bar__label {
+  min-width: 20px;
+}
+
+.quota-bar__track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.quota-bar__fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.quota-bar__pct {
+  min-width: 28px;
+  text-align: right;
+}
+
+.quota-bar__reset {
+  min-width: 32px;
+  text-align: right;
+  opacity: 0.6;
+}

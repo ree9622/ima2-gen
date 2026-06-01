@@ -1,4 +1,3 @@
-import type { Express } from "express";
 import { registerCapabilitiesRoutes } from "./capabilities.js";
 import { registerHealthRoutes } from "./health.js";
 import { registerHistoryRoutes } from "./history.js";
@@ -22,31 +21,31 @@ import { registerGrokRoutes } from "./grok.js";
 import { registerVideoRoutes } from "./video.js";
 import { registerVideoExtendedRoutes } from "./videoExtended.js";
 import { registerQuotaRoutes } from "./quota.js";
-import { type RouteRuntimeContext, requireRuntimeContext } from "../lib/runtimeContext.js";
-
-export function configureRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
-  const ctx = requireRuntimeContext(ctxRaw);
-  registerHealthRoutes(app, ctx);
-  registerCapabilitiesRoutes(app, ctx);
-  registerStorageRoutes(app, ctx);
-  registerMetadataRoutes(app, ctx);
-  registerHistoryRoutes(app, ctx);
-  registerAnnotationRoutes(app, ctx);
-  registerCanvasVersionRoutes(app, ctx);
-  registerImageImportRoutes(app, ctx);
-  registerComfyRoutes(app, ctx);
-  registerSessionRoutes(app, ctx);
-  registerEditRoutes(app, ctx);
-  registerNodeRoutes(app, ctx);
-  if (ctx.config.features.cardNews) registerCardNewsRoutes(app, ctx);
-  registerMultimodeRoutes(app, ctx);
-  registerGenerateRoutes(app, ctx);
-  registerAgentRoutes(app, ctx);
-  registerPromptBuilderRoutes(app, ctx);
-  registerPromptRoutes(app, ctx);
-  registerPromptImportRoutes(app, ctx);
-  registerGrokRoutes(app, ctx);
-  registerVideoRoutes(app, ctx);
-  registerVideoExtendedRoutes(app, ctx);
-  registerQuotaRoutes(app, ctx);
+import { requireRuntimeContext } from "../lib/runtimeContext.js";
+export function configureRoutes(app, ctxRaw) {
+    const ctx = requireRuntimeContext(ctxRaw);
+    registerHealthRoutes(app, ctx);
+    registerCapabilitiesRoutes(app, ctx);
+    registerStorageRoutes(app, ctx);
+    registerMetadataRoutes(app, ctx);
+    registerHistoryRoutes(app, ctx);
+    registerAnnotationRoutes(app, ctx);
+    registerCanvasVersionRoutes(app, ctx);
+    registerImageImportRoutes(app, ctx);
+    registerComfyRoutes(app, ctx);
+    registerSessionRoutes(app, ctx);
+    registerEditRoutes(app, ctx);
+    registerNodeRoutes(app, ctx);
+    if (ctx.config.features.cardNews)
+        registerCardNewsRoutes(app, ctx);
+    registerMultimodeRoutes(app, ctx);
+    registerGenerateRoutes(app, ctx);
+    registerAgentRoutes(app, ctx);
+    registerPromptBuilderRoutes(app, ctx);
+    registerPromptRoutes(app, ctx);
+    registerPromptImportRoutes(app, ctx);
+    registerGrokRoutes(app, ctx);
+    registerVideoRoutes(app, ctx);
+    registerVideoExtendedRoutes(app, ctx);
+    registerQuotaRoutes(app, ctx);
 }

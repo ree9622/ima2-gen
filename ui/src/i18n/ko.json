@@ -891,6 +891,14 @@
         "checking": "확인 중"
       }
     },
+    "quota": {
+      "eyebrow": "사용량 쿼타",
+      "title": "속도 제한",
+      "codexNotLoggedIn": "로그인 필요",
+      "fetchError": "쿼타를 불러올 수 없음",
+      "noData": "사용량 데이터 없음",
+      "grokUsageLink": "Grok 사용량 보기 →"
+    },
     "imageModel": {
       "title": "이미지 모델",
       "body": "앞으로 생성 요청에 사용할 이미지 모델을 선택합니다. Grok 모델을 선택하면 공급자도 Grok으로 전환됩니다.",

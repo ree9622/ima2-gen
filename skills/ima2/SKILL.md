@@ -461,7 +461,7 @@ ima2 video continue "Elon counterattacks with haymaker" --video "$CLIP1" --durat
 - First frame is the **anchor**: all subsequent frames inherit its composition, lighting, and character designs
 - Change **one variable per step**: shot scale, action, or camera — keep everything else constant
 - Use the `images.edit` API with `image[]` array or Responses API `input_image` content blocks for multi-ref
-- Thinking mode can produce up to 8 consistent frames from one prompt
+- ChatGPT Thinking mode (not API) can produce up to 8 consistent frames from one prompt; API users should generate frames sequentially with shared character descriptions
 
 #### Video Continuation (extend/sequel)
 

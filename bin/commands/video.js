@@ -58,6 +58,7 @@ const SPEC = {
         resolution: { type: "string", default: "480p" },
         "aspect-ratio": { type: "string", default: "auto" },
         model: { type: "string" },
+        "planner-model": { type: "string" },
         topic: { type: "string" },
         ref: { type: "string", repeatable: true },
         out: { short: "o", type: "string" },
@@ -92,6 +93,7 @@ const HELP = `
         --resolution <480p|720p>        Default: 480p
         --aspect-ratio <ratio|auto>     1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto. Default: auto
         --model <name>                  grok-imagine-video, grok-imagine-video-1.5-preview
+        --planner-model <name>          Planner model override (e.g. grok-4.3, grok-composer-2.5-fast)
         --topic <text>                  Series topic for prompt chain continuity
         --ref <file>                    Attach source/reference image (repeatable, max 7)
     -o, --out <file>                    Output file path
@@ -184,6 +186,8 @@ export default async function videoCmd(argv) {
     };
     if (args.model)
         body.model = args.model;
+    if (args["planner-model"])
+        body.plannerModel = args["planner-model"];
     if (args.session)
         body.sessionId = args.session;
     if (args.topic)
@@ -408,6 +412,7 @@ async function videoContinueCmd(argv) {
             resolution: { type: "string", default: "720p" },
             "aspect-ratio": { type: "string", default: "auto" },
             model: { type: "string" },
+            "planner-model": { type: "string" },
             out: { short: "o", type: "string" },
             output: { type: "string" },
             json: { type: "boolean" },
@@ -459,6 +464,8 @@ async function videoContinueCmd(argv) {
     };
     if (args.model)
         body.model = args.model;
+    if (args["planner-model"])
+        body.plannerModel = args["planner-model"];
     const data = await runVideoGenerateRequest(server.base, body, args.timeout, Boolean(args.json));
     const outPath = (args.out || args.output);
     if (outPath)

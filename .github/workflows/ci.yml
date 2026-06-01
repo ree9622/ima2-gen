@@ -58,6 +58,7 @@ jobs:
       - name: CLI smoke (--version)
         run: node bin/ima2.js --version
       - name: Graceful shutdown (SIGINT clean exit)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           node server.js &

@@ -215,6 +215,38 @@ Common patterns across Reddit, ComfyUI workflows, and third-party docs:
    - audio/dialogue intent preserved
    - duration and aspect constraints preserved
 
+## V2V Native vs Text-Intermediate Assessment
+
+Question:
+
+Are most V2V systems actually native video-conditioned generation, or are they mostly `audio/text -> text plan -> video` workflows?
+
+Current answer:
+
+Most credible public evidence points to native video-conditioned or multimodal-conditioned generation/editing at the API/product level. They are not merely "caption the source video, rewrite text, then run text-to-video" workflows.
+
+Provider assessment:
+
+| Provider / Family | Public V2V interpretation | Evidence strength | Notes |
+|---|---|---|---|
+| Runway Gen-3/Gen-4 family | native video-conditioned edit/transform | high | Runway V2V accepts full input video and exposes structure transformation controls; text prompt modifies style/content while input video carries motion/structure. Exact internals are proprietary. |
+| Seedance 2.0 | unified multimodal reference conditioning | high | Public docs describe text/image/audio/video references and joint audio-video generation. Public evidence does not support reducing it to text-only intermediate. |
+| Kling O3 / Omni family | native or wrapper-exposed video-conditioned edit | medium | Wrapper/catalog evidence describes video upload, V2V edit, start/end frames, element refs, and 4K output. Official low-level API fields still need direct confirmation. |
+| Grok Imagine Video edits | native product/API edit surface | medium | `/v1/videos/edits` accepts video input and prompt and preserves duration/aspect. Internal architecture is not public. |
+| Runway lip-sync / Kling lip-sync | post-process side task, not base V2V | high | Video plus audio/TTS is routed through a lip-sync tool or endpoint; this should be modeled separately from visual V2V. |
+| ComfyUI workflows | graph-native multimodal conditioning | medium | Workflows often explicitly route video frames, reference images, masks, audio, or motion nodes. The exact model internals vary by node/model. |
+
+Important caveat:
+
+Native video-conditioned does not mean "no text planner exists internally." Providers can still use captioning, scene parsing, control signals, or LLM-like instruction planning. The key design point for ima2 is that the workflow must preserve and pass typed source assets instead of collapsing everything into plain prompt text.
+
+Design consequence:
+
+- `AssetRef(kind: "video")` must remain first-class.
+- `FrameAnchor` and `VideoAnchor` must not be treated as generated prompt snippets only.
+- `DialogueSpec` / `AudioSpec` may compile to prompt for Grok, but must remain typed because other providers can route them to native audio, TTS, dubbing, or lip-sync side tasks.
+- Every adapter should report whether it used `native-video`, `frame-anchor`, `prompt-compiled`, or `post-process` execution so the user can inspect why continuity did or did not hold.
+
 ## Design Consequence For ima2
 
 ima2 should not model continuity as one provider feature.

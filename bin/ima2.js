@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { spawn, execSync } from "child_process";
 import { confirmDestructiveAction } from "./lib/destructive-confirm.js";
 import { doctor } from "./commands/doctor.js";
-import { openUrl, resolveBin } from "./lib/platform.js";
+import { openUrl, resolveBin, killProcessTree } from "./lib/platform.js";
 import { maybePromptGithubStar } from "./lib/star-prompt.js";
 import { ensureFreshUiDist } from "./lib/ui-build.js";
 import { detectCodexAuth } from "../lib/codexDetect.js";
@@ -197,9 +197,16 @@ async function serve(serveArgs = []) {
         env,
         cwd: ROOT,
     });
+    child.on("error", (err) => {
+        console.error(`[ima2] Failed to start server: ${err.message}`);
+        process.exit(1);
+    });
     child.on("exit", (code) => process.exit(code));
-    process.on("SIGINT", () => child.kill("SIGINT"));
-    process.on("SIGTERM", () => child.kill("SIGTERM"));
+    process.on("SIGINT", () => killProcessTree(child.pid));
+    process.on("SIGTERM", () => killProcessTree(child.pid));
+    if (process.platform === "win32") {
+        process.on("SIGBREAK", () => killProcessTree(child.pid));
+    }
 }
 async function showStatus() {
     const config = loadConfig();
@@ -335,7 +342,10 @@ switch (command) {
         break;
     case "setup":
     case "login":
-        setup().then(() => console.log("  Done. Run 'ima2 serve' to start."));
+        setup().then(() => console.log("  Done. Run 'ima2 serve' to start.")).catch((e) => {
+            console.error(`Setup failed: ${e?.message || e}`);
+            process.exit(1);
+        });
         break;
     case "status":
         showStatus();

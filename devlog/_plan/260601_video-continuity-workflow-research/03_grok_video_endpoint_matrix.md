@@ -70,6 +70,20 @@ Live 2026-06-01 direct REST smoke through progrok proxy:
 | 1.5 + MP4 in refs | `reference_images: [{data:video/mp4}, {data:image/png}]` | HTTP 400, `` `reference_images` is not supported for this model. `` |
 | 1.5 + MP4 as `image` | `image: {data:video/mp4}` | start HTTP 200 with request id, then poll `failed`: `Unable to process input image for video generation.` |
 | 1.5 + `video` on generations | `video: {data:video/mp4}` | HTTP 400, `Text-to-video is not supported for this model.` |
+| 1.5 + string-array refs | `reference_images: ["data:image/png", "data:image/png"]` | HTTP 422, `reference_images[0]: invalid type: string ..., expected struct ImageUrl` |
+
+The currently accepted REST shape for references is object-based:
+
+```json
+{
+  "reference_images": [
+    { "url": "https://example.com/ref1.jpg" },
+    { "url": "https://example.com/ref2.jpg" }
+  ]
+}
+```
+
+The string-array shape shown in some examples is not accepted by the tested xAI REST surface.
 
 ### Adapter implication
 

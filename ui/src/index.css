@@ -2663,13 +2663,11 @@ body {
   box-shadow: none;
 }
 .composer__toolbar {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
-  flex-wrap: wrap;
 }
 .composer__tool {
-  flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -98,6 +98,7 @@ import {
   THEME_FAMILY_STORAGE_KEY,
   THEME_STORAGE_KEY,
   UI_MODE_STORAGE_KEY,
+  VIDEO_DEFAULTS_STORAGE_KEY,
   WEB_SEARCH_STORAGE_KEY,
 } from "./persistenceRegistry";
 import { newClientNodeId, type ClientNodeId } from "../lib/graph";
@@ -265,6 +266,38 @@ function loadWebSearchEnabled(): boolean {
 function saveWebSearchEnabled(enabled: boolean): void {
   try {
     localStorage.setItem(WEB_SEARCH_STORAGE_KEY, String(enabled));
+  } catch {}
+}
+
+type VideoDefaults = {
+  model: string | false;
+  duration: number;
+  resolution: string;
+  aspectRatio: string;
+};
+
+const VIDEO_DEFAULTS_FALLBACK: VideoDefaults = { model: false, duration: 5, resolution: "480p", aspectRatio: "auto" };
+
+function loadVideoDefaults(): VideoDefaults {
+  try {
+    const raw = localStorage.getItem(VIDEO_DEFAULTS_STORAGE_KEY);
+    if (!raw) return VIDEO_DEFAULTS_FALLBACK;
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      model: typeof p.model === "string" ? p.model : false,
+      duration: typeof p.duration === "number" ? p.duration : 5,
+      resolution: p.resolution === "480p" || p.resolution === "720p" ? p.resolution : "480p",
+      aspectRatio: typeof p.aspectRatio === "string" ? p.aspectRatio : "auto",
+    };
+  } catch {
+    return VIDEO_DEFAULTS_FALLBACK;
+  }
+}
+
+function saveVideoDefaults(patch: Partial<VideoDefaults>): void {
+  try {
+    const current = loadVideoDefaults();
+    localStorage.setItem(VIDEO_DEFAULTS_STORAGE_KEY, JSON.stringify({ ...current, ...patch }));
   } catch {}
 }
 
@@ -1338,7 +1371,9 @@ function getCustomSizeConfirmation(
 
 const storedGenerationDefaults = loadGenerationDefaults();
 const storedImageModel = loadImageModel();
+const storedVideoDefaults = loadVideoDefaults();
 const initialProvider =
+  storedVideoDefaults.model ? "grok" :
   isGrokImageModel(storedImageModel) ? "grok" : (storedGenerationDefaults.provider ?? "oauth") === "grok" ? "oauth" : (storedGenerationDefaults.provider ?? "oauth");
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -1777,10 +1812,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   syncFromStorage: () => {
-    // Triggered by `storage` events (another tab changed localStorage).
     const nextInflight = loadInFlight();
     const nextSelected = loadSelectedFilename();
     const nextImageModel = loadImageModel();
+    const nextVideo = loadVideoDefaults();
     set((s) => {
       const matched = nextSelected
         ? s.history.find((h) => h.filename === nextSelected) ?? null
@@ -1796,6 +1831,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         inFlight: nextInflight,
         activeGenerations: nextInflight.length,
         imageModel: nextImageModel,
+        videoModelSelected: nextVideo.model,
+        videoDuration: nextVideo.duration,
+        videoResolution: nextVideo.resolution as VideoResolutionUI,
+        videoAspectRatio: nextVideo.aspectRatio,
         currentImage:
           nextSelected && currentImage?.filename !== nextSelected
             ? normalized ?? currentImage
@@ -3091,7 +3130,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setImageModel: (imageModel) => {
     saveImageModel(imageModel);
-    set({ videoModelSelected: false });  // selecting an image model exits video mode (covers all branches)
+    set({ videoModelSelected: false });
+    saveVideoDefaults({ model: false });
     if (isGrokImageModel(imageModel)) {
       saveGenerationDefaultsPatch({ provider: "grok" });
       set({ provider: "grok", imageModel });
@@ -3104,20 +3144,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set({ imageModel });
   },
-  videoModelSelected: false,
-  videoDuration: 5,
-  videoResolution: "480p",
-  videoAspectRatio: "auto",
+  videoModelSelected: storedVideoDefaults.model,
+  videoDuration: storedVideoDefaults.duration,
+  videoResolution: storedVideoDefaults.resolution as VideoResolutionUI,
+  videoAspectRatio: storedVideoDefaults.aspectRatio,
   videoTopic: "",
   videoContinuityLineage: null,
   videoProgress: null,
   selectVideoModel: (model) => {
-    set({ videoModelSelected: model || "grok-imagine-video" });
+    const m = model || "grok-imagine-video";
+    set({ videoModelSelected: m });
+    saveVideoDefaults({ model: m });
     if (get().provider !== "grok") get().setProvider("grok");
   },
-  setVideoDuration: (videoDuration) => set({ videoDuration }),
-  setVideoResolution: (videoResolution) => set({ videoResolution }),
-  setVideoAspectRatio: (videoAspectRatio) => set({ videoAspectRatio }),
+  setVideoDuration: (videoDuration) => { set({ videoDuration }); saveVideoDefaults({ duration: videoDuration }); },
+  setVideoResolution: (videoResolution) => { set({ videoResolution }); saveVideoDefaults({ resolution: videoResolution }); },
+  setVideoAspectRatio: (videoAspectRatio) => { set({ videoAspectRatio }); saveVideoDefaults({ aspectRatio: videoAspectRatio }); },
   setVideoTopic: (videoTopic) => set({ videoTopic }),
   setVideoContinuityLineage: (videoContinuityLineage) => set({ videoContinuityLineage }),
   activeVideoRefCount: () => {

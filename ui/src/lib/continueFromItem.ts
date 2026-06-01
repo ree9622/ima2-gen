@@ -43,6 +43,9 @@ export async function continueFromItem(item: ContinueableItem): Promise<Continue
     if (item.videoSeries?.topic) {
       store.setVideoTopic(item.videoSeries.topic);
     }
+    if (!store.videoModelSelected) {
+      store.selectVideoModel("grok-imagine-video-1.5-preview");
+    }
   } else {
     await store.useImageAsReference(item as GenerateItem);
   }

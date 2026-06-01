@@ -535,9 +535,9 @@
   "result": {
     "download": "다운로드",
     "copyImage": "이미지 복사",
-    "copyLastFrame": "마지막",
-    "copyFirstFrame": "처음",
-    "copyMidFrame": "중간",
+    "copyLastFrame": "마지막\n프레임",
+    "copyFirstFrame": "처음\n프레임",
+    "copyMidFrame": "중간\n프레임",
     "copyPrompt": "프롬프트 복사",
     "continueHere": "여기서 이어서",
     "continueHereTitle": "이 이미지의 프롬프트를 가져와 이어서 작업",

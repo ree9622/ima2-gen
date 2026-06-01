@@ -535,9 +535,9 @@
   "result": {
     "download": "Download",
     "copyImage": "Copy image",
-    "copyLastFrame": "Last",
-    "copyFirstFrame": "First",
-    "copyMidFrame": "Mid",
+    "copyLastFrame": "Last\nFrame",
+    "copyFirstFrame": "First\nFrame",
+    "copyMidFrame": "Mid\nFrame",
     "copyPrompt": "Copy prompt",
     "continueHere": "Continue here",
     "continueHereTitle": "Import this image's prompt and keep working",

@@ -2213,6 +2213,12 @@ body {
   border-color: var(--red);
   background: color-mix(in srgb, var(--red) 12%, var(--surface));
 }
+.action-btn--frame {
+  white-space: pre-line;
+  text-align: center;
+  line-height: 1.2;
+  padding-block: 4px;
+}
 .result-actions__more {
   position: relative;
 }

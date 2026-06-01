@@ -194,15 +194,15 @@ export function ResultActions({
       <button type="button" className="action-btn" onClick={download}>
         {t("result.download")}
       </button>
-      <button type="button" className="action-btn" onClick={copyImage}>
+      <button type="button" className={`action-btn${isVideo ? " action-btn--frame" : ""}`} onClick={copyImage}>
         {t(isVideo ? "result.copyLastFrame" : "result.copyImage")}
       </button>
       {isVideo && (
         <>
-          <button type="button" className="action-btn" onClick={copyFirstFrame}>
+          <button type="button" className="action-btn action-btn--frame" onClick={copyFirstFrame}>
             {t("result.copyFirstFrame")}
           </button>
-          <button type="button" className="action-btn" onClick={copyMidFrame}>
+          <button type="button" className="action-btn action-btn--frame" onClick={copyMidFrame}>
             {t("result.copyMidFrame")}
           </button>
         </>

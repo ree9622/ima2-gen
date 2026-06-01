@@ -40,12 +40,16 @@ test("Grok proxy auth guidance points users at ima2, not progrok", () => {
 
 test("Grok proxy auth failure exits without restart loop", async () => {
   const tempDir = await mkdtemp(join(tmpdir(), "ima2-grok-proxy-test-"));
-  const fakeProgrok = join(tempDir, "progrok");
-  await writeFile(
-    fakeProgrok,
-    `#!/bin/sh\nprintf '${upstreamLoginMessage}\\n' >&2\nexit 1\n`,
-  );
-  await chmod(fakeProgrok, 0o755);
+  const fakeProgrok = join(tempDir, process.platform === "win32" ? "progrok.cmd" : "progrok");
+  if (process.platform === "win32") {
+    await writeFile(fakeProgrok, `@echo off\r\necho ${upstreamLoginMessage} 1>&2\r\nexit /b 1\r\n`);
+  } else {
+    await writeFile(
+      fakeProgrok,
+      `#!/bin/sh\nprintf '${upstreamLoginMessage}\\n' >&2\nexit 1\n`,
+    );
+    await chmod(fakeProgrok, 0o755);
+  }
 
   let exitCount = 0;
   const handle = await startGrokProxy({

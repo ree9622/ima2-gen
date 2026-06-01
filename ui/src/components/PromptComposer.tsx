@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 import { SavePromptPopover } from "./SavePromptPopover";
 import { WebSearchToggle } from "./WebSearchToggle";
 import { extractLastFrame, isVideoItem } from "../lib/videoMedia";
+import { buildContinuityPromptChip, buildVideoContinuityFromItem, type VideoReferenceDragPayload } from "../lib/videoContinuity";
 
 const MAX_REFS = 5;
 
@@ -11,7 +12,7 @@ type PromptComposerProps = {
   variant?: "sidebar" | "bottom";
 };
 
-type InternalRefDragItem = { image: string; url?: string; filename?: string };
+type InternalRefDragItem = VideoReferenceDragPayload;
 
 function parseCssPixelValue(value: string): number | null {
   const parsed = Number.parseFloat(value);
@@ -33,6 +34,9 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   const removeReference = useAppStore((s) => s.removeReference);
   const useCurrentAsReference = useAppStore((s) => s.useCurrentAsReference);
   const currentImage = useAppStore((s) => s.currentImage);
+  const videoModelSelected = useAppStore((s) => s.videoModelSelected);
+  const selectVideoModel = useAppStore((s) => s.selectVideoModel);
+  const setImageModel = useAppStore((s) => s.setImageModel);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -73,6 +77,9 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
     if (isVideoItem(item)) {
       const frameDataUrl = await extractLastFrame(item.image || item.url || "");
       useAppStore.getState().addReferenceDataUrl(frameDataUrl);
+      const lineage = buildVideoContinuityFromItem(item);
+      useAppStore.getState().setVideoContinuityLineage(lineage);
+      if (lineage) useAppStore.getState().insertPromptToComposer(buildContinuityPromptChip(lineage));
       return;
     }
     await useAppStore.getState().useImageAsReference(item as any);
@@ -304,13 +311,33 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
           className="composer__tool"
           onClick={() => void useCurrentAsReference()}
           disabled={!currentImage || !canAddMore}
-          title={t("prompt.useCurrentTitle")}
+          title={t("prompt.continueTitle")}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="23 4 23 10 17 10" />
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
-          <span>{t("prompt.useCurrent")}</span>
+          <span>{t("prompt.continue")}</span>
+        </button>
+        <button
+          type="button"
+          className={`composer__tool${videoModelSelected ? " composer__tool--on" : ""}`}
+          onClick={() => {
+            if (videoModelSelected) {
+              setImageModel("gpt-5.5" as any);
+            } else {
+              selectVideoModel("grok-imagine-video-1.5-preview");
+            }
+          }}
+          title={t("prompt.videoToggleTitle")}
+          aria-label={t("prompt.videoToggleTitle")}
+          aria-pressed={!!videoModelSelected}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polygon points="23 7 16 12 23 17 23 7" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+          </svg>
+          <span>Video</span>
         </button>
         <button
           type="button"

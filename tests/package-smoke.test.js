@@ -51,14 +51,17 @@ function npmCommand() {
 }
 
 function npmPackCommandArgs(packDestination) {
-  const args = ["pack", "--dry-run", "--json", "--pack-destination", packDestination];
+  const args = ["pack", "--dry-run", "--json", "--ignore-scripts", "--pack-destination", packDestination];
   if (process.env.npm_execpath) {
     return { command: process.execPath, args: [process.env.npm_execpath, ...args] };
   }
   return { command: npmCommand(), args };
 }
 
+let cachedPackManifest = null;
+
 function readPackManifest() {
+  if (cachedPackManifest) return cachedPackManifest;
   const packDestination = mkdtempSync(join(tmpdir(), "ima2-pack-smoke-"));
   try {
     const { command, args } = npmPackCommandArgs(packDestination);
@@ -83,7 +86,8 @@ function readPackManifest() {
       const parsed = JSON.parse(jsonMatch[0]);
       assert.ok(Array.isArray(parsed), "npm pack output should be a JSON array");
       assert.ok(parsed[0], "npm pack output should include one package manifest");
-      return parsed[0];
+      cachedPackManifest = parsed[0];
+      return cachedPackManifest;
     } catch (error) {
       assert.fail(`Could not parse npm pack --dry-run --json output: ${error.message}`);
     }

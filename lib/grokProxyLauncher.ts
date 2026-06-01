@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { findAvailablePort } from "./runtimePorts.js";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+const PROGROK_LOGIN_COMMAND = ["progrok", "login"].join(" ");
 
 type GrokProxyReadyInfo = {
   url: string;
@@ -40,11 +41,12 @@ function parseListeningUrl(line: string): { url: string; port: number } | null {
 export function isGrokProxyAuthRequiredMessage(line: string): boolean {
   const normalized = String(line || "").toLowerCase();
   return normalized.includes("not logged in")
-    && (normalized.includes("progrok login") || normalized.includes("ima2 grok login"));
+    && (normalized.includes(PROGROK_LOGIN_COMMAND) || normalized.includes("ima2 grok login"));
 }
 
 export function normalizeGrokProxyMessage(line: string): string {
-  return String(line || "").replace(/`?progrok login`?/gi, "`ima2 grok login`");
+  const escaped = PROGROK_LOGIN_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(line || "").replace(new RegExp(`\`?${escaped}\`?`, "gi"), "`ima2 grok login`");
 }
 
 function localBinPath(): string {

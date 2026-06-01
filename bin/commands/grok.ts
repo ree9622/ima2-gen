@@ -75,7 +75,7 @@ export default async function grokCmd(argv: string[]) {
       if (sub === "login") {
         out(color.yellow("⚠ ") + "Login failed. Try again with:\n");
         out("  ima2 grok login\n");
-        die(code, "bundled progrok login failed");
+        die(code, "bundled Grok OAuth login failed");
       } else {
         die(code, `bundled progrok exited with code ${code}`);
       }

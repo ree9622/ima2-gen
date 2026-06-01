@@ -298,7 +298,7 @@ function showHelp() {
     billing        API usage / quota
     providers      Configured providers
     oauth <sub>    OAuth proxy status              (ima2 oauth --help)
-    grok <sub>     Bundled progrok login/status     (ima2 grok --help)
+    grok <sub>     Bundled Grok auth/status         (ima2 grok --help)
     config <sub>   Config get/set/ls/path/rm       (ima2 config --help)
     defaults <sub> Inspect/change model defaults   (ima2 defaults --help)
     capabilities   Agent capability metadata       (ima2 capabilities --help)

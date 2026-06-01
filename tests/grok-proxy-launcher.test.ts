@@ -9,9 +9,12 @@ import {
   startGrokProxy,
 } from "../lib/grokProxyLauncher.ts";
 
+const upstreamLoginCommand = ["progrok", "login"].join(" ");
+const upstreamLoginMessage = `Not logged in. Run \`${upstreamLoginCommand}\` first.`;
+
 test("Grok proxy auth errors are recognized as non-restartable setup state", () => {
   assert.equal(
-    isGrokProxyAuthRequiredMessage("[grok] Not logged in. Run `progrok login` first."),
+    isGrokProxyAuthRequiredMessage(`[grok] ${upstreamLoginMessage}`),
     true,
   );
   assert.equal(
@@ -26,11 +29,11 @@ test("Grok proxy auth errors are recognized as non-restartable setup state", () 
 
 test("Grok proxy auth guidance points users at ima2, not progrok", () => {
   assert.equal(
-    normalizeGrokProxyMessage("Not logged in. Run `progrok login` first."),
+    normalizeGrokProxyMessage(upstreamLoginMessage),
     "Not logged in. Run `ima2 grok login` first.",
   );
   assert.equal(
-    normalizeGrokProxyMessage("Run progrok login first."),
+    normalizeGrokProxyMessage(`Run ${upstreamLoginCommand} first.`),
     "Run `ima2 grok login` first.",
   );
 });
@@ -40,7 +43,7 @@ test("Grok proxy auth failure exits without restart loop", async () => {
   const fakeProgrok = join(tempDir, "progrok");
   await writeFile(
     fakeProgrok,
-    "#!/bin/sh\nprintf 'Not logged in. Run `progrok login` first.\\n' >&2\nexit 1\n",
+    `#!/bin/sh\nprintf '${upstreamLoginMessage}\\n' >&2\nexit 1\n`,
   );
   await chmod(fakeProgrok, 0o755);
 

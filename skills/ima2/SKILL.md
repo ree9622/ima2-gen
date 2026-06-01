@@ -68,6 +68,8 @@ ima2 grok status
 ima2 gen "cinematic neon city" --provider grok --model grok-imagine-image-quality
 ```
 
+`ima2 grok login` defaults to the manual-paste flow.
+
 Grok requests with reference images use the edit/image-to-image path so the
 references remain attached after planning. Keep Grok references to three total
 input images.

@@ -60,7 +60,7 @@ ima2 serve
 3. **Both** — GPT OAuth + Grok OAuth (full feature access)
 4. **API Key** — paste your OpenAI API key (paid)
 
-Video generation requires Grok OAuth (option 2 or 3). Run `ima2 grok login` separately if you already have GPT OAuth configured and want to add video support.
+Video generation requires Grok OAuth (option 2 or 3). Run `ima2 grok login` separately if you already have GPT OAuth configured and want to add video support; it defaults to the manual-paste flow.
 
 Before updating a global install on Windows, stop any running `ima2 serve`
 process. If npm reports `EBUSY` or `resource busy or locked`, close ima2

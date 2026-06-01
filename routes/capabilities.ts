@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { buildIma2Capabilities } from "../lib/capabilities.js";
 import { requireRuntimeContext, type RouteRuntimeContext } from "../lib/runtimeContext.js";
 
-const GROK_PLANNER_MODELS = ["grok-composer-2.5-fast", "grok-4.3"];
+const GROK_PLANNER_MODELS = ["grok-composer-2.5-fast", "grok-4.3", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"];
 
 export function registerCapabilitiesRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
   const ctx = requireRuntimeContext(ctxRaw);

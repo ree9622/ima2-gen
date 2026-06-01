@@ -224,10 +224,10 @@
     "offline": "Offline",
     "remaining": "${remaining} remaining",
     "thisMonth": "${amount} this month",
-    "oauthFree": "OAuth · free via codex",
+    "oauthFree": "GPT OAuth · free via codex",
     "apiDisabled": "API key ready",
     "apiReady": "API key ready",
-    "oauthMode": "OAuth mode"
+    "oauthMode": "GPT OAuth mode"
   },
   "history": {
     "openGalleryAria": "Open gallery",
@@ -500,10 +500,10 @@
   "provider": {
     "authTitle": "Provider",
     "apiLabel": "API Key",
-    "oauthNotReady": "OAuth proxy is not ready yet.",
+    "oauthNotReady": "GPT OAuth proxy is not ready yet.",
     "codexLoginRequired": "Codex login required.",
     "codexLoginHint": "Run `codex login` in your terminal, then refresh this page.",
-    "oauthStarting": "OAuth proxy is starting. Try again in a few seconds.",
+    "oauthStarting": "GPT OAuth proxy is starting. Try again in a few seconds.",
     "serverUnreachable": "Cannot reach the server. Make sure the backend is running.",
     "apiInvalid": "API key is missing or invalid. Check OPENAI_API_KEY in the server's .env.",
     "grokOffline": "Grok proxy is not running.",
@@ -840,7 +840,7 @@
     "sections": {
       "account": {
         "title": "Account",
-        "hint": "OAuth status"
+        "hint": "GPT OAuth status"
       },
       "generation": {
         "title": "Generation",
@@ -865,8 +865,8 @@
     },
     "account": {
       "primaryEyebrow": "Active provider",
-      "oauthTitle": "OAuth is active",
-      "oauthBody": "OAuth generation runs through your Codex OAuth session. You can switch to API-key mode when a valid key is configured.",
+      "oauthTitle": "GPT OAuth is active",
+      "oauthBody": "GPT OAuth generation runs through your Codex OAuth session. You can switch to API-key mode when a valid key is configured.",
       "apiSourceEnv": "OPENAI_API_KEY detected",
       "apiSourceConfig": "config.json API key detected",
       "apiTitle": "API key provider available",
@@ -920,7 +920,7 @@
     },
     "grokCompatibility": {
       "title": "Grok compatibility",
-      "body": "Grok image generation first runs mandatory web search with grok-4.3, then sends text and attached images to a local image-tool planner that writes the final image prompt in English. Attached references route through xAI image editing; size is mapped to aspect ratio/resolution. Output format, moderation, and reasoning are only used by OAuth and API key providers."
+      "body": "Grok image generation first runs mandatory web search with grok-4.3, then sends text and attached images to a local image-tool planner that writes the final image prompt in English. Attached references route through xAI image editing; size is mapped to aspect ratio/resolution. Output format, moderation, and reasoning are only used by GPT OAuth and API key providers."
     },
     "gallery": {
       "defaultScopeTitle": "Default gallery view",
@@ -1020,7 +1020,7 @@
     },
     "oauthImageCapabilityUnavailable": {
       "title": "This account may not have image-tool access",
-      "body": "OAuth is connected, but this account/model combination may not be entitled to use image generation. Compare with API-key mode or another model.",
+      "body": "GPT OAuth is connected, but this account/model combination may not be entitled to use image generation. Compare with API-key mode or another model.",
       "cta": "OK"
     },
     "responsesStreamError": {
@@ -1040,7 +1040,7 @@
     },
     "authApiKeyInvalid": {
       "title": "API key authentication failed",
-      "body": "The key is missing, invalid, revoked, out of quota, or tied to the wrong org. Switch to OAuth or update the configured API key.",
+      "body": "The key is missing, invalid, revoked, out of quota, or tied to the wrong org. Switch to GPT OAuth or update the configured API key.",
       "cta": "OK"
     },
     "networkFailed": {
@@ -1049,8 +1049,8 @@
       "cta": "Reload"
     },
     "oauthUnavailable": {
-      "title": "OAuth proxy unavailable",
-      "body": "The OAuth proxy is starting, unavailable, or moved to a fallback port. Reload first; if it persists, run `ima2 doctor` and check the reported OAuth URL.",
+      "title": "GPT OAuth proxy unavailable",
+      "body": "The GPT OAuth proxy is starting, unavailable, or moved to a fallback port. Reload first; if it persists, run `ima2 doctor` and check the reported GPT OAuth URL.",
       "cta": "Reload"
     },
     "invalidRequest": {
@@ -1060,7 +1060,7 @@
     },
     "apikeyDisabled": {
       "title": "API-key mode is unavailable",
-      "body": "This build supports API-key generation, but the current request could not use a configured key. Switch to OAuth or update the API key.",
+      "body": "This build supports API-key generation, but the current request could not use a configured key. Switch to GPT OAuth or update the API key.",
       "cta": "OK"
     }
   },

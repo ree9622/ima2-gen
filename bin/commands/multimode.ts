@@ -43,7 +43,7 @@ const HELP = `
     -d, --out-dir <dir>                 Output dir for multiple images
         --json
         --model <gpt-5.5|gpt-5.4|gpt-5.4-mini>
-        --provider <auto|oauth|api|grok>  Provider for this request; grok uses progrok proxy
+        --provider <auto|oauth|api|grok>  Provider (oauth = GPT OAuth; grok = xAI Grok)
         --mode <auto|direct>            Prompt handling mode. Default: auto
         --ref <file>                    Attach reference image (repeatable, max 5)
         --reasoning-effort <none|low|medium|high|xhigh>

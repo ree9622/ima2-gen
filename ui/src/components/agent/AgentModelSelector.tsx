@@ -45,7 +45,7 @@ export function AgentModelSelector({ settings, onChange }: Props) {
       <label>
         <span>{t("agent.provider")}</span>
         <select value={settings.provider} onChange={(event) => setProvider(event.target.value as AgentGenerationSettings["provider"])}>
-          <option value="oauth">OAuth</option>
+          <option value="oauth">GPT OAuth</option>
           <option value="api">API</option>
           <option value="grok">Grok</option>
         </select>

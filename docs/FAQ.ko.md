@@ -2,7 +2,7 @@
 
 마지막 확인: 2026-05-26
 
-이 문서는 설치, 업데이트, OAuth, 갤러리, 레퍼런스 이미지 관련 질문을 모아둔 FAQ입니다. README는 짧게 유지하고, 자세한 설명은 이곳에 둡니다.
+이 문서는 설치, 업데이트, GPT OAuth, 갤러리, 레퍼런스 이미지 관련 질문을 모아둔 FAQ입니다. README는 짧게 유지하고, 자세한 설명은 이곳에 둡니다.
 
 English version: [FAQ.md](FAQ.md)
 
@@ -11,8 +11,8 @@ English version: [FAQ.md](FAQ.md)
 | 증상 | 먼저 해볼 것 |
 |---|---|
 | 서버에 연결되지 않음 | `ima2 serve`를 켠 뒤 `ima2 ping`을 실행합니다. |
-| OAuth 로그인이 안 됨 | `npx @openai/codex login`을 실행하고 `ima2 serve`를 다시 시작합니다. |
-| API key provider가 `API_KEY_REQUIRED`를 반환함 | API 키를 설정하거나 OAuth 공급자로 다시 전환합니다. |
+| GPT OAuth 로그인이 안 됨 | `npx @openai/codex login`을 실행하고 `ima2 serve`를 다시 시작합니다. |
+| API key provider가 `API_KEY_REQUIRED`를 반환함 | API 키를 설정하거나 GPT OAuth 공급자로 다시 전환합니다. |
 | 업데이트 후 예전 이미지가 안 보임 | `ima2 doctor`를 실행한 뒤 [예전 이미지 복구 안내](RECOVER_OLD_IMAGES.md)를 확인합니다. |
 | `gpt-5.5`만 실패함 | Codex CLI를 업데이트하고, 안정 대안으로 `gpt-5.4`를 사용합니다. |
 | 레퍼런스 업로드 실패 | JPEG/PNG로 변환하고 해상도를 낮춰 보세요. 레퍼런스는 최대 5장입니다. |
@@ -82,7 +82,7 @@ API 키를 설정하면 이미지 생성 엔드포인트도 `provider: "api"`로
 
 ### Codex CLI에 이미 로그인되어 있으면 자동으로 잡히나요?
 
-네. `ima2-gen`은 기존 Codex 로그인 상태를 확인하고 로컬 OAuth 경로를 사용합니다. 감지에 실패하거나 토큰이 만료되면 다음을 실행하세요.
+네. `ima2-gen`은 기존 Codex 로그인 상태를 확인하고 로컬 GPT OAuth 경로를 사용합니다. 감지에 실패하거나 토큰이 만료되면 다음을 실행하세요.
 
 ```bash
 npx @openai/codex login
@@ -118,7 +118,7 @@ ima2 serve
 
 ### Plus/Pro는 몇 장까지 생성할 수 있나요?
 
-커뮤니티에서 말하는 숫자를 보장으로 받아들이면 안 됩니다. OAuth 생성은 계정, 백엔드 capability, 트래픽, 정책 변경의 영향을 받을 수 있습니다. `ima2-gen` 문서에서는 고정된 Plus/Pro 생성 횟수를 약속하지 않습니다.
+커뮤니티에서 말하는 숫자를 보장으로 받아들이면 안 됩니다. GPT OAuth 생성은 계정, 백엔드 capability, 트래픽, 정책 변경의 영향을 받을 수 있습니다. `ima2-gen` 문서에서는 고정된 Plus/Pro 생성 횟수를 약속하지 않습니다.
 
 ## Prompt Studio와 멀티모드
 
@@ -258,7 +258,7 @@ ima2 ping
 
 필요하면 `ima2 serve`를 다시 시작합니다.
 
-### OAuth 이미지 생성이 이미지 없이 끝나면 무엇을 공유해야 하나요?
+### GPT OAuth 이미지 생성이 이미지 없이 끝나면 무엇을 공유해야 하나요?
 
 먼저 moderation으로 단정하지 말고 image probe를 실행하세요. `EMPTY_RESPONSE`는
 Responses 경로에서 `ima2-gen`이 사용할 수 있는 이미지 데이터가 나오지 않았다는
@@ -326,7 +326,7 @@ export HTTPS_PROXY=http://127.0.0.1:7890
 
 ### 회사 컴퓨터에서는 무엇을 확인해야 하나요?
 
-OAuth는 OpenAI와 ChatGPT/Codex 관련 호스트 접근이 필요할 수 있습니다. 회사 방화벽, TLS 검사, VPN, 프록시가 흐름을 깨뜨릴 수 있습니다. 로그인 실패와 `failed to fetch`가 반복되면 다른 네트워크에서도 시도해 보세요.
+GPT OAuth는 OpenAI와 ChatGPT/Codex 관련 호스트 접근이 필요할 수 있습니다. 회사 방화벽, TLS 검사, VPN, 프록시가 흐름을 깨뜨릴 수 있습니다. 로그인 실패와 `failed to fetch`가 반복되면 다른 네트워크에서도 시도해 보세요.
 
 ## CLI 점검 순서
 

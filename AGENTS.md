@@ -2,7 +2,7 @@
 
 ## What This Project Does
 GPT Image 2 (gpt-image-2) 이미지 생성기 CLI + 웹 UI
-- OAuth (ChatGPT 계정) 또는 API Key 인증 지원
+- GPT OAuth (ChatGPT 계정) 또는 API Key 인증 지원
 - 텍스트→이미지, 이미지→이미지(편집) 생성
 - 병렬 생성 (최대 8장)
 

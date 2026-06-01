@@ -224,10 +224,10 @@
     "offline": "오프라인",
     "remaining": "${remaining} 남음",
     "thisMonth": "이번 달 ${amount}",
-    "oauthFree": "OAuth 무료 사용 가능",
+    "oauthFree": "GPT OAuth 무료 사용 가능",
     "apiDisabled": "API 키 사용 가능",
     "apiReady": "API 키 사용 가능",
-    "oauthMode": "OAuth 모드"
+    "oauthMode": "GPT OAuth 모드"
   },
   "history": {
     "openGalleryAria": "갤러리 열기",
@@ -500,10 +500,10 @@
   "provider": {
     "authTitle": "공급자",
     "apiLabel": "API 키",
-    "oauthNotReady": "OAuth 프록시가 아직 준비되지 않았습니다.",
+    "oauthNotReady": "GPT OAuth 프록시가 아직 준비되지 않았습니다.",
     "codexLoginRequired": "Codex 로그인이 필요합니다.",
     "codexLoginHint": "터미널에서 `codex login`을 실행한 뒤 이 페이지를 새로고침하세요.",
-    "oauthStarting": "OAuth 프록시가 시작 중입니다. 몇 초 후 다시 시도하세요.",
+    "oauthStarting": "GPT OAuth 프록시가 시작 중입니다. 몇 초 후 다시 시도하세요.",
     "serverUnreachable": "서버에 연결할 수 없습니다. 백엔드가 실행 중인지 확인하세요.",
     "apiInvalid": "API 키가 없거나 유효하지 않습니다. 서버의 .env 파일에서 OPENAI_API_KEY를 확인하세요.",
     "grokOffline": "Grok 프록시가 실행되지 않고 있습니다.",
@@ -840,7 +840,7 @@
     "sections": {
       "account": {
         "title": "계정",
-        "hint": "OAuth 상태"
+        "hint": "GPT OAuth 상태"
       },
       "generation": {
         "title": "생성",
@@ -865,8 +865,8 @@
     },
     "account": {
       "primaryEyebrow": "현재 공급자",
-      "oauthTitle": "OAuth 사용 중",
-      "oauthBody": "OAuth 생성은 Codex OAuth 세션으로 실행됩니다. 유효한 키가 설정되어 있으면 API-Key 모드로 전환할 수 있습니다.",
+      "oauthTitle": "GPT OAuth 사용 중",
+      "oauthBody": "GPT OAuth 생성은 Codex OAuth 세션으로 실행됩니다. 유효한 키가 설정되어 있으면 API-Key 모드로 전환할 수 있습니다.",
       "apiSourceEnv": "OPENAI_API_KEY 감지됨",
       "apiSourceConfig": "config.json API 키 감지됨",
       "apiTitle": "API 키 공급자 사용 가능",
@@ -920,7 +920,7 @@
     },
     "grokCompatibility": {
       "title": "Grok 호환성",
-      "body": "Grok 이미지 생성은 grok-4.3이 먼저 필수 웹 검색을 수행하고, 그 다음 텍스트와 첨부 이미지를 함께 보는 image-tool planner가 최종 이미지 프롬프트를 영어로 작성한 뒤 xAI Images API로 실행됩니다. 첨부 레퍼런스는 xAI 이미지 편집 경로로 유지되고, 크기는 aspect ratio/resolution으로 매핑됩니다. 출력 포맷·모더레이션·추론은 OAuth/API 키 공급자에서만 사용됩니다."
+      "body": "Grok 이미지 생성은 grok-4.3이 먼저 필수 웹 검색을 수행하고, 그 다음 텍스트와 첨부 이미지를 함께 보는 image-tool planner가 최종 이미지 프롬프트를 영어로 작성한 뒤 xAI Images API로 실행됩니다. 첨부 레퍼런스는 xAI 이미지 편집 경로로 유지되고, 크기는 aspect ratio/resolution으로 매핑됩니다. 출력 포맷·모더레이션·추론은 GPT OAuth/API 키 공급자에서만 사용됩니다."
     },
     "gallery": {
       "defaultScopeTitle": "기본 갤러리 보기",
@@ -943,7 +943,7 @@
     },
     "future": {
       "title": "나중을 위한 자리",
-      "body": "OAuth 복구 도구나 작업공간 옵션이 실제로 필요해지면 이곳에 추가합니다."
+      "body": "GPT OAuth 복구 도구나 작업공간 옵션이 실제로 필요해지면 이곳에 추가합니다."
     }
   },
   "nodeCanvas": {
@@ -1020,7 +1020,7 @@
     },
     "oauthImageCapabilityUnavailable": {
       "title": "현재 계정에서 이미지 도구를 사용할 수 없는 것 같아요",
-      "body": "OAuth 로그인은 되어 있지만, 이 계정/모델 조합에서 이미지 생성 도구 권한이 없을 수 있어요. API-Key 모드나 다른 모델로 확인해 주세요.",
+      "body": "GPT OAuth 로그인은 되어 있지만, 이 계정/모델 조합에서 이미지 생성 도구 권한이 없을 수 있어요. API-Key 모드나 다른 모델로 확인해 주세요.",
       "cta": "확인"
     },
     "responsesStreamError": {
@@ -1040,7 +1040,7 @@
     },
     "authApiKeyInvalid": {
       "title": "API 키 인증 실패",
-      "body": "키가 없거나 잘못됐거나, 한도/조직 권한 문제가 있을 수 있어요. OAuth로 전환하거나 설정된 API 키를 갱신해 주세요.",
+      "body": "키가 없거나 잘못됐거나, 한도/조직 권한 문제가 있을 수 있어요. GPT OAuth로 전환하거나 설정된 API 키를 갱신해 주세요.",
       "cta": "확인"
     },
     "networkFailed": {
@@ -1049,8 +1049,8 @@
       "cta": "새로고침"
     },
     "oauthUnavailable": {
-      "title": "OAuth 프록시를 사용할 수 없어요",
-      "body": "OAuth 프록시가 아직 시작 중이거나, 사용할 수 없거나, fallback 포트로 이동했을 수 있어요. 먼저 새로고침하고, 계속되면 `ima2 doctor`의 OAuth URL을 확인해 주세요.",
+      "title": "GPT OAuth 프록시를 사용할 수 없어요",
+      "body": "GPT OAuth 프록시가 아직 시작 중이거나, 사용할 수 없거나, fallback 포트로 이동했을 수 있어요. 먼저 새로고침하고, 계속되면 `ima2 doctor`의 GPT OAuth URL을 확인해 주세요.",
       "cta": "새로고침"
     },
     "invalidRequest": {
@@ -1060,7 +1060,7 @@
     },
     "apikeyDisabled": {
       "title": "API-Key 모드를 사용할 수 없어요",
-      "body": "이 빌드는 API-Key 생성을 지원하지만 현재 요청에서 설정된 키를 사용할 수 없었습니다. OAuth로 전환하거나 API 키를 갱신해 주세요.",
+      "body": "이 빌드는 API-Key 생성을 지원하지만 현재 요청에서 설정된 키를 사용할 수 없었습니다. GPT OAuth로 전환하거나 API 키를 갱신해 주세요.",
       "cta": "확인"
     }
   },

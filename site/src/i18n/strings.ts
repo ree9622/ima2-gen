@@ -6,7 +6,7 @@ const en: Dict = {
   // Base / meta
   'meta.title': 'ima2-gen — Local AI Studio for Image + Video Generation',
   'meta.desc':
-    'Generate images and videos locally with Classic, Node, Canvas, Grok Video, and OAuth/API providers. No API key required.',
+    'Generate images and videos locally with Classic, Node, Canvas, Grok Video, and GPT OAuth/API providers. No API key required.',
   'meta.og.title': 'ima2-gen — Generate, branch, animate',
   'meta.og.desc':
     'A local AI studio with image generation, Grok Video, Node-graph branching, and Canvas Mode. Two lines to install.',
@@ -100,7 +100,7 @@ const en: Dict = {
   'branch.s3.strong': 'Compare without loss.',
   'branch.s3.body': 'The parent stays. Children recover by request ID even after a refresh.',
 
-  // Local & OAuth
+  // Local & GPT OAuth
   'local.tag': '04 · Local & open',
   'local.h.before': 'Sign in. ',
   'local.h.em': 'Stay local.',
@@ -108,10 +108,10 @@ const en: Dict = {
     "Start with your free ChatGPT login or a SuperGrok subscription. No API key needed. Generated images, videos, and sessions stay on your disk — not on someone else's.",
   'local.quote.before': 'If the settings page says ',
   'local.quote.strong': 'Configured but disabled',
-  'local.quote.after': ', that means an API key exists in env/config but the current workspace is using OAuth. Switch provider to API or Grok when you want those paths.',
+  'local.quote.after': ', that means an API key exists in env/config but the current workspace is using GPT OAuth. Switch provider to API or Grok when you want those paths.',
   'local.meta': 'User-data folder · MIT licensed · Inspect, sync, version — your call.',
   'local.shot.alt':
-    'ima2-gen Settings workspace showing OAuth active and an API key configured but disabled.',
+    'ima2-gen Settings workspace showing GPT OAuth active and an API key configured but disabled.',
 
   // Install
   'install.tag': '06 · Get going',
@@ -139,7 +139,7 @@ const en: Dict = {
     'Locally. Generated images and session logs live in your user-data folder. Inspect, sync, version — your call. Image files are not uploaded to a separate remote store.',
   'faq.q3': 'Do I need an OpenAI API key?',
   'faq.a3':
-    'No for the default OAuth path. `ima2-gen` can also use an OpenAI API key or bundled Grok/progrok when you explicitly choose those providers.',
+    'No for the default GPT OAuth path. `ima2-gen` can also use an OpenAI API key or bundled Grok/progrok when you explicitly choose those providers.',
 
   // FAQ — full detail page
   'faq.page.title': 'FAQ — ima2-gen',
@@ -182,7 +182,7 @@ const en: Dict = {
 
   'faq.tech.q1': 'What data leaves my machine?',
   'faq.tech.a1':
-    'The generation request goes to the selected provider: OpenAI through OAuth/API, or xAI through bundled progrok for Grok. The result file and session log stay on your disk.',
+    'The generation request goes to the selected provider: OpenAI through GPT OAuth/API, or xAI through bundled progrok for Grok. The result file and session log stay on your disk.',
   'faq.tech.q2': 'Does it work offline?',
   'faq.tech.a2':
     'Generation needs the selected provider network path, so an internet connection is required for that step. Browsing the local gallery, organizing sessions, and editing style sheets work offline.',
@@ -299,7 +299,7 @@ const ko: Dict = {
   'branch.s3.strong': '원본은 그대로, 결과는 나란히.',
   'branch.s3.body': '새로고침해도 요청 기록을 기준으로 결과를 다시 불러옵니다.',
 
-  // Local & OAuth
+  // Local & GPT OAuth
   'local.tag': '04 · 로컬 & 오픈',
   'local.h.before': '로그인 한 번, ',
   'local.h.em': '내 컴퓨터에 저장.',
@@ -308,10 +308,10 @@ const ko: Dict = {
   'local.quote.before': '설정에 ',
   'local.quote.strong': 'Configured but disabled',
   'local.quote.after':
-    '가 보인다면, API key가 설정돼 있지만 현재 작업공간은 OAuth를 쓰고 있다는 뜻입니다. API나 Grok 경로를 쓰려면 provider를 바꾸세요.',
+    '가 보인다면, API key가 설정돼 있지만 현재 작업공간은 GPT OAuth를 쓰고 있다는 뜻입니다. API나 Grok 경로를 쓰려면 provider를 바꾸세요.',
   'local.meta': '로컬 저장 · MIT 라이선스 · 확인, 동기화, 버전 관리까지 원하는 방식으로.',
   'local.shot.alt':
-    'ima2-gen 설정 화면 — OAuth 활성, API key는 설정되어 있지만 비활성.',
+    'ima2-gen 설정 화면 — GPT OAuth 활성, API key는 설정되어 있지만 비활성.',
 
   // Install
   'install.tag': '06 · 시작하기',
@@ -339,7 +339,7 @@ const ko: Dict = {
     '로컬 사용자 데이터 폴더에 이미지와 작업 기록이 저장됩니다. 직접 확인, 동기화, 버전 관리까지 가능합니다. 이미지 파일을 별도 외부 저장소에 올리지 않습니다.',
   'faq.q3': 'OpenAI API key가 필요한가요?',
   'faq.a3':
-    '기본 OAuth 경로에는 필요 없습니다. 명시적으로 선택하면 OpenAI API key 경로나 번들 Grok/progrok 경로도 사용할 수 있습니다.',
+    '기본 GPT OAuth 경로에는 필요 없습니다. 명시적으로 선택하면 OpenAI API key 경로나 번들 Grok/progrok 경로도 사용할 수 있습니다.',
 
   // FAQ — 상세 페이지
   'faq.page.title': 'FAQ — ima2-gen',
@@ -382,7 +382,7 @@ const ko: Dict = {
 
   'faq.tech.q1': '내 컴퓨터에서 어떤 데이터가 나가나요?',
   'faq.tech.a1':
-    '이미지 생성 요청은 선택한 provider로 전송됩니다: OAuth/API는 OpenAI, Grok은 번들 progrok을 통한 xAI입니다. 결과 파일과 작업 기록은 로컬에 남습니다.',
+    '이미지 생성 요청은 선택한 provider로 전송됩니다: GPT OAuth/API는 OpenAI, Grok은 번들 progrok을 통한 xAI입니다. 결과 파일과 작업 기록은 로컬에 남습니다.',
   'faq.tech.q2': '오프라인에서도 되나요?',
   'faq.tech.a2':
     '이미지 생성은 선택한 provider 네트워크 경로가 필요해 인터넷이 있어야 합니다. 로컬 갤러리 조회, 세션 정리, 스타일 시트 편집은 오프라인에서도 사용할 수 있습니다.',

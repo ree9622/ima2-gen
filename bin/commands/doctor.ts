@@ -63,7 +63,7 @@ function showImageProbeHelp() {
     --quality <quality>    Default: low
     --moderation <value>   Default: low
     --prompt <text>        Override built-in cat prompt
-    --oauth-url <url>      Override OAuth proxy URL
+    --oauth-url <url>      Override GPT OAuth proxy URL
     --timeout-ms <ms>      Per-probe timeout
 `);
 }
@@ -160,7 +160,7 @@ async function standardDoctor() {
   console.log(`  ℹ Preferred backend port: ${runtimeConfig.server.port}`);
   if (adv?.backend || adv?.port) {
     console.log(`  ℹ Backend actual URL: ${adv?.backend?.url || adv?.url || `http://localhost:${adv.port}`}`);
-    if (adv?.oauth) console.log(`  ℹ OAuth actual URL: ${adv.oauth.url} (${adv.oauth.status || "unknown"})`);
+    if (adv?.oauth) console.log(`  ℹ GPT OAuth actual URL: ${adv.oauth.url} (${adv.oauth.status || "unknown"})`);
   }
 
   const hardeningLines = await buildHardeningDoctorLines({
@@ -187,7 +187,7 @@ async function standardDoctor() {
   for (const line of storageLines) console.log(line);
 
   const auth = detectCodexAuth();
-  if (auth.platform === "win32") console.log("  ℹ Windows OAuth note: use WSL2 for Codex login.");
+  if (auth.platform === "win32") console.log("  ℹ Windows GPT OAuth note: use WSL2 for Codex login.");
 
   console.log(`\n  ${ok} passed, ${fail} failed\n`);
   process.exit(fail > 0 ? 1 : 0);

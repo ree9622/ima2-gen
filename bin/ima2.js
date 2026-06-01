@@ -135,7 +135,7 @@ async function setup() {
         config.oauth.disableAutoStart = false;
         delete config.apiKey;
         saveConfig(config);
-        console.log("\n  Starting OAuth login...\n");
+        console.log("\n  Starting GPT OAuth login...\n");
         const auth = detectCodexAuth();
         const hasAuth = auth.authed;
         if (!hasAuth) {
@@ -154,10 +154,10 @@ async function setup() {
         }
         else {
             const how = auth.probe === "authed" ? "codex CLI" : "auth file";
-            console.log(`  Existing OAuth session found (${how}).\n`);
+            console.log(`  Existing GPT OAuth session found (${how}).\n`);
         }
         saveConfig(config);
-        console.log("  OAuth configured. Starting server...\n");
+        console.log("  GPT OAuth configured. Starting server...\n");
     }
     rl.close();
     return config;
@@ -222,7 +222,7 @@ async function showStatus() {
     }
     // Check OAuth auth files + codex CLI probe
     const auth = detectCodexAuth();
-    console.log(`  OAuth sessions:`);
+    console.log(`  GPT OAuth sessions:`);
     console.log(`    ${auth.files.codex}          ${auth.fileHits.codex ? "✓" : "✗"}`);
     console.log(`    ${auth.files.chatgpt}  ${auth.fileHits.chatgpt ? "✓" : "✗"}`);
     if (auth.fileHits.xdgCodex) {
@@ -255,7 +255,7 @@ function showHelp() {
 
   Server commands:
     serve [--dev]  Start the image generation server
-    setup, login   Configure API key or OAuth (interactive)
+    setup, login   Configure API key or GPT OAuth (interactive)
     status         Show current configuration status
     doctor         Diagnose environment and setup
     open           Open web UI in browser
@@ -283,7 +283,7 @@ function showHelp() {
     storage <sub>  Storage status / open-dir       (ima2 storage --help)
     billing        API usage / quota
     providers      Configured providers
-    oauth <sub>    OAuth proxy status              (ima2 oauth --help)
+    oauth <sub>    GPT OAuth proxy status              (ima2 oauth --help)
     grok <sub>     Bundled Grok auth/status         (ima2 grok --help)
     config <sub>   Config get/set/ls/path/rm       (ima2 config --help)
     defaults <sub> Inspect/change model defaults   (ima2 defaults --help)

@@ -58,8 +58,8 @@ function printText(capabilities) {
     out(`server: ${capabilities.server || "none"}`);
     out("");
     out("defaults:");
-    out(`  oauth model: ${capabilities.defaults?.oauth?.model}`);
-    out(`  oauth reasoning: ${capabilities.defaults?.oauth?.reasoningEffort}`);
+    out(`  gpt-oauth model: ${capabilities.defaults?.oauth?.model}`);
+    out(`  gpt-oauth reasoning: ${capabilities.defaults?.oauth?.reasoningEffort}`);
     out(`  api model: ${capabilities.defaults?.api?.model}`);
     out(`  api reasoning: ${capabilities.defaults?.api?.reasoningEffort}`);
     out(`  grok model: ${capabilities.defaults?.grok?.model}`);

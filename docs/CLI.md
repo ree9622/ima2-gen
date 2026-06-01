@@ -60,7 +60,7 @@ Provider override semantics:
 - `api` forces the API-key Responses path and requires a configured API key.
 - `oauth` forces the local OAuth proxy path.
 - `grok` uses the bundled progrok xAI proxy (`127.0.0.1:18645`). Classic generation first runs mandatory xAI Web Search through Responses API, then asks `grok-4.3` to call ima2's local `generate_image` tool, then ima2 executes xAI `/v1/images/generations`. If `--ref` images are attached, the final step uses xAI `/v1/images/edits` instead so image-to-image/reference context is preserved. Models: `grok-imagine-image`, `grok-imagine-image-quality`. Size is mapped to xAI `aspect_ratio` and `resolution`; the UI web-search toggle is OpenAI-provider-only because Grok search is always on in this path.
-- `auto` preserves route default behavior and currently resolves to OAuth unless server routing changes.
+- `auto` preserves route default behavior and currently resolves to GPT OAuth unless server routing changes.
 
 `ima2 serve` starts the bundled Grok proxy automatically. No separate `progrok`
 install is required. Use `ima2 grok login` once to authorize xAI OAuth. Login
@@ -187,7 +187,7 @@ codes, event counts, tool-call summaries, byte counts, provider/model labels,
 and probe statuses. It does not include prompt text, auth tokens, URLs with
 credentials, raw upstream responses, or base64 image data.
 
-For OAuth no-image reports, a useful support bundle is:
+For GPT OAuth no-image reports, a useful support bundle is:
 
 ```bash
 ima2 doctor

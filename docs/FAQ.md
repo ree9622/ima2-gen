@@ -11,8 +11,8 @@ For Korean, see [FAQ.ko.md](FAQ.ko.md).
 | Symptom | Try first |
 |---|---|
 | The server is unreachable | Run `ima2 serve`, then `ima2 ping`. |
-| OAuth login fails | Run `npx @openai/codex login`, then restart `ima2 serve`. |
-| API key provider says `API_KEY_REQUIRED` | Configure an API key, or switch back to the OAuth provider. |
+| GPT OAuth login fails | Run `npx @openai/codex login`, then restart `ima2 serve`. |
+| API key provider says `API_KEY_REQUIRED` | Configure an API key, or switch back to the GPT OAuth provider. |
 | Old gallery images look missing | Run `ima2 doctor`, then see [Recover Old Generated Images](RECOVER_OLD_IMAGES.md). |
 | `gpt-5.5` fails | Update Codex CLI first, then try `gpt-5.4` as the stable fallback. |
 | Reference upload fails | Use JPEG/PNG, lower the resolution, and keep references to 5 images or fewer. |
@@ -88,7 +88,7 @@ It means `ima2-gen` found a valid API key. API-key mode can generate, edit, run 
 
 ### If Codex CLI is already logged in, does ima2-gen reuse it?
 
-Yes. `ima2-gen` checks for an existing Codex login and uses the local OAuth path. If detection fails or the token expires, run:
+Yes. `ima2-gen` checks for an existing Codex login and uses the local GPT OAuth path. If detection fails or the token expires, run:
 
 ```bash
 npx @openai/codex login
@@ -124,7 +124,7 @@ Start with `gpt-5.4` for the safest balanced workflow.
 
 ### How many images can Plus or Pro generate?
 
-Do not treat any community number as a guarantee. OAuth generation can be limited by account, backend capability, traffic, and policy changes. `ima2-gen` does not publish a fixed Plus/Pro image count because that number is not stable enough to document as a promise.
+Do not treat any community number as a guarantee. GPT OAuth generation can be limited by account, backend capability, traffic, and policy changes. `ima2-gen` does not publish a fixed Plus/Pro image count because that number is not stable enough to document as a promise.
 
 ## Prompt Studio and multimode
 
@@ -268,7 +268,7 @@ ima2 ping
 
 Then restart `ima2 serve` if needed.
 
-### What should I share when OAuth image generation returns no image?
+### What should I share when GPT OAuth image generation returns no image?
 
 Use the image probe before assuming moderation. `EMPTY_RESPONSE` means the
 Responses path did not produce image data that `ima2-gen` could use; it can be
@@ -337,7 +337,7 @@ Use the host and port from your proxy client. If `ima2-gen` still fails after th
 
 ### What should I check on a company computer?
 
-OAuth may require access to OpenAI and ChatGPT/Codex-related hosts. A corporate firewall, TLS inspection, VPN, or proxy can break the flow. Try a different network if login and `failed to fetch` errors keep repeating.
+GPT OAuth may require access to OpenAI and ChatGPT/Codex-related hosts. A corporate firewall, TLS inspection, VPN, or proxy can break the flow. Try a different network if login and `failed to fetch` errors keep repeating.
 
 ## CLI troubleshooting checklist
 

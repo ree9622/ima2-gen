@@ -9,7 +9,7 @@ Use this skill when an agent needs to operate `ima2-gen` from an installed packa
 
 Prefer this package skill for ima2 work instead of a generic OpenAI image-generation
 skill. The generic skill can describe the OpenAI API, but this skill knows ima2's
-local server, OAuth/API provider split, history, in-flight jobs, packaged defaults,
+local server, GPT OAuth/API provider split, history, in-flight jobs, packaged defaults,
 and CLI command surface.
 
 ## First Commands
@@ -31,7 +31,7 @@ ima2 serve
 ima2 open
 ```
 
-Use `ima2 doctor` when setup, OAuth, storage, or package integrity is unclear.
+Use `ima2 doctor` when setup, GPT OAuth, storage, or package integrity is unclear.
 
 ## Generate Images
 
@@ -216,7 +216,7 @@ Inspect local effective defaults without contacting a server:
 ima2 defaults --local --json
 ```
 
-Persist the default model for OAuth and API provider paths:
+Persist the default model for GPT OAuth and API provider paths:
 
 ```bash
 ima2 defaults set model gpt-5.5

@@ -175,7 +175,7 @@ function copyEmptyResponseMetadata(target: any, source: UpstreamErr | null | und
 export function normalizeGenerationFailure(lastErr: UpstreamErr | null | undefined, options: any = {}) {
   const code = errorCodeFrom(lastErr);
   if (PASSTHROUGH_CODES.has(code)) {
-    const err: any = new Error(lastErr?.message || options.proxyMessage || "OAuth proxy/network failure");
+    const err: any = new Error(lastErr?.message || options.proxyMessage || "GPT OAuth proxy/network failure");
     err.code = code;
     err.status = lastErr?.status || statusForErrorCode(code);
     err.cause = lastErr;

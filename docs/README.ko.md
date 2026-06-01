@@ -78,7 +78,7 @@ Grok video 생성(T2V/I2V/ref2v)은 v1.1.16부터 사용 가능합니다. 텍스
 
 설정 화면에 **API key provider available**이나 **Grok provider available**이 보이면 해당 공급자가 감지됐고 생성 요청에 사용할 수 있다는 뜻입니다.
 
-![OAuth 활성화와 API 키 비활성 상태를 보여주는 설정 화면](../assets/screenshots/settings-oauth-generation.png)
+![GPT OAuth 활성화와 API 키 비활성 상태를 보여주는 설정 화면](../assets/screenshots/settings-oauth-generation.png)
 
 ## 모델 안내
 
@@ -225,14 +225,14 @@ environment variables > ~/.ima2/config.json > built-in defaults
 **`ima2 ping`이 서버에 연결하지 못한다고 나와요**
 `ima2 serve`를 먼저 실행하고 `~/.ima2/server.json`을 확인하세요. `ima2 ping --server http://localhost:3333`도 사용할 수 있습니다.
 
-**OAuth 로그인이 안 돼요**
+**GPT OAuth 로그인이 안 돼요**
 `npx @openai/codex login`을 실행하고, `ima2 status`를 확인한 뒤 `ima2 serve`를 다시 시작하세요.
 
 **프록시/VPN 환경에서 `fetch failed`가 반복돼요**
 로컬 OAuth 프록시가 접근 가능한지 확인하세요. 프록시가 필요한 네트워크라면 프록시 클라이언트의 TUN/TURN류 모드를 켠 뒤 `npx openai-oauth --port 10531`을 다시 시도하세요. 그래도 실패하면 `ima2 serve` 또는 `openai-oauth`를 실행하는 같은 터미널에 `HTTP_PROXY`와 `HTTPS_PROXY`를 설정하세요.
 
 **이미지 생성이 `API_KEY_REQUIRED`로 실패해요**
-`provider: "api"` 요청에 사용할 API 키가 설정되어 있지 않다는 뜻입니다. API 키를 설정하거나 OAuth 공급자로 전환하세요.
+`provider: "api"` 요청에 사용할 API 키가 설정되어 있지 않다는 뜻입니다. API 키를 설정하거나 GPT OAuth 공급자로 전환하세요.
 
 **큰 레퍼런스 이미지가 실패해요**
 JPEG/PNG는 업로드 전에 자동 압축됩니다. 그래도 실패하면 해상도를 낮춘 JPEG/PNG로 바꿔 다시 시도하세요. HEIC/HEIF는 브라우저 경로에서 지원하지 않습니다.

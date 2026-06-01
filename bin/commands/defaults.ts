@@ -25,8 +25,8 @@ const HELP = `
 
   Subcommands:
     ls                         Show effective defaults
-    set model <model>          Persist default model for OAuth and API paths
-    set reasoning <effort>     Persist default reasoning effort for OAuth and API paths
+    set model <model>          Persist default model for GPT OAuth and API paths
+    set reasoning <effort>     Persist default reasoning effort for GPT OAuth and API paths
     reset model                Remove persisted model defaults
     reset reasoning            Remove persisted reasoning defaults
 

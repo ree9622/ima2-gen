@@ -270,7 +270,7 @@ export async function startServer(overrides: StartServerOverrides = {}) {
   ctx.serverActualPort = getServerPort(server) || ctx.config.server.port;
   ctx.serverUrl = `http://${runtimeHostUrl(ctx.config.server.host)}:${ctx.serverActualPort}`;
   console.log(`Image Gen running at ${ctx.serverUrl}`);
-  console.log(`Provider policy: OAuth, API-key Responses, and Grok Images providers. OAuth proxy port ${ctx.oauthPort}; Grok proxy port ${ctx.grokActualPort || ctx.grokPort}.`);
+  console.log(`Provider policy: GPT OAuth, API-key Responses, and Grok Images providers. GPT OAuth proxy port ${ctx.oauthPort}; Grok proxy port ${ctx.grokActualPort || ctx.grokPort}.`);
   advertise(ctx);
   try {
     const s = ensureDefaultSession();

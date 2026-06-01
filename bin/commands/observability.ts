@@ -9,10 +9,10 @@ const HELP = `
     storage status [--json]                  Storage inspection
     storage open                             Open generated-dir in OS file manager
 
-  Billing / Providers / OAuth:
+  Billing / Providers / GPT OAuth:
     billing [--json]                         API usage / quota
     providers [--json]                       Configured providers
-    oauth status [--json]                    OAuth proxy state
+    oauth status [--json]                    GPT OAuth proxy state
 
   Inflight jobs:
     inflight ls [--kind classic|node|multimode] [--session <id>] [--terminal] [--json]

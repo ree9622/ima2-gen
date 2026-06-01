@@ -1,5 +1,8 @@
+import type { DragEvent } from "react";
 import type { GenerateItem } from "../../types";
 import { getGalleryItemKey } from "../../lib/galleryNavigation";
+import { isVideoItem } from "../../lib/videoMedia";
+import { buildVideoDragPayload } from "../../lib/videoContinuity";
 
 type SidebarHistoryImageCardProps = {
   item: GenerateItem;
@@ -21,22 +24,43 @@ export function SidebarHistoryImageCard({
   onDelete,
 }: SidebarHistoryImageCardProps) {
   const key = getGalleryItemKey(item);
+  const isVideo = isVideoItem(item);
+
+  const onDragStart = (event: DragEvent<HTMLButtonElement>) => {
+    event.dataTransfer.setData(
+      "application/ima2-ref",
+      JSON.stringify(isVideo ? buildVideoDragPayload(item) : { image: item.url || item.image, filename: item.filename }),
+    );
+    event.dataTransfer.effectAllowed = "copy";
+  };
 
   return (
     <div className="sidebar-history__item">
       <button
         ref={(node) => setRef(key, node)}
         type="button"
-        className={`sidebar-history__thumb${active ? " active" : ""}`}
+        className={`sidebar-history__thumb${active ? " active" : ""}${isVideo ? " sidebar-history__thumb--video" : ""}`}
         onClick={() => onSelect(item)}
         aria-label={selectLabel}
+        title={item.prompt ?? ""}
+        draggable
+        onDragStart={onDragStart}
       >
-        <img
-          src={item.thumb || item.url || item.image}
-          alt=""
-          loading="lazy"
-          decoding="async"
-        />
+        {isVideo ? (
+          <video
+            src={item.url || item.image}
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <img
+            src={item.thumb || item.url || item.image}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        )}
       </button>
       <button
         type="button"

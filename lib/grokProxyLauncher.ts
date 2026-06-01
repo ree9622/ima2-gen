@@ -23,6 +23,7 @@ type GrokProxyPortInfo = {
 type GrokProxyOptions = {
   host?: string;
   port?: number;
+  progrokBinPath?: string;
   restartDelayMs?: number;
   onPortSelected?: (info: GrokProxyPortInfo) => void;
   onReady?: (info: GrokProxyReadyInfo) => void;
@@ -36,6 +37,16 @@ function parseListeningUrl(line: string): { url: string; port: number } | null {
   return Number.isFinite(port) ? { url: match[0], port } : null;
 }
 
+export function isGrokProxyAuthRequiredMessage(line: string): boolean {
+  const normalized = String(line || "").toLowerCase();
+  return normalized.includes("not logged in")
+    && (normalized.includes("progrok login") || normalized.includes("ima2 grok login"));
+}
+
+export function normalizeGrokProxyMessage(line: string): string {
+  return String(line || "").replace(/`?progrok login`?/gi, "`ima2 grok login`");
+}
+
 function localBinPath(): string {
   return join(rootDir, "node_modules", ".bin");
 }
@@ -47,6 +58,7 @@ export async function startGrokProxy(options: GrokProxyOptions = {}) {
   let currentChild: ChildProcess | null = null;
   let stopping = false;
   let restartTimer: NodeJS.Timeout | null = null;
+  let authRequired = false;
 
   const scheduleRestart = () => {
     restartTimer = setTimeout(() => {
@@ -72,7 +84,7 @@ export async function startGrokProxy(options: GrokProxyOptions = {}) {
     }
     options.onPortSelected?.({ host, port, requestedPort, url: `http://${host}:${port}/v1` });
     console.log(`Starting bundled progrok proxy for Grok images at http://${host}:${port}/v1 (managed by ima2 serve)...`);
-    const progrokBin = join(localBinPath(), isWin ? "progrok.cmd" : "progrok");
+    const progrokBin = options.progrokBinPath ?? join(localBinPath(), isWin ? "progrok.cmd" : "progrok");
     const child = spawn(progrokBin, ["proxy", "--host", host, "--port", String(port)], {
       stdio: ["ignore", "pipe", "pipe"],
       shell: isWin,
@@ -80,12 +92,14 @@ export async function startGrokProxy(options: GrokProxyOptions = {}) {
       env: process.env,
     });
     currentChild = child;
+    authRequired = false;
 
     child.stdout?.on("data", (d) => {
-      const msg = d.toString().trim();
+      const msg = normalizeGrokProxyMessage(d.toString().trim());
       if (!msg) return;
       console.log(`[grok] ${msg}`);
       for (const line of msg.split(/\r?\n/)) {
+        if (isGrokProxyAuthRequiredMessage(line)) authRequired = true;
         const ready = parseListeningUrl(line);
         if (!ready) continue;
         console.log(`[grok] ready for ima2 Grok provider at ${ready.url}`);
@@ -94,8 +108,11 @@ export async function startGrokProxy(options: GrokProxyOptions = {}) {
     });
 
     child.stderr?.on("data", (d) => {
-      const msg = d.toString().trim();
+      const msg = normalizeGrokProxyMessage(d.toString().trim());
       if (msg) console.error(`[grok] ${msg}`);
+      for (const line of msg.split(/\r?\n/)) {
+        if (isGrokProxyAuthRequiredMessage(line)) authRequired = true;
+      }
     });
 
     child.on("error", (err) => {
@@ -106,6 +123,11 @@ export async function startGrokProxy(options: GrokProxyOptions = {}) {
       if (currentChild === child) currentChild = null;
       if (stopping) return;
       options.onExit?.({ code });
+      if (authRequired && code !== 0) {
+        console.error("[grok] Grok OAuth is not logged in. Run `ima2 grok login` to enable Grok images/video.");
+        console.error("[grok] Continuing without auto-restarting the Grok proxy. GPT OAuth/API image generation can still run.");
+        return;
+      }
       console.log(`[grok] exited with code ${code}, restarting in ${Math.round(restartDelayMs / 1000)}s...`);
       scheduleRestart();
     });

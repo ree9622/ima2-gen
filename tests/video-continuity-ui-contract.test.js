@@ -18,6 +18,7 @@ describe("video continuity UI contracts", () => {
   it("carries video lineage through drag producers and composer consumer", () => {
     assert.match(read("ui/src/components/GalleryImageTile.tsx"), /buildVideoDragPayload/);
     assert.match(read("ui/src/components/HistoryStrip.tsx"), /buildVideoDragPayload/);
+    assert.match(read("ui/src/components/history/SidebarHistoryImageCard.tsx"), /buildVideoDragPayload/);
     const composer = read("ui/src/components/PromptComposer.tsx");
     assert.match(composer, /continueFromItem/);
     const shared = read("ui/src/lib/continueFromItem.ts");

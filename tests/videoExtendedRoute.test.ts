@@ -11,6 +11,7 @@ import { config } from "../config.js";
 import { registerVideoExtendedRoutes } from "../routes/videoExtended.ts";
 
 const execFileAsync = promisify(execFile);
+let ffmpegAvailable: Promise<boolean> | null = null;
 
 function listen(server): Promise<string> {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
@@ -33,6 +34,13 @@ async function makeTinyMp4(path: string): Promise<void> {
     "-pix_fmt", "yuv420p",
     path,
   ]);
+}
+
+function hasFfmpeg(): Promise<boolean> {
+  ffmpegAvailable ??= execFileAsync("ffmpeg", ["-version"], { timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  return ffmpegAvailable;
 }
 
 function jsonRes(res, body, status = 200): void {
@@ -244,26 +252,24 @@ test("/api/video/extend reports moderation block even when upstream omits url", 
   }
 });
 
-test("/api/video/frame supports generated relative and absolute paths safely", async () => {
+test("/api/video/frame rejects unsafe, invalid, and undecodable generated inputs", async () => {
   const proxy = makeProxy();
   const proxyUrl = await listen(proxy);
-  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-frame-"));
-  const mp4 = join(generatedDir, "clip.mp4");
-  await makeTinyMp4(mp4);
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-frame-invalid-"));
   const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
   try {
-    for (const file of ["clip.mp4", mp4]) {
-      const res = await fetch(`${url}/api/video/frame?file=${encodeURIComponent(file)}&position=0`);
-      assert.equal(res.status, 200);
-      assert.match(res.headers.get("content-type") || "", /image\/png/);
-      assert.ok((await res.arrayBuffer()).byteLength > 100);
-    }
     const traversal = await fetch(`${url}/api/video/frame?file=${encodeURIComponent("../clip.mp4")}`);
     assert.equal(traversal.status, 400);
+
     const notVideo = join(generatedDir, "not-video.mp4");
     await writeFile(notVideo, "not an mp4");
     const invalid = await fetch(`${url}/api/video/frame?file=${encodeURIComponent("not-video.mp4")}`);
     assert.equal(invalid.status, 400);
+
+    await writeFile(join(generatedDir, "fake.mp4"), fakeMp4Bytes());
+    const undecodable = await fetch(`${url}/api/video/frame?file=${encodeURIComponent("fake.mp4")}&position=0`);
+    assert.equal(undecodable.status, 500);
+    assert.match((await undecodable.json()).error, /ffmpeg failed/);
   } finally {
     closeServer(server);
     closeServer(proxy);
@@ -271,15 +277,68 @@ test("/api/video/frame supports generated relative and absolute paths safely", a
   }
 });
 
-test("/api/video/analyze extracts first/last frames and sends input_image payload", async () => {
+test("/api/video/frame supports generated relative and absolute paths safely", async (t) => {
+  if (!(await hasFfmpeg())) {
+    t.skip("ffmpeg is not installed in this environment");
+    return;
+  }
+  const proxy = makeProxy();
+  const proxyUrl = await listen(proxy);
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-frame-"));
+  const mp4 = join(generatedDir, "clip.mp4");
+  try {
+    await makeTinyMp4(mp4);
+    const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
+    try {
+      for (const file of ["clip.mp4", mp4]) {
+        const res = await fetch(`${url}/api/video/frame?file=${encodeURIComponent(file)}&position=0`);
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get("content-type") || "", /image\/png/);
+        assert.ok((await res.arrayBuffer()).byteLength > 100);
+      }
+    } finally {
+      closeServer(server);
+    }
+  } finally {
+    closeServer(proxy);
+    await rm(generatedDir, { recursive: true, force: true });
+  }
+});
+
+test("/api/video/analyze rejects remote URLs before frame extraction", async () => {
+  const proxy = makeProxy();
+  const proxyUrl = await listen(proxy);
+  const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-analyze-remote-"));
+  const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
+  try {
+    const remote = await fetch(`${url}/api/video/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoUrl: "https://vidgen.example/clip.mp4" }),
+    });
+    assert.equal(remote.status, 400);
+    assert.match((await remote.json()).error, /generated .mp4/);
+  } finally {
+    closeServer(server);
+    closeServer(proxy);
+    await rm(generatedDir, { recursive: true, force: true });
+  }
+});
+
+test("/api/video/analyze extracts first/last frames and sends input_image payload", async (t) => {
+  if (!(await hasFfmpeg())) {
+    t.skip("ffmpeg is not installed in this environment");
+    return;
+  }
   let responseBody: any = null;
   const proxy = makeProxy({ responseText: "first and last frame analysis", capture: (url, body) => { if (url.includes("/v1/responses")) responseBody = body; } });
   const proxyUrl = await listen(proxy);
   const generatedDir = await mkdtemp(join(tmpdir(), "ima2-video-ext-analyze-"));
   const mp4 = join(generatedDir, "clip.mp4");
-  await makeTinyMp4(mp4);
-  const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
   try {
+    await makeTinyMp4(mp4);
+    const { server, url } = await videoApp(generatedDir, Number(new URL(proxyUrl).port));
+    try {
     const res = await fetch(`${url}/api/video/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -293,16 +352,10 @@ test("/api/video/analyze extracts first/last frames and sends input_image payloa
     const content = responseBody.input[0].content;
     assert.equal(content.filter((item: any) => item.type === "input_image").length, 2);
     assert.ok(content.every((item: any) => item.type !== "input_file"));
-
-    const remote = await fetch(`${url}/api/video/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoUrl: "https://vidgen.example/clip.mp4" }),
-    });
-    assert.equal(remote.status, 400);
-    assert.match((await remote.json()).error, /generated .mp4/);
+    } finally {
+      closeServer(server);
+    }
   } finally {
-    closeServer(server);
     closeServer(proxy);
     await rm(generatedDir, { recursive: true, force: true });
   }

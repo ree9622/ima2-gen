@@ -1,11 +1,13 @@
+import { useEffect, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { OptionGroup } from "./OptionGroup";
 import { deriveVideoModeUI, MAX_REF2V_DURATION_UI } from "../lib/imageModels";
 import { ACTIVE_VIDEO_PROMPT_GUIDANCE, continuitySummary } from "../lib/videoContinuity";
-import { GrokPlannerSelect } from "./settings/GrokPlannerSelect";
-import { ReasoningEffortSelect } from "./ReasoningEffortSelect";
+import { REASONING_EFFORT_OPTIONS, type ReasoningEffort } from "../lib/reasoning";
 import type { VideoResolutionUI } from "../types";
+
+interface PlannerConfig { model: string; options: string[]; }
 
 const RES_ITEMS = [
   { value: "480p" as const, label: "480p" },
@@ -26,9 +28,29 @@ export function VideoControlsPanel() {
   const videoTopic = useAppStore((s) => s.videoTopic);
   const setVideoTopic = useAppStore((s) => s.setVideoTopic);
   const continuity = useAppStore((s) => s.videoContinuityLineage);
+  const reasoningEffort = useAppStore((s) => s.reasoningEffort);
+  const setReasoningEffort = useAppStore((s) => s.setReasoningEffort);
   const maxDuration = refCount >= 2 ? MAX_REF2V_DURATION_UI : 15;
   const mode = deriveVideoModeUI(refCount);
   const summary = continuitySummary(continuity);
+
+  const [plannerConfig, setPlannerConfig] = useState<PlannerConfig | null>(null);
+  useEffect(() => {
+    fetch("/api/config/grok-planner")
+      .then((r) => r.json() as Promise<PlannerConfig>)
+      .then(setPlannerConfig)
+      .catch(() => {});
+  }, []);
+  const onPlannerChange = async (model: string) => {
+    try {
+      await fetch("/api/config/grok-planner", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+      });
+      setPlannerConfig((prev) => prev ? { ...prev, model } : null);
+    } catch {}
+  };
 
   return (
     <div className="right-panel-settings video-controls">
@@ -42,14 +64,6 @@ export function VideoControlsPanel() {
           <span>{summary}</span>
         </div>
       ) : null}
-      <div className="option-group">
-        <div className="section-title">{t("video.plannerModelTitle") ?? "Planner Model"}</div>
-        <GrokPlannerSelect />
-      </div>
-      <div className="option-group">
-        <div className="section-title">{t("video.reasoningEffortTitle") ?? "Reasoning Effort"}</div>
-        <ReasoningEffortSelect />
-      </div>
       <div className="option-group">
         <div className="section-title">{t("video.seriesTopicTitle") ?? "시리즈 주제"}</div>
         <input
@@ -87,6 +101,30 @@ export function VideoControlsPanel() {
         value={aspect}
         onChange={setAspect}
       />
+      <div className="video-controls__pills">
+        {plannerConfig && (
+          <select
+            className="video-controls__pill"
+            value={plannerConfig.model}
+            onChange={(e) => void onPlannerChange(e.target.value)}
+            aria-label={t("video.plannerModelTitle")}
+          >
+            {plannerConfig.options.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        )}
+        <select
+          className="video-controls__pill"
+          value={reasoningEffort}
+          onChange={(e) => setReasoningEffort(e.target.value as ReasoningEffort)}
+          aria-label={t("video.reasoningEffortTitle")}
+        >
+          {REASONING_EFFORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.shortLabel}</option>
+          ))}
+        </select>
+      </div>
       <div className="provider-compat-note" role="note" style={{ marginTop: 8 }}>
         <strong>Active prompt</strong>
         <span>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</span>

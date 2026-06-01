@@ -1171,6 +1171,8 @@ type AppState = {
   // Prompt Builder panel toggle
   promptBuilderOpen: boolean;
   togglePromptBuilder: () => void;
+  storyboardActive: boolean;
+  toggleStoryboard: () => void;
 
   // Prompt Library (0.23)
   promptLibraryOpen: boolean;
@@ -1403,6 +1405,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Prompt Builder panel
   promptBuilderOpen: false,
+  storyboardActive: false,
 
   // Prompt Library state (0.23)
   promptLibraryOpen: false,
@@ -4152,6 +4155,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   togglePromptBuilder() {
     set((s) => ({ promptBuilderOpen: !s.promptBuilderOpen }));
+  },
+  toggleStoryboard() {
+    set((s) => ({ storyboardActive: !s.storyboardActive }));
   },
 
   // ── Prompt Library actions (0.23) ──

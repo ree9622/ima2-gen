@@ -270,6 +270,8 @@
     "continue": "Continue",
     "continueTitle": "Continue from current result as reference",
     "savePrompt": "Save",
+    "storyboard": "Storyboard",
+    "storyboardTitle": "Enable storyboard mode — maintains character and scene continuity across sequential frames",
     "videoToggleTitle": "Toggle video mode (Grok 1.5)",
     "directMode": "Direct",
     "directModeActive": "1:1 Direct on",

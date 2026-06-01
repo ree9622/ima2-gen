@@ -115,6 +115,10 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
 
       if (provider !== "grok") return fail(400, "VIDEO_PROVIDER_UNSUPPORTED", "video generation requires provider 'grok'");
+      const storyboardActive = req.body?.storyboard === true;
+      const storyboardPrefix = storyboardActive
+        ? "[STORYBOARD MODE] This clip is part of a sequential storyboard. Continue from the previous frame's composition. Maintain character visual descriptions verbatim. Keep lighting and environment constant.\n\n"
+        : "";
       const activePrompt = requireActiveVideoPrompt(prompt);
       if (!activePrompt) return fail(400, "PROMPT_REQUIRED", "Prompt is required", { guidance: ACTIVE_VIDEO_PROMPT_GUIDANCE });
 
@@ -202,9 +206,10 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
 
       // Build prompt with series chain context
       const chain = !parentLineage && topic ? await getVideoSeriesChain(ctx.config.storage.generatedDir, topic) : [];
-      const effectivePrompt = chain.length > 0
+      const basePrompt = chain.length > 0
         ? `[Series topic: ${topic}]\n[Previous prompts in series:\n${chain.map((p, i) => `${i + 1}. ${p}`).join("\n")}\n]\n\n${activePrompt}`
         : activePrompt;
+      const effectivePrompt = storyboardPrefix + basePrompt;
 
       const plannerModel = typeof req.body?.plannerModel === "string" ? req.body.plannerModel.trim() : undefined;
 
@@ -262,6 +267,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         },
         videoContinuity,
         ...(topic ? { videoSeries: { topic, chainIndex: chain.length } } : {}),
+        ...(storyboardActive ? { storyboard: true } : {}),
       };
       await saveGeneratedVideoArtifact(ctx, filename, result.videoBuffer, meta);
       invalidateHistoryIndex();

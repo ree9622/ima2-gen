@@ -2716,6 +2716,15 @@ body {
   flex-basis: 100%;
   height: 0;
 }
+.composer__storyboard-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.composer__tool--storyboard {
+  flex: 1;
+  justify-content: center;
+}
 .composer__dropzone {
   position: absolute;
   inset: 0;

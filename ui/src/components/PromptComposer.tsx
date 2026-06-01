@@ -36,6 +36,8 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   const videoModelSelected = useAppStore((s) => s.videoModelSelected);
   const selectVideoModel = useAppStore((s) => s.selectVideoModel);
   const setImageModel = useAppStore((s) => s.setImageModel);
+  const storyboardActive = useAppStore((s) => s.storyboardActive);
+  const toggleStoryboard = useAppStore((s) => s.toggleStoryboard);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -360,6 +362,17 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
             />
           )}
         </div>
+      </div>
+      <div className="composer__storyboard-row">
+        <button
+          type="button"
+          className={`composer__tool composer__tool--storyboard${storyboardActive ? " composer__tool--on" : ""}`}
+          onClick={toggleStoryboard}
+          title={t("prompt.storyboardTitle")}
+          aria-pressed={storyboardActive}
+        >
+          {t("prompt.storyboard")}
+        </button>
       </div>
 
       {dragOver && (

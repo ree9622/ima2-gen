@@ -270,6 +270,8 @@
     "continue": "이어가기",
     "continueTitle": "현재 결과를 참조로 이어서 작업",
     "savePrompt": "저장",
+    "storyboard": "스토리보드",
+    "storyboardTitle": "스토리보드 모드 — 인물과 장면의 연속성을 유지하며 순차 프레임 생성",
     "videoToggleTitle": "비디오 모드 전환 (Grok 1.5)",
     "directMode": "Direct",
     "directModeActive": "1:1 Direct 켜짐",

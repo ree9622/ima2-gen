@@ -66,6 +66,10 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         reasoningEffort: rawReasoningEffort,
         webSearchEnabled: rawWebSearchEnabled = true,
       } = req.body;
+      const storyboardActive = req.body?.storyboard === true;
+      const storyboardPrefix = storyboardActive
+        ? "[STORYBOARD MODE] This image is part of a sequential storyboard. Maintain character visual descriptions verbatim from previous frames. Change only the action, shot scale, or camera angle — keep lighting, environment, and character design constant.\n\n"
+        : "";
       const composerPrompt = normalizeComposerPrompt(req.body?.composerPrompt);
       const composerInsertedPrompts = normalizeComposerInsertedPrompts(
         req.body?.composerInsertedPrompts,
@@ -90,6 +94,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       const webSearchEnabled = providerOptions.webSearchEnabled;
       const activeProvider = providerOptions.provider;
       const normalizedPromptMode = promptMode === "direct" ? "direct" : "auto";
+      const generationPrompt = storyboardPrefix + prompt;
 
       if (!prompt) return res.status(400).json({ error: "Prompt is required" });
       const moderationCheck = validateModeration(ctx, moderation);
@@ -169,7 +174,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
 
       const sharedGrokPlan = activeProvider === "grok"
-        ? await planGrokImage(prompt, ctx, {
+        ? await planGrokImage(generationPrompt, ctx, {
           model: quality === "high" ? "grok-imagine-image-quality" : imageModel,
           size: effectiveSize,
           signal: cancelController.signal,
@@ -182,7 +187,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       const generateOne = async () => {
         if (activeProvider === "grok") {
           const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
-          const r = await generateViaGrok(prompt, ctx, {
+          const r = await generateViaGrok(generationPrompt, ctx, {
             model: grokModel,
             size: effectiveSize,
             signal: cancelController.signal,
@@ -201,7 +206,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
           try {
             const r = await generateViaResponses(
               activeProvider,
-              prompt,
+              generationPrompt,
               quality,
               effectiveSize,
               moderation,

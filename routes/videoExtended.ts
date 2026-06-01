@@ -259,13 +259,12 @@ export function registerVideoExtendedRoutes(app: Express, ctxRaw: RouteRuntimeCo
       const tmpOut = join(ctx.config.storage.generatedDir, `frame_tmp_${randomBytes(4).toString("hex")}.png`);
       try {
         await extractFrame(inputPath, tmpOut, position);
-        res.sendFile(tmpOut, (err) => {
-          unlink(tmpOut).catch(() => {});
-          if (err && !res.headersSent) res.status(500).json({ error: `sendFile failed: ${err.message}` });
-        });
+        const frame = await readFile(tmpOut);
+        res.type("png").send(frame);
       } catch (err: any) {
-        await unlink(tmpOut).catch(() => {});
         return res.status(500).json({ error: "ffmpeg failed" });
+      } finally {
+        await unlink(tmpOut).catch(() => {});
       }
     } catch (err: any) {
       logError("video", "frame:error", err);

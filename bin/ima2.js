@@ -88,7 +88,7 @@ async function setup() {
         saveConfig(config);
         console.log("\n  Starting Grok OAuth login...\n");
         try {
-            execSync(`node ${JSON.stringify(join(ROOT, "bin", "ima2.js"))} grok login`, { stdio: "inherit" });
+            execSync(`node ${JSON.stringify(join(ROOT, "bin", "ima2.js"))} grok login --manual-paste`, { stdio: "inherit" });
         }
         catch {
             console.log("\n  Grok login failed or cancelled. You can retry with 'ima2 grok login'.\n");
@@ -121,7 +121,7 @@ async function setup() {
         // Grok OAuth
         console.log("  Running Grok OAuth login...\n");
         try {
-            execSync(`node ${JSON.stringify(join(ROOT, "bin", "ima2.js"))} grok login`, { stdio: "inherit" });
+            execSync(`node ${JSON.stringify(join(ROOT, "bin", "ima2.js"))} grok login --manual-paste`, { stdio: "inherit" });
         }
         catch {
             console.log("\n  Grok login failed. You can retry with 'ima2 grok login'.\n");

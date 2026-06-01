@@ -63,9 +63,10 @@ Provider override semantics:
 - `auto` preserves route default behavior and currently resolves to OAuth unless server routing changes.
 
 `ima2 serve` starts the bundled Grok proxy automatically. No separate `progrok`
-install is required. Use `ima2 grok login` once to authorize xAI OAuth, or
-`ima2 grok login --device-code` on a remote shell. Set `IMA2_NO_GROK_PROXY=1`
-only if you want to manage the proxy yourself.
+install is required. Use `ima2 grok login` once to authorize xAI OAuth. Login
+defaults to `--manual-paste` so PowerShell, Terminal, and remote shells all use
+the same copy/paste flow. Set `IMA2_NO_GROK_PROXY=1` only if you want to manage
+the proxy yourself.
 
 Grok size mapping follows xAI's image API, not OpenAI's `size` field. ima2
 keeps the requested size in local metadata, but sends `aspect_ratio` such as

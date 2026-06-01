@@ -322,7 +322,7 @@ Prompts are NOT sent directly to the video model. A Grok planner (grok-4.3) rewr
 ### Prerequisites
 
 ```bash
-ima2 grok login     # authenticate (device-code flow)
+ima2 grok login     # authenticate (manual-paste flow)
 ima2 grok status    # verify connection
 ima2 serve          # server must be running
 ```

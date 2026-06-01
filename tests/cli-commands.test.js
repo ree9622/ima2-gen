@@ -230,6 +230,9 @@ describe("ima2 CLI commands (live server)", () => {
     assert.strictEqual(code, 0);
     assert.match(stdout, /bundled progrok runtime/);
     assert.match(stdout, /login/);
+    assert.match(stdout, /default: --manual-paste/);
+    assert.match(stdout, /defaults to --manual-paste/);
+    assert.doesNotMatch(stdout, /device-code/);
     assert.match(stdout, /IMA2_NO_GROK_PROXY=1/);
   });
 });

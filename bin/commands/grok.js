@@ -20,8 +20,11 @@ const HELP = `
 
   Notes:
     ima2 serve auto-starts the bundled proxy on 127.0.0.1:18645 by default.
+    ima2 grok login defaults to --manual-paste for reliable copy/paste auth.
     Use IMA2_NO_GROK_PROXY=1 to disable automatic proxy startup.
 `;
+const MANUAL_PASTE_FLAG = "--manual-paste";
+const NON_MANUAL_LOGIN_FLOW_FLAGS = new Set(["--device-code", "--browser"]);
 function localBinPath() {
     return join(ROOT, "node_modules", ".bin");
 }
@@ -39,6 +42,15 @@ function spawnProgrok(argv, env) {
         child.on("close", resolve);
     });
 }
+export function normalizeGrokLoginArgs(argv) {
+    const sub = argv[0];
+    if (sub !== "login")
+        return argv;
+    const normalized = argv.filter((arg) => !NON_MANUAL_LOGIN_FLOW_FLAGS.has(arg));
+    if (normalized.includes(MANUAL_PASTE_FLAG))
+        return normalized;
+    return [...normalized, MANUAL_PASTE_FLAG];
+}
 export default async function grokCmd(argv) {
     const sub = argv[0];
     if (!sub || sub === "--help" || sub === "-h") {
@@ -50,19 +62,12 @@ export default async function grokCmd(argv) {
         PATH: `${localBinPath()}${delimiter}${process.env.PATH || ""}`,
     };
     try {
-        // Default to --manual-paste for login (most reliable across platforms).
-        // Users can still pass --device-code or --browser explicitly.
-        if (sub === "login" && !argv.includes("--device-code") && !argv.includes("--browser") && !argv.includes("--manual-paste")) {
-            argv = [...argv, "--manual-paste"];
-        }
+        argv = normalizeGrokLoginArgs(argv);
         const code = await spawnProgrok(argv, env);
         if (code && code !== 0) {
-            // progrok 0.1.1+ defaults to device-code flow already.
-            // Do NOT auto-retry with --device-code — it issues a NEW code that
-            // invalidates the one the user may already be looking at in their browser.
-            if (sub === "login" && !argv.includes("--device-code")) {
+            if (sub === "login") {
                 out(color.yellow("⚠ ") + "Login failed. Try again with:\n");
-                out("  ima2 grok login --device-code\n");
+                out("  ima2 grok login\n");
                 die(code, "bundled progrok login failed");
             }
             else {

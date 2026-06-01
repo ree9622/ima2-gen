@@ -29,9 +29,14 @@ async function readJsonResponse(res: Response, label: string): Promise<Record<st
   }
 }
 
-function timeoutSignal(seconds: unknown): AbortSignal {
+function parseTimeoutSeconds(seconds: unknown): number {
   const sec = parseIntegerFlag(seconds, 600, "--timeout");
   if (sec < 1) die(2, "--timeout must be at least 1");
+  return sec;
+}
+
+function timeoutSignal(seconds: unknown): AbortSignal {
+  const sec = parseTimeoutSeconds(seconds);
   return AbortSignal.timeout(sec * 1000);
 }
 
@@ -281,6 +286,7 @@ async function videoEditCmd(argv: string[]) {
   const prompt = args.positional.join(" ");
   if (!prompt) die(2, "prompt is required");
   if (!args.video) die(2, "--video <url> is required");
+  parseTimeoutSeconds(args.timeout);
   let server;
   try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
   const res = await fetch(`${server.base}/api/video/edit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, videoUrl: args.video }), signal: timeoutSignal(args.timeout) });
@@ -301,6 +307,7 @@ async function videoExtendCmd(argv: string[]) {
   if (!args.video) die(2, "--video <url> is required");
   const duration = parseIntegerFlag(args.duration, 6, "--duration");
   if (duration < 2 || duration > 10) die(2, "--duration must be between 2 and 10");
+  parseTimeoutSeconds(args.timeout);
   let server;
   try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
   const res = await fetch(`${server.base}/api/video/extend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, videoUrl: args.video, duration }), signal: timeoutSignal(args.timeout) });
@@ -321,6 +328,7 @@ async function videoFrameCmd(argv: string[]) {
   if (args.last && args.position) die(2, "use either --last or --position, not both");
   const position = args.last ? "last" : (String(args.position || "last"));
   if (position !== "last" && !/^\d+(\.\d+)?$/.test(position)) die(2, "--position must be a non-negative number");
+  parseTimeoutSeconds(args.timeout);
   let server;
   try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
   const url = `${server.base}/api/video/frame?file=${encodeURIComponent(file)}&position=${encodeURIComponent(position)}`;
@@ -339,6 +347,7 @@ async function videoAnalyzeCmd(argv: string[]) {
   if (args.help) { out(`  ima2 video analyze <generated-file>\n\n  Analyze first/last frames from a generated .mp4 with Grok 4.3 image understanding. Outputs structured recreation prompt.\n\n  Options:\n        --json            Print JSON result\n        --timeout <sec>   Default: 180\n        --server <url>    Override server URL`); return; }
   const videoUrl = args.positional[0];
   if (!videoUrl) die(2, "generated video filename required");
+  parseTimeoutSeconds(args.timeout);
   let server;
   try { server = await resolveServer({ serverFlag: args.server }); } catch (e: unknown) { die(exitCodeForError(e), (e as Error).message); throw e; }
   const res = await fetch(`${server.base}/api/video/analyze`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ videoUrl }), signal: timeoutSignal(args.timeout) });

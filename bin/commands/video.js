@@ -27,10 +27,14 @@ async function readJsonResponse(res, label) {
         die(1, `${label} failed: expected JSON response, got ${text.slice(0, 120) || `HTTP ${res.status}`}`);
     }
 }
-function timeoutSignal(seconds) {
+function parseTimeoutSeconds(seconds) {
     const sec = parseIntegerFlag(seconds, 600, "--timeout");
     if (sec < 1)
         die(2, "--timeout must be at least 1");
+    return sec;
+}
+function timeoutSignal(seconds) {
+    const sec = parseTimeoutSeconds(seconds);
     return AbortSignal.timeout(sec * 1000);
 }
 async function writeBuffer(path, buf) {
@@ -298,6 +302,7 @@ async function videoEditCmd(argv) {
         die(2, "prompt is required");
     if (!args.video)
         die(2, "--video <url> is required");
+    parseTimeoutSeconds(args.timeout);
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });
@@ -336,6 +341,7 @@ async function videoExtendCmd(argv) {
     const duration = parseIntegerFlag(args.duration, 6, "--duration");
     if (duration < 2 || duration > 10)
         die(2, "--duration must be between 2 and 10");
+    parseTimeoutSeconds(args.timeout);
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });
@@ -374,6 +380,7 @@ async function videoFrameCmd(argv) {
     const position = args.last ? "last" : (String(args.position || "last"));
     if (position !== "last" && !/^\d+(\.\d+)?$/.test(position))
         die(2, "--position must be a non-negative number");
+    parseTimeoutSeconds(args.timeout);
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });
@@ -404,6 +411,7 @@ async function videoAnalyzeCmd(argv) {
     const videoUrl = args.positional[0];
     if (!videoUrl)
         die(2, "generated video filename required");
+    parseTimeoutSeconds(args.timeout);
     let server;
     try {
         server = await resolveServer({ serverFlag: args.server });

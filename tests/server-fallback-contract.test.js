@@ -21,7 +21,11 @@ async function waitForAdvertise(path, timeoutMs = 8000) {
   throw new Error("server advertisement did not appear");
 }
 
-test("server falls back when advertised localhost port is occupied", async () => {
+test("server falls back when advertised localhost port is occupied", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("Windows GitHub runners do not reliably hold the probe port for the spawned server");
+    return;
+  }
   const preferred = 4700 + Math.floor(Math.random() * 300);
   const blocker = await occupy(preferred);
   const home = mkdtempSync(join(tmpdir(), "ima2-server-fallback-"));

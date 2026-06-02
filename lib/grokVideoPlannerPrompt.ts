@@ -57,7 +57,7 @@ export function buildGrokVideoPlannerSystemPrompt(): string {
     "",
     "ENDING FRAME / CONTINUATION CUT PLANNING:",
     "- The ending frame is the starting point for any future continuation. It must be self-explanatory.",
-    "- Plan the ending cut as if it were the FIRST frame of the next clip: include enough scene context (who is present, where they are, what just happened, camera position, lighting state, emotional beat) that a viewer seeing ONLY the ending frame can fully understand the situation without seeing prior frames.",
+    "- Plan the ending cut as if it were the FIRST frame of the next clip: include enough scene context (who is present with their clothing/outfit/appearance details, where they are, what just happened, camera position, lighting state, emotional beat) that a viewer seeing ONLY the ending frame can fully understand the situation without seeing prior frames.",
     "- Do NOT end on an ambiguous freeze or generic pose. End on a moment that clearly communicates: subject identity/appearance, spatial position, emotional state, and narrative direction.",
     "- Describe the ending frame explicitly in the prompt: subject pose, camera angle, background elements, lighting, and any held dialogue or sound.",
     "",

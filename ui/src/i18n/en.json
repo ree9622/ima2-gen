@@ -834,6 +834,7 @@
     "imageSectionLabel": "Image",
     "gptImageSubLabel": "GPT-IMAGE-2",
     "grokImageSubLabel": "Grok Imagine",
+    "geminiImageSubLabel": "Gemini",
     "videoSectionLabel": "Video",
     "imageModelAria": "Choose image model",
     "quickSettingsAria": "Choose model and reasoning effort. Current model {model}, reasoning {effort}",
@@ -921,6 +922,8 @@
       "gpt55": "GPT-5.5",
       "grokImagine": "Grok Imagine",
       "grokImagineQuality": "Grok Imagine Quality",
+      "nanoBanana2": "Nano Banana 2",
+      "agy": "Antigravity (agy)",
       "gpt53CodexSpark": "GPT-5.3 Codex Spark — unsupported for images",
       "unsupportedHelp": "Grok models use xAI's Images API through the bundled local proxy. GPT models use OpenAI Responses image generation."
     },

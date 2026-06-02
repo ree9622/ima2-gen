@@ -9,6 +9,7 @@ import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateMultimodeViaResponses } from "../lib/responsesImageAdapter.js";
 import { generateMultimodeViaGrok } from "../lib/grokMultimodeAdapter.js";
+import { generateViaAgy } from "../lib/agyImageAdapter.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
   isGenerationCanceledError,
@@ -204,7 +205,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
 
       const startTime = Date.now();
       const mimeMap: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
-      const mmFormat = activeProvider === "grok" ? "jpeg" : String(format);
+      const mmFormat = activeProvider === "grok" || activeProvider === "agy" ? "jpeg" : String(format);
       const mime = mimeMap[mmFormat] || "image/png";
       const sequenceId = `seq_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
       routeMaxImages = maxImages;
@@ -230,10 +231,10 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
       ) => {
         if (persistedIndexes.has(index)) return;
         throwIfJobCanceled(requestId);
-        const resultMime = activeProvider === "grok"
+        const resultMime = activeProvider === "grok" || activeProvider === "agy"
           ? (image.mime || detectImageMimeFromB64(image.b64) || mime)
           : mime;
-        const resultFormat = activeProvider === "grok" ? imageFormatFromMime(resultMime) : mmFormat;
+        const resultFormat = activeProvider === "grok" || activeProvider === "agy" ? imageFormatFromMime(resultMime) : mmFormat;
         const rand = randomBytes(ctx.config.ids.generatedHexBytes).toString("hex");
         const filename = `${Date.now()}_${rand}_multimode_${index}.${resultFormat}`;
         const meta = {
@@ -290,7 +291,18 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
 
       let generated: { images: Array<{ b64: string; revisedPrompt?: string | null }>; usage: Record<string, number> | null; webSearchCalls?: number; extraIgnored?: number };
 
-      if (activeProvider === "grok") {
+      if (activeProvider === "agy") {
+        const r = await generateViaAgy(prompt, {
+          references: refCheck.refDetails,
+          signal: cancelController.signal,
+          requestId,
+        });
+        generated = {
+          images: [{ b64: r.b64, revisedPrompt: r.revisedPrompt }],
+          usage: r.usage,
+          webSearchCalls: r.webSearchCalls,
+        };
+      } else if (activeProvider === "grok") {
         const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
         generated = await generateMultimodeViaGrok(prompt, ctx, {
           model: grokModel,

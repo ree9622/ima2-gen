@@ -114,7 +114,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const clientNodeId = typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
       const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
 
-      if (provider !== "grok") return fail(400, "VIDEO_PROVIDER_UNSUPPORTED", "video generation requires provider 'grok'");
+      if (provider !== "grok") return fail(400, provider === "agy" ? "AGY_VIDEO_UNSUPPORTED" : "VIDEO_PROVIDER_UNSUPPORTED", provider === "agy" ? "Gemini (agy) does not support video generation" : "video generation requires provider 'grok'");
       const storyboardActive = req.body?.storyboard === true;
       const storyboardPrefix = storyboardActive
         ? [

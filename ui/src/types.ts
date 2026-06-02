@@ -12,13 +12,14 @@ export const THEME_FAMILIES = [
   "gemini",
   "grok",
 ] as const satisfies readonly ThemeFamily[];
-export type Provider = "oauth" | "api" | "grok";
+export type Provider = "oauth" | "api" | "grok" | "agy";
 export type Quality = "low" | "medium" | "high";
 export type Format = "png" | "jpeg" | "webp";
 export type Moderation = "low" | "auto";
 export type OpenAIImageModel = "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini";
 export type GrokImageModel = "grok-imagine-image" | "grok-imagine-image-quality";
-export type ImageModel = OpenAIImageModel | GrokImageModel;
+export type GeminiImageModel = "nano-banana-2";
+export type ImageModel = OpenAIImageModel | GrokImageModel | GeminiImageModel;
 export type VideoModel = "grok-imagine-video" | "grok-imagine-video-1.5-preview";
 export type VideoResolutionUI = "480p" | "720p";
 export type UnsupportedImageModel = "gpt-5.3-codex-spark";

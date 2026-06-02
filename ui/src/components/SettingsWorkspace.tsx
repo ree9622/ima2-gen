@@ -229,6 +229,13 @@ export function SettingsWorkspace() {
                   </article>
                   <GrokPlannerSelect />
                 </>
+              ) : provider === "agy" ? (
+                <article className="settings-row">
+                  <div className="settings-row__copy">
+                    <h4>Gemini (agy)</h4>
+                    <p>1024x1024 fixed output, JPEG format, max 3 reference images. No web search, no quality/size control.</p>
+                  </div>
+                </article>
               ) : (
                 <>
                   <article className="settings-row">

@@ -109,11 +109,12 @@ Ctrl+C now performs a clean shutdown — closing the database, stopping child pr
 
 ## Provider Paths
 
-Image generation can run through the local Codex/ChatGPT OAuth path, a configured OpenAI API key, or the bundled Grok provider.
+Image generation can run through the local Codex/ChatGPT OAuth path, a configured OpenAI API key, the bundled Grok provider, or the Gemini provider via Antigravity CLI.
 
 - `provider: "oauth"` uses the local Codex OAuth proxy.
 - `provider: "api"` calls the OpenAI Responses API with the hosted `image_generation` tool.
 - `provider: "grok"` starts bundled `progrok` on `127.0.0.1:18645`, runs mandatory xAI Web Search plus a planner pass (default: `grok-4.3`, configurable in settings or via `--planner-model`), then calls xAI Images API through the local proxy.
+- `provider: "agy"` spawns the Antigravity CLI (`agy -p`) to generate images via Google Gemini's `default_api:generate_image` tool (model: `nano-banana-2`). Output is fixed at 1024×1024 JPEG, max 3 reference images. No web search, quality, or size controls.
 - API-key generation supports classic generate, edit, mask-guided edit, multimode, and node generation.
 - Grok generation supports Classic, Node, and Agent flows. If a Classic reference, Node parent image, or Agent current image is present, ima2 switches the final Grok call to xAI image edit so image-to-image context is preserved.
 

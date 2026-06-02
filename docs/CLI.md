@@ -53,13 +53,14 @@ Agents should start from the packaged skill and capability commands instead of g
 | `ima2 node generate` | Node-mode generate (SSE; supports `--no-stream`) |
 | `ima2 node show <nodeId>` | Read node metadata |
 
-Generation flags include `--provider <auto|oauth|api|grok>`, `--reasoning-effort {none\|low\|medium\|high\|xhigh}`, `--web-search` / `--no-web-search`, `--model`, `--mode`, `--moderation`, `--ref <file>` (repeatable, up to 5 where supported), `-q low|medium|high`, `-n <count>`, `-o <file>`.
+Generation flags include `--provider <auto|oauth|api|grok|agy>`, `--reasoning-effort {none\|low\|medium\|high\|xhigh}`, `--web-search` / `--no-web-search`, `--model`, `--mode`, `--moderation`, `--ref <file>` (repeatable, up to 5 where supported), `-q low|medium|high`, `-n <count>`, `-o <file>`.
 
 Provider override semantics:
 
 - `api` forces the API-key Responses path and requires a configured API key.
 - `oauth` forces the local OAuth proxy path.
 - `grok` uses the bundled progrok xAI proxy (`127.0.0.1:18645`). Classic generation first runs mandatory xAI Web Search through Responses API, then asks `grok-4.3` to call ima2's local `generate_image` tool, then ima2 executes xAI `/v1/images/generations`. If `--ref` images are attached, the final step uses xAI `/v1/images/edits` instead so image-to-image/reference context is preserved. Models: `grok-imagine-image`, `grok-imagine-image-quality`. Size is mapped to xAI `aspect_ratio` and `resolution`; the UI web-search toggle is OpenAI-provider-only because Grok search is always on in this path.
+- `agy` spawns the Antigravity CLI to generate via Google Gemini (`nano-banana-2`). Fixed 1024×1024 JPEG output, max 3 refs. No web search, quality, size, or mask controls.
 - `auto` preserves route default behavior and currently resolves to GPT OAuth unless server routing changes.
 
 `ima2 serve` starts the bundled Grok proxy automatically. No separate `progrok`

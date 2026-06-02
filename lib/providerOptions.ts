@@ -9,6 +9,16 @@ export function resolveProviderOptions(ctx: RuntimeContext | null | undefined, {
   rawWebSearchEnabled = true,
   searchMode = "on",
 }: any = {}) {
+  if (provider === "agy") {
+    return {
+      provider: "agy" as const,
+      model: "nano-banana-2",
+      reasoningEffort: "none",
+      size: "1024x1024",
+      webSearchEnabled: false,
+    };
+  }
+
   if (provider === "grok") {
     const grokCfg: { defaultImageModel?: string } = (ctx?.config as any)?.grokProvider || {};
     const modelInput = rawModel || grokCfg.defaultImageModel;

@@ -19,6 +19,7 @@ import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateViaResponses, editViaResponses } from "../lib/responsesImageAdapter.js";
 import { generateViaGrok, type GrokReferenceImage } from "../lib/grokImageAdapter.js";
+import { generateViaAgy } from "../lib/agyImageAdapter.js";
 import { isNonRetryableGenerationError, normalizeGenerationFailure, type UpstreamErr } from "../lib/generationErrors.js";
 import { logEvent, logError } from "../lib/logger.js";
 
@@ -253,16 +254,16 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const refsForRequest = contextMode === "parent-only" ? [] : (refCheck.refDetails || refCheck.refs);
       const parentImagePresent = !!parentB64;
       const inputImageCount = (parentImagePresent ? 1 : 0) + refsForRequest.length;
-      if (activeProvider === "grok" && inputImageCount > 3) {
+      if ((activeProvider === "grok" || activeProvider === "agy") && inputImageCount > 3) {
         finishStatus = "error";
         finishHttpStatus = 400;
-        finishErrorCode = "GROK_REF_TOO_MANY";
+        const code = activeProvider === "agy" ? "AGY_REF_TOO_MANY" : "GROK_REF_TOO_MANY";
         return res.status(400).json({
           error: {
-            code: "GROK_REF_TOO_MANY",
-            message: "Grok image editing supports up to 3 reference images.",
+            code,
+            message: `${activeProvider === "agy" ? "Agy" : "Grok"} image editing supports up to 3 reference images.`,
           },
-          code: "GROK_REF_TOO_MANY",
+          code,
           parentNodeId,
         });
       }
@@ -300,7 +301,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       }
 
       let b64: string | undefined, usage: unknown, webSearchCalls = 0, revisedPrompt: string | null = null;
-      let resultFormat: "png" | "jpeg" | "webp" = activeProvider === "grok" ? "jpeg" : format as "png" | "jpeg" | "webp";
+      let resultFormat: "png" | "jpeg" | "webp" = activeProvider === "grok" || activeProvider === "agy" ? "jpeg" : format as "png" | "jpeg" | "webp";
       const MAX_RETRIES = 1;
       let lastErr: UpstreamErr | null = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -323,7 +324,15 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
             searchMode,
             webSearchEnabled,
           });
-          const r = activeProvider === "grok"
+          const r = activeProvider === "agy"
+            ? await generateViaAgy(parentB64 ? `Edit this image: ${prompt}` : prompt, {
+                references: parentB64
+                  ? [{ b64: parentB64, declaredMime: null, detectedMime: null }]
+                  : undefined,
+                signal: cancelController.signal,
+                requestId,
+              })
+            : activeProvider === "grok"
             ? await generateViaGrok(prompt, ctx, {
                 model: effectiveImageModel,
                 size: effectiveSize,

@@ -1255,7 +1255,7 @@ function isModeration(value: unknown): value is Moderation {
 }
 
 function isProvider(value: unknown): value is Provider {
-  return value === "oauth" || value === "api" || value === "grok";
+  return value === "oauth" || value === "api" || value === "grok" || value === "agy";
 }
 
 function isPromptMode(value: unknown): value is "auto" | "direct" {

@@ -1,4 +1,4 @@
-import type { ImageModel, OpenAIImageModel, Provider, UnsupportedImageModel, VideoModel } from "../types";
+import type { ImageModel, OpenAIImageModel, GeminiImageModel, Provider, UnsupportedImageModel, VideoModel } from "../types";
 
 export const DEFAULT_IMAGE_MODEL: ImageModel = "gpt-5.4-mini";
 export const IMAGE_MODEL_STORAGE_KEY = "ima2.imageModel";
@@ -13,15 +13,23 @@ export const IMAGE_MODEL_OPTIONS: Array<{
   { value: "gpt-5.5", shortLabel: "5.5", fullLabelKey: "settings.imageModel.gpt55" },
   { value: "grok-imagine-image", shortLabel: "grok", fullLabelKey: "settings.imageModel.grokImagine" },
   { value: "grok-imagine-image-quality", shortLabel: "grok+", fullLabelKey: "settings.imageModel.grokImagineQuality" },
+  { value: "nano-banana-2", shortLabel: "agy", fullLabelKey: "settings.imageModel.nanoBanana2" },
 ];
+
+const GEMINI_MODEL_VALUES = new Set<string>(["nano-banana-2"]);
 
 export const OPENAI_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter(
   (option): option is { value: OpenAIImageModel; shortLabel: string; fullLabelKey: string } =>
-    !option.value.startsWith("grok-"),
+    !option.value.startsWith("grok-") && !GEMINI_MODEL_VALUES.has(option.value),
 );
 
 export const GROK_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter((option) =>
   option.value.startsWith("grok-"),
+);
+
+export const GEMINI_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter(
+  (option): option is { value: GeminiImageModel; shortLabel: string; fullLabelKey: string } =>
+    GEMINI_MODEL_VALUES.has(option.value),
 );
 
 export const UNSUPPORTED_IMAGE_MODELS: Array<{
@@ -39,8 +47,14 @@ export function isGrokImageModel(value: unknown): boolean {
   return typeof value === "string" && value.startsWith("grok-");
 }
 
+export function isGeminiImageModel(value: unknown): boolean {
+  return typeof value === "string" && GEMINI_MODEL_VALUES.has(value);
+}
+
 export function getImageModelOptionsForProvider(provider: Provider) {
-  return provider === "grok" ? GROK_IMAGE_MODEL_OPTIONS : OPENAI_IMAGE_MODEL_OPTIONS;
+  if (provider === "grok") return GROK_IMAGE_MODEL_OPTIONS;
+  if (provider === "agy") return GEMINI_IMAGE_MODEL_OPTIONS;
+  return OPENAI_IMAGE_MODEL_OPTIONS;
 }
 
 export function getImageModelShortLabel(value: string | null | undefined): string | null {
@@ -58,8 +72,6 @@ export function isVideoModelValue(v: unknown): v is VideoModel {
   return v === "grok-imagine-video" || v === "grok-imagine-video-1.5-preview";
 }
 
-// UI-side mirrors of the backend helpers (lib/imageModels.ts). The UI lib is a
-// separate module; the backend route remains the authoritative clamp.
 export const MAX_REF2V_DURATION_UI = 10;
 
 export function deriveVideoModeUI(refCount: number): "text-to-video" | "image-to-video" | "reference-to-video" {

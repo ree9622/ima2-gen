@@ -10,11 +10,12 @@ http://localhost:3333
 
 ## Provider Policy
 
-Image generation supports OAuth, API-key, and Grok providers.
+Image generation supports OAuth, API-key, Grok, and Gemini (agy) providers.
 
 - `provider: "oauth"` uses the local Codex OAuth proxy.
 - `provider: "api"` uses the OpenAI Responses API with the hosted `image_generation` tool.
 - `provider: "grok"` uses the bundled progrok xAI proxy. Classic, Node, and Agent generation run mandatory xAI Web Search through `/v1/responses`, then run a `grok-4.3` planner call with a forced local `generate_image` function, then ima2 executes xAI `/v1/images/generations`. If reference images, a Node parent image, or an Agent current image are attached, the final step switches to xAI `/v1/images/edits` so image-to-image context is preserved.
+- `provider: "agy"` spawns the Antigravity CLI (`agy -p`) to generate images via Google Gemini's `default_api:generate_image` tool. Model is `nano-banana-2`. Output is fixed at 1024×1024 JPEG. Max 3 reference images (i2i). No web search, quality, size, or mask controls. Multimode returns a single image. Video is unsupported (`AGY_VIDEO_UNSUPPORTED`).
 - API-key generation covers classic generate, edit, mask-guided edit, multimode, and node generation.
 - If `provider: "api"` is requested without an API key, routes fail before upstream with `401` and `API_KEY_REQUIRED`.
 - Grok generation maps `size` to xAI `aspect_ratio` and `resolution`; it does not send an OpenAI-style `size` field upstream. Grok edit uses xAI `/v1/images/edits`; Grok mask edit remains unsupported and returns `GROK_MASK_UNSUPPORTED`.

@@ -10,6 +10,10 @@ type Props = {
 export function AgentModelSelector({ settings, onChange }: Props) {
   const { t } = useI18n();
   const setProvider = (provider: AgentGenerationSettings["provider"]) => {
+    if (provider === "agy") {
+      onChange({ provider, model: "nano-banana-2" });
+      return;
+    }
     if (provider === "grok" && !isGrokImageModel(settings.model)) {
       onChange({ provider, model: "grok-imagine-image" });
       return;
@@ -48,6 +52,7 @@ export function AgentModelSelector({ settings, onChange }: Props) {
           <option value="oauth">GPT OAuth</option>
           <option value="api">API</option>
           <option value="grok">Grok</option>
+          <option value="agy">Gemini</option>
         </select>
       </label>
       <label>

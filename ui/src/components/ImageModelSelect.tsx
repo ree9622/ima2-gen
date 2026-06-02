@@ -2,7 +2,7 @@ import type { ImageModel } from "../types";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IMAGE_MODEL_OPTIONS, OPENAI_IMAGE_MODEL_OPTIONS, GROK_IMAGE_MODEL_OPTIONS, UNSUPPORTED_IMAGE_MODELS, VIDEO_MODEL_OPTIONS } from "../lib/imageModels";
+import { IMAGE_MODEL_OPTIONS, OPENAI_IMAGE_MODEL_OPTIONS, GROK_IMAGE_MODEL_OPTIONS, GEMINI_IMAGE_MODEL_OPTIONS, UNSUPPORTED_IMAGE_MODELS, VIDEO_MODEL_OPTIONS, isGeminiImageModel } from "../lib/imageModels";
 import { REASONING_EFFORT_OPTIONS, type ReasoningEffort } from "../lib/reasoning";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
@@ -172,7 +172,9 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
             <span className="image-model-select__trigger-model">{videoModelSelected ? (VIDEO_MODEL_OPTIONS.find((o) => o.value === videoModelSelected)?.shortLabel ?? VIDEO_MODEL_OPTIONS[0].shortLabel) : current.shortLabel}</span>
             <span className="image-model-select__trigger-chevron" aria-hidden="true">▾</span>
           </span>
-          <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
+          {!isGeminiImageModel(imageModel) && (
+            <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
+          )}
         </button>
         {open ? createPortal(
           <div
@@ -233,6 +235,27 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
                   <small>{t(option.fullLabelKey)}</small>
                 </button>
               ))}
+              <div className="image-model-select__subsection-title">{t("sidebar.geminiImageSubLabel")}</div>
+              {GEMINI_IMAGE_MODEL_OPTIONS.map((option, index) => (
+                <button
+                  key={option.value}
+                  ref={(node) => {
+                    menuItemRefs.current[OPENAI_IMAGE_MODEL_OPTIONS.length + GROK_IMAGE_MODEL_OPTIONS.length + index] = node;
+                  }}
+                  type="button"
+                  className={`image-model-select__item${option.value === imageModel && !videoModelSelected ? " is-active" : ""}`}
+                  role="menuitemradio"
+                  aria-checked={option.value === imageModel && !videoModelSelected}
+                  tabIndex={-1}
+                  onClick={() => {
+                    setImageModel(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <span>{option.shortLabel}</span>
+                  <small>{t(option.fullLabelKey)}</small>
+                </button>
+              ))}
             </div>
             <div className="image-model-select__section" role="group" aria-label={t("sidebar.videoSectionLabel")}>
               <div className="image-model-select__section-title">{t("sidebar.videoSectionLabel")}</div>
@@ -257,29 +280,36 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
                 </button>
               ))}
             </div>
-            <div className="image-model-select__section" role="group" aria-label={t("sidebar.reasoningLabel")}>
-              <div className="image-model-select__section-title">{t("sidebar.reasoningLabel")}</div>
-              {REASONING_EFFORT_OPTIONS.map((option, index) => (
-                <button
-                  key={option.value}
-                  ref={(node) => {
-                    menuItemRefs.current[modelOptions.length + VIDEO_MODEL_OPTIONS.length + index] = node;
-                  }}
-                  type="button"
-                  className={`image-model-select__item${option.value === reasoningEffort ? " is-active" : ""}`}
-                  role="menuitemradio"
-                  aria-checked={option.value === reasoningEffort}
-                  tabIndex={-1}
-                  onClick={() => {
-                    setReasoningEffort(option.value as ReasoningEffort);
-                    setOpen(false);
-                  }}
-                >
-                  <span>{option.shortLabel}</span>
-                  <small>{t(option.fullLabelKey)}</small>
-                </button>
-              ))}
-            </div>
+            {!isGeminiImageModel(imageModel) && (
+              <details className="image-model-select__section image-model-select__collapsible">
+                <summary className="image-model-select__section-title image-model-select__section-title--toggle">
+                  {t("sidebar.reasoningLabel")}
+                  <span className="image-model-select__chevron" aria-hidden="true">▸</span>
+                </summary>
+                <div role="group" aria-label={t("sidebar.reasoningLabel")}>
+                  {REASONING_EFFORT_OPTIONS.map((option, index) => (
+                    <button
+                      key={option.value}
+                      ref={(node) => {
+                        menuItemRefs.current[modelOptions.length + VIDEO_MODEL_OPTIONS.length + index] = node;
+                      }}
+                      type="button"
+                      className={`image-model-select__item${option.value === reasoningEffort ? " is-active" : ""}`}
+                      role="menuitemradio"
+                      aria-checked={option.value === reasoningEffort}
+                      tabIndex={-1}
+                      onClick={() => {
+                        setReasoningEffort(option.value as ReasoningEffort);
+                        setOpen(false);
+                      }}
+                    >
+                      <span>{option.shortLabel}</span>
+                      <small>{t(option.fullLabelKey)}</small>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>,
           document.body,
         ) : null}

@@ -9,6 +9,7 @@ import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateViaResponses } from "../lib/responsesImageAdapter.js";
 import { generateViaGrok, planGrokImage } from "../lib/grokImageAdapter.js";
+import { generateViaAgy } from "../lib/agyImageAdapter.js";
 import { isNonRetryableGenerationError, normalizeGenerationFailure, type UpstreamErr } from "../lib/generationErrors.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
@@ -152,13 +153,13 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         return res.status(400).json({ error: refCheckResult.error, code: refCheckResult.code });
       }
       const refCheck = refCheckResult as Extract<typeof refCheckResult, { refs: string[] }>;
-      if (activeProvider === "grok" && refCheck.refs.length > 3) {
+      if ((activeProvider === "grok" || activeProvider === "agy") && refCheck.refs.length > 3) {
         finishStatus = "error";
         finishHttpStatus = 400;
-        finishErrorCode = "GROK_REF_TOO_MANY";
+        finishErrorCode = activeProvider === "agy" ? "AGY_REF_TOO_MANY" : "GROK_REF_TOO_MANY";
         return res.status(400).json({
-          error: "Grok image editing supports up to 3 reference images",
-          code: "GROK_REF_TOO_MANY",
+          error: `${activeProvider === "agy" ? "Agy" : "Grok"} image editing supports up to 3 reference images`,
+          code: activeProvider === "agy" ? "AGY_REF_TOO_MANY" : "GROK_REF_TOO_MANY",
           requestId,
         });
       }
@@ -189,7 +190,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       const startTime = Date.now();
 
       const mimeMap: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
-      const effectiveFormat = activeProvider === "grok" ? "jpeg" : String(format);
+      const effectiveFormat = activeProvider === "grok" || activeProvider === "agy" ? "jpeg" : String(format);
       const mime = mimeMap[effectiveFormat] || "image/png";
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
 
@@ -205,6 +206,16 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         : null;
 
       const generateOne = async () => {
+        if (activeProvider === "agy") {
+          const r = await generateViaAgy(generationPrompt, {
+            references: refCheck.refDetails,
+            signal: cancelController.signal,
+            requestId,
+          });
+          throwIfJobCanceled(requestId);
+          return r;
+        }
+
         if (activeProvider === "grok") {
           const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
           const r = await generateViaGrok(generationPrompt, ctx, {
@@ -271,10 +282,10 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         if (r.status === "fulfilled" && r.value.b64) {
           throwIfJobCanceled(requestId);
           const valueWithMime = r.value as typeof r.value & { mime?: string };
-          const resultMime = activeProvider === "grok"
+          const resultMime = activeProvider === "grok" || activeProvider === "agy"
             ? (valueWithMime.mime || detectImageMimeFromB64(r.value.b64) || mime)
             : mime;
-          const resultFormat = activeProvider === "grok" ? imageFormatFromMime(resultMime) : effectiveFormat;
+          const resultFormat = activeProvider === "grok" || activeProvider === "agy" ? imageFormatFromMime(resultMime) : effectiveFormat;
           const retryValue = r.value as typeof r.value & {
             retryKind?: string;
             initialEventCount?: number;

@@ -29,6 +29,8 @@ export function GenerationControlsPanel() {
   const videoModelSelected = useAppStore((s) => s.videoModelSelected);
   const showMultimodeControls = uiMode === "classic";
   const isGrok = provider === "grok";
+  const isAgy = provider === "agy";
+  const hideFormatControls = isGrok || isAgy;
   const qualityItems = [
     { value: "low" as const, label: t("quality.lowLabel"), sub: t("quality.lowSub") },
     { value: "medium" as const, label: t("quality.mediumLabel"), sub: t("quality.mediumSub") },
@@ -56,15 +58,24 @@ export function GenerationControlsPanel() {
           <strong>{t("provider.grokCompatTitle")}</strong>
           <span>{t("provider.grokCompatBody")}</span>
         </div>
+      ) : isAgy ? (
+        <div className="provider-compat-note" role="note">
+          <strong>Gemini (agy)</strong>
+          <span>1024x1024 fixed, JPEG output, max 3 refs</span>
+        </div>
       ) : null}
-      <OptionGroup<Quality>
-        title={isGrok ? t("quality.grokTitle") : t("quality.title")}
-        items={qualityItems}
-        value={quality}
-        onChange={setQuality}
-      />
-      <SizePicker />
-      {isGrok ? null : (
+      {isAgy ? null : (
+        <>
+        <OptionGroup<Quality>
+          title={isGrok ? t("quality.grokTitle") : t("quality.title")}
+          items={qualityItems}
+          value={quality}
+          onChange={setQuality}
+        />
+        <SizePicker />
+        </>
+      )}
+      {hideFormatControls ? null : (
         <>
           <OptionGroup<Format>
             title={t("format.title")}
@@ -83,7 +94,7 @@ export function GenerationControlsPanel() {
           </p>
         </>
       )}
-      {showMultimodeControls && (
+      {showMultimodeControls && !isAgy && (
         <div className="option-group multimode-toggle">
           <button
             type="button"
@@ -97,7 +108,7 @@ export function GenerationControlsPanel() {
           </button>
         </div>
       )}
-      <CountPicker />
+      {isAgy ? null : <CountPicker />}
       <CostEstimate />
       </>
       )}

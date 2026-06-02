@@ -10,6 +10,7 @@ import { detectImageMimeFromB64 } from "./refs.js";
 import { resolveProviderOptions } from "./providerOptions.js";
 import { generateViaResponses } from "./responsesImageAdapter.js";
 import { generateViaGrok, type GrokReferenceImage } from "./grokImageAdapter.js";
+import { generateViaAgy } from "./agyImageAdapter.js";
 import { generateVideoViaGrok } from "./grokVideoAdapter.js";
 import { parseVideoParams } from "./agentGenerationPlanner.js";
 import {
@@ -95,7 +96,7 @@ export async function runAgentGenerationPlan(
 ) {
   const session = getAgentSession(sessionId);
   if (!session) throw notFound(sessionId);
-  const webSearchEnabled = options.provider === "grok" ? true : options.webSearchEnabled ?? session.webSearchEnabled;
+  const webSearchEnabled = options.provider === "agy" ? false : options.provider === "grok" ? true : options.webSearchEnabled ?? session.webSearchEnabled;
   const enabledTools: AgentToolName[] = webSearchEnabled
     ? [...AGENT_ALLOWED_TOOLS]
     : ["ima2.get_image_context", "ima2.generate_image", "ima2.generate_video"];
@@ -306,7 +307,12 @@ async function generateAgentImage(
   const effectiveModel = activeProvider === "grok" && options.quality === "high"
     ? "grok-imagine-image-quality"
     : providerOptions.model;
-  const response = activeProvider === "grok"
+  const response = activeProvider === "agy"
+    ? await generateViaAgy(`${manifest}\n\nUser request:\n${prompt}`, {
+        requestId,
+        signal: options.signal ?? undefined,
+      })
+    : activeProvider === "grok"
     ? await generateViaGrok(`${manifest}\n\nUser request:\n${prompt}`, ctx, {
         model: effectiveModel,
         size: providerOptions.size,
@@ -331,7 +337,7 @@ async function generateAgentImage(
           signal: options.signal,
         },
       );
-  const format = activeProvider === "grok"
+  const format = activeProvider === "grok" || activeProvider === "agy"
     ? imageFormatFromMime(("mime" in response ? response.mime : undefined) || detectImageMimeFromB64(response.b64) || "image/jpeg")
     : options.format ?? "png";
   const image = await persistAgentImage(ctx, sessionId, prompt, format, requestId, response, {
@@ -532,13 +538,13 @@ async function persistAgentVideo(
 
 function recordSearchFindings(sessionId: string, prompt: string, count: number, provider: string) {
   if (!count) return [];
-  const isGrok = provider === "grok";
+  const providerLabel = provider === "grok" ? "Grok" : provider === "agy" ? "Gemini" : "Responses";
   return [
     recordAgentWebFinding({
       sessionId,
       query: prompt,
-      title: isGrok ? "Grok visual research" : "Responses web_search",
-      snippet: `${isGrok ? "Grok" : "Responses"} reported ${count} web search call${count === 1 ? "" : "s"}.`,
+      title: `${providerLabel} visual research`,
+      snippet: `${providerLabel} reported ${count} web search call${count === 1 ? "" : "s"}.`,
     }),
   ];
 }

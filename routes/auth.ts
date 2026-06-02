@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -59,7 +59,13 @@ function saveGrokTokens(tokens: Record<string, unknown>) {
     tokenEndpoint: GROK_TOKEN_URL,
   };
   if (email) data.email = email;
-  writeFileSync(join(dir, "auth.json"), JSON.stringify(data, null, 2), { mode: 0o600 });
+  // Atomic write: temp file (0600) + rename, so concurrent completions or a crash
+  // mid-flush can never truncate/corrupt the only credential file. Rename also
+  // guarantees final perms are 0600 even if a looser-perm file pre-existed.
+  const target = join(dir, "auth.json");
+  const tmp = join(dir, `auth.json.tmp-${randomBytes(6).toString("hex")}`);
+  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+  renameSync(tmp, target);
 }
 
 async function startGrokDeviceCode(): Promise<{ sessionId: string; userCode: string; verificationUrl: string; expiresIn: number }> {
@@ -127,9 +133,15 @@ async function startGrokDeviceCode(): Promise<{ sessionId: string; userCode: str
 
 function startCodexDeviceCode(): Promise<{ sessionId: string; userCode: string; verificationUrl: string; expiresIn: number }> {
   return new Promise((resolve, reject) => {
+    // Don't hand other providers' secrets to the codex child — it only needs
+    // PATH/HOME/codex config to run the ChatGPT device-code login.
+    const childEnv = { ...process.env };
+    for (const k of ["OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "VERTEX_SERVICE_ACCOUNT_JSON"]) {
+      delete childEnv[k];
+    }
     const child = spawn("codex", ["login", "--device-auth"], {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: childEnv,
     });
 
     let stdout = "";

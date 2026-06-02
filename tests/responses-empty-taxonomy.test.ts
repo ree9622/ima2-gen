@@ -132,10 +132,10 @@ test("OAuth no-image stream retries once with prompt-only non-stream image tool"
       developerPromptDroppedOnRetry?: boolean;
       webSearchDroppedOnRetry?: boolean;
     };
-    assert.equal(retryResult.retryKind, "prompt_only_json_image_tool");
+    assert.equal(retryResult.retryKind, "prompt_only_with_developer");
     assert.equal(retryResult.initialEventCount, 1);
     assert.equal(retryResult.referencesDroppedOnRetry, true);
-    assert.equal(retryResult.developerPromptDroppedOnRetry, true);
+    assert.equal(retryResult.developerPromptDroppedOnRetry, false);
     assert.equal(retryResult.webSearchDroppedOnRetry, true);
     assert.equal(calls.length, 2);
     assert.equal(calls[0].body.stream, true);
@@ -143,8 +143,9 @@ test("OAuth no-image stream retries once with prompt-only non-stream image tool"
     assert.equal(calls[1].body.stream, false);
     assert.deepEqual(calls[1].body.tool_choice, { type: "image_generation" });
     assert.deepEqual(calls[1].body.tools.map((tool: any) => tool.type), ["image_generation"]);
-    assert.equal(calls[1].body.input.length, 1);
-    assert.equal(calls[1].body.input[0].role, "user");
+    assert.equal(calls[1].body.input.length, 2);
+    assert.equal(calls[1].body.input[0].role, "developer");
+    assert.equal(calls[1].body.input[1].role, "user");
   } finally {
     globalThis.fetch = originalFetch;
   }

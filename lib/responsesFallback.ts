@@ -3,7 +3,11 @@ import type { ParsedResponsesResult } from "./responsesParse.js";
 import type { RouteRuntimeContext } from "./runtimeContext.js";
 import { imageToolChoice, tools } from "./responsesTools.js";
 import { emptyResponseError } from "./responsesErrors.js";
-import { buildUserTextPrompt } from "./oauthProxy.js";
+import {
+  GENERATE_DEVELOPER_PROMPT,
+  GENERATE_NO_SEARCH_DEVELOPER_PROMPT,
+  buildUserTextPrompt,
+} from "./oauthProxy.js";
 
 type PostResponses = (args: {
   ctx: RouteRuntimeContext;
@@ -14,6 +18,8 @@ type PostResponses = (args: {
   maxImages?: number;
   signal?: AbortSignal | null;
 }) => Promise<ParsedResponsesResult>;
+
+const MAX_RETRIES = 2;
 
 export async function retryPromptOnlyJsonImage({
   postResponses,
@@ -49,51 +55,60 @@ export async function retryPromptOnlyJsonImage({
   reasoningEffort?: string;
 }) {
   if (provider === "api") return null;
-  const retryKind = "prompt_only_json_image_tool";
+  const retryKind = "prompt_only_with_developer";
   const retryMeta = {
     retryKind,
     initialEventCount: initial.eventCount,
     initialEventTypes: initial.eventTypes,
     referencesDroppedOnRetry,
-    developerPromptDroppedOnRetry: true,
+    developerPromptDroppedOnRetry: false,
     webSearchDroppedOnRetry,
   };
-  logEvent("oauth", "retry_json", { requestId, ...retryMeta });
-  let retry: ParsedResponsesResult;
-  try {
-    retry = await postResponses({
-      ctx,
-      provider,
-      scope: "oauth-fallback",
-      requestId,
-      maxImages: 1,
-      signal,
-      payload: {
-        model,
-        input: [{ role: "user", content: buildUserTextPrompt(prompt, mode, { webSearchEnabled: false }) }],
-        tools: tools(false, { quality, size, moderation }),
-        tool_choice: imageToolChoice(true),
-        reasoning: { effort: reasoningEffort || "low" },
-        stream: false,
-      },
-    });
-  } catch (e) {
-    if (e && typeof e === "object") Object.assign(e, retryMeta);
-    throw e;
+
+  const developerPrompt = webSearchDroppedOnRetry
+    ? GENERATE_NO_SEARCH_DEVELOPER_PROMPT
+    : GENERATE_DEVELOPER_PROMPT;
+
+  let lastRetry: ParsedResponsesResult | null = null;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    logEvent("oauth", "retry_attempt", { requestId, attempt, maxRetries: MAX_RETRIES, ...retryMeta });
+    try {
+      lastRetry = await postResponses({
+        ctx,
+        provider,
+        scope: "oauth-fallback",
+        requestId,
+        maxImages: 1,
+        signal,
+        payload: {
+          model,
+          input: [
+            { role: "developer", content: developerPrompt },
+            { role: "user", content: buildUserTextPrompt(prompt, mode, { webSearchEnabled: false }) },
+          ],
+          tools: tools(false, { quality, size, moderation }),
+          tool_choice: imageToolChoice(true),
+          reasoning: { effort: reasoningEffort || "low" },
+          stream: false,
+        },
+      });
+    } catch (e) {
+      if (e && typeof e === "object") Object.assign(e, retryMeta);
+      if (attempt === MAX_RETRIES) throw e;
+      logEvent("oauth", "retry_error", { requestId, attempt, error: (e as Error).message });
+      continue;
+    }
+    const image = lastRetry.images[0];
+    if (image?.b64) {
+      logEvent("oauth", "retry_image", { requestId, retryKind, attempt, imageChars: image.b64.length });
+      return { b64: image.b64, usage: lastRetry.usage, webSearchCalls: initial.webSearchCalls, revisedPrompt: image.revisedPrompt, text: lastRetry.text, ...retryMeta };
+    }
+    logEvent("oauth", "retry_no_image", { requestId, retryKind, attempt, fallbackEventCount: lastRetry.eventCount });
   }
-  const image = retry.images[0];
-  if (image?.b64) {
-    logEvent("oauth", "retry_image", { requestId, retryKind, imageChars: image.b64.length });
-    return { b64: image.b64, usage: retry.usage, webSearchCalls: initial.webSearchCalls, revisedPrompt: image.revisedPrompt, text: retry.text, ...retryMeta };
-  }
-  logEvent("oauth", "retry_no_image", {
-    requestId,
-    retryKind,
-    fallbackEventCount: retry.eventCount,
-    fallbackImageCallSeen: retry.diagnostics.imageCallSeen,
-    fallbackImageResultCount: retry.diagnostics.imageResultCount,
-  });
-  throw emptyResponseError("No image data received from Responses API fallback", retry, {
+
+  const diagSource = lastRetry ?? initial;
+  throw emptyResponseError("No image data received after retries", diagSource, {
     provider,
     model,
     quality,
@@ -106,9 +121,9 @@ export async function retryPromptOnlyJsonImage({
     toolTypes: ["image_generation"],
     toolChoiceKind: "image_generation",
     ...retryMeta,
-    fallbackEventCount: retry.eventCount,
-    fallbackEventTypes: retry.eventTypes,
-    fallbackImageCallSeen: retry.diagnostics.imageCallSeen,
-    fallbackImageResultCount: retry.diagnostics.imageResultCount,
+    fallbackEventCount: diagSource.eventCount,
+    fallbackEventTypes: diagSource.eventTypes,
+    fallbackImageCallSeen: diagSource.diagnostics.imageCallSeen,
+    fallbackImageResultCount: diagSource.diagnostics.imageResultCount,
   });
 }

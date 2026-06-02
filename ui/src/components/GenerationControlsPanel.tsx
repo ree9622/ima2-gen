@@ -213,13 +213,14 @@ export function GenerationControlsPanel() {
         </div>
         <div className="option-group">
           <div className="section-title">{t("size.grokResolutionTitle") || "Resolution"}</div>
-          <div className="option-row">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
             {GEMINI_RESOLUTIONS.map((r) => (
               <button
                 key={r.value}
                 type="button"
                 className={`option-btn${geminiSettings.res === r.value ? " active" : ""}`}
                 onClick={() => setGeminiSize(geminiSettings.ratio, r.value)}
+                style={{ padding: "6px 4px" }}
               >
                 <span>{r.label}</span><br /><small>{GEMINI_RATIO_TO_SIZE[geminiSettings.ratio]?.[r.value]?.replace("x", "×") || ""}</small>
               </button>

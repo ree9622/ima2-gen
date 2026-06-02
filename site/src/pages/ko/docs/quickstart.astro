@@ -24,6 +24,26 @@ ima2 setup
 ima2 serve</code></pre>
   <p>그다음 <code>http://localhost:3333</code>을 엽니다.</p>
 
+  <h2>원클릭 설치 (npm 필요 없음)</h2>
+  <p>
+    Node.js나 npm이 없나요? 플랫폼별 설치 스크립트를 사용하세요.
+    환경을 감지하고, 필요하면 Node LTS를 설치한 뒤 ima2-gen을 설치합니다.
+  </p>
+
+  <h3>macOS</h3>
+  <pre><code>curl -fsSL https://lidge-jun.github.io/ima2-gen/install-mac.sh | bash</code></pre>
+
+  <h3>Windows (PowerShell)</h3>
+  <pre><code>irm https://lidge-jun.github.io/ima2-gen/install-windows.ps1 | iex</code></pre>
+
+  <h3>Linux / WSL</h3>
+  <pre><code>curl -fsSL https://lidge-jun.github.io/ima2-gen/install-linux.sh | bash</code></pre>
+
+  <p>
+    각 스크립트는 nvm/fnm/brew/winget을 확인하고, 가장 적합한 방법으로
+    Node LTS를 설치하며, 멈춘 프로세스 정리도 자동으로 처리합니다.
+  </p>
+
   <div class="docs-callout docs-callout-info">
     <strong>포트 탐색.</strong> <code>3333</code>이 사용 중이면 ima2-gen이 다음 빈 포트에 바인딩하고
     실제 URL을 <code>~/.ima2/server.json</code>에 기록합니다. 포트를 추측하지 말고

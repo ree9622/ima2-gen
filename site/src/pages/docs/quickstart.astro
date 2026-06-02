@@ -24,6 +24,26 @@ ima2 setup
 ima2 serve</code></pre>
   <p>Then open <code>http://localhost:3333</code>.</p>
 
+  <h2>One-Click Install (no npm required)</h2>
+  <p>
+    Don't have Node.js or npm? Use the platform install script — it detects your environment,
+    installs Node LTS if needed, then installs ima2-gen.
+  </p>
+
+  <h3>macOS</h3>
+  <pre><code>curl -fsSL https://lidge-jun.github.io/ima2-gen/install-mac.sh | bash</code></pre>
+
+  <h3>Windows (PowerShell)</h3>
+  <pre><code>irm https://lidge-jun.github.io/ima2-gen/install-windows.ps1 | iex</code></pre>
+
+  <h3>Linux / WSL</h3>
+  <pre><code>curl -fsSL https://lidge-jun.github.io/ima2-gen/install-linux.sh | bash</code></pre>
+
+  <p>
+    Each script checks for nvm/fnm/brew/winget, installs Node LTS through
+    the best available method, and handles stale process cleanup automatically.
+  </p>
+
   <div class="docs-callout docs-callout-info">
     <strong>Port discovery.</strong> If <code>3333</code> is busy, ima2-gen binds the next free port
     and writes the real URL to <code>~/.ima2/server.json</code>. Use <code>ima2 open</code> or the

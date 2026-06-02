@@ -93,7 +93,9 @@ export async function generateViaGeminiApi(
   } = {},
 ): Promise<GeminiApiGenerateResult> {
   const apiKey = ctx.geminiApiKey;
-  const useVertex = ctx.hasVertexKey && isVertexInitialized();
+  const vertexReady = ctx.hasVertexKey && isVertexInitialized();
+  const authMode = (ctx as any).geminiAuthMode as string | undefined;
+  const useVertex = authMode === "vertex" ? vertexReady : (!apiKey && vertexReady);
   if (!apiKey && !useVertex) {
     throw geminiApiError("Gemini API key or Vertex AI credentials not configured", 401, "GEMINI_API_KEY_MISSING");
   }

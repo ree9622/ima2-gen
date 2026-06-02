@@ -201,6 +201,12 @@
     "model": "Model",
     "source": "Source"
   },
+  "onboarding": {
+    "title": "Hello! First time here?",
+    "body": "Sign in to start generating. You can connect ChatGPT, Grok, or Gemini.",
+    "login": "Yes, sign me in",
+    "skip": "I'll set it up myself"
+  },
   "readiness": {
     "title": "Generation readiness",
     "open": "Check readiness",

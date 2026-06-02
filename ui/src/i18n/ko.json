@@ -201,6 +201,12 @@
     "model": "모델",
     "source": "출처"
   },
+  "onboarding": {
+    "title": "안녕하세요, 처음이신가요?",
+    "body": "여기서 로그인하세요. ChatGPT, Grok, Gemini를 연결할 수 있어요.",
+    "login": "네",
+    "skip": "알아서 진행하겠습니다"
+  },
   "readiness": {
     "title": "생성 준비 상태",
     "open": "준비 상태 확인",

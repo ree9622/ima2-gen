@@ -65,20 +65,15 @@ async function setup() {
     console.log("    1) GPT OAuth   — login with ChatGPT account (free, images only)");
     console.log("    2) Grok OAuth  — login with xAI/Grok account (images + video)");
     console.log("    3) Both        — GPT OAuth + Grok OAuth");
-    console.log("    4) API Key     — paste your OpenAI API key (paid)\n");
+    console.log("    4) Web setup   — configure everything in the web UI\n");
     const choice = await rl.question("  Enter 1-4: ");
     const config = loadConfig();
     if (choice.trim() === "4") {
-        const key = await rl.question("  OpenAI API Key: ");
-        if (!key.startsWith("sk-")) {
-            console.log("  Invalid API key format. Expected sk-...");
-            rl.close();
-            process.exit(1);
-        }
-        config.provider = "api";
-        config.apiKey = key.trim();
+        config.provider = "oauth";
+        delete config.apiKey;
         saveConfig(config);
-        console.log("\n  API key saved. Starting server...\n");
+        console.log("\n  You can set up everything from the web UI.");
+        console.log("  Run 'ima2 serve', then open Settings in the browser to sign in or add API keys.\n");
     }
     else if (choice.trim() === "2") {
         config.provider = "grok";

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useBilling } from "../hooks/useBilling";
 import { useGrokStatus } from "../hooks/useGrokStatus";
 import { useOAuthStatus } from "../hooks/useOAuthStatus";
+import { useAgyStatus } from "../hooks/useAgyStatus";
 import { useI18n } from "../i18n";
 import { ApiKeyInput } from "./ApiKeyInput";
 import { GeminiKeySection } from "./GeminiKeySection";
@@ -21,6 +22,7 @@ export function AccountSettings() {
   const { t } = useI18n();
   const oauth = useOAuthStatus();
   const grok = useGrokStatus();
+  const agy = useAgyStatus();
   const { data, error } = useBilling();
   const { data: keyStatus, mutate: mutateKeys } = useKeyStatus();
   const [keysOpen, setKeysOpen] = useState(false);
@@ -77,6 +79,34 @@ export function AccountSettings() {
         <div className={`settings-status${grokReady ? " is-ok" : " is-muted"}`}>
           <span aria-hidden="true" />
           {statusLabel(t, grok?.status)}
+        </div>
+      </article>
+
+      <article className="settings-row">
+        <div className="settings-row__copy">
+          <p className="settings-eyebrow">{t("settings.account.agyEyebrow")}</p>
+          <h4>{t("settings.account.agyTitle")}</h4>
+          {agy?.installed ? (
+            <p>{t("settings.account.agyInstalledBody")}</p>
+          ) : (
+            <p>
+              {t("settings.account.agyMissingBody")}{" "}
+              <a
+                href="https://antigravity.google/docs/cli-install"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("settings.account.agyMissingLink")}
+              </a>
+            </p>
+          )}
+          <p style={{ fontSize: "12px", color: "var(--text-dim, #888)", marginTop: "4px" }}>
+            {t("settings.account.agyFineprint")}
+          </p>
+        </div>
+        <div className={`settings-status${agy?.installed ? " is-ok" : " is-muted"}`}>
+          <span aria-hidden="true" />
+          {agy?.installed ? t("settings.account.agyInstalled") : t("settings.account.agyMissing")}
         </div>
       </article>
 

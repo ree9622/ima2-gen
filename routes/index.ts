@@ -19,6 +19,7 @@ import { registerImageImportRoutes } from "./imageImport.js";
 import { registerPromptBuilderRoutes } from "./promptBuilder.js";
 import { registerAgentRoutes } from "./agent.js";
 import { registerGrokRoutes } from "./grok.js";
+import { registerAgyRoutes } from "./agy.js";
 import { registerVideoRoutes } from "./video.js";
 import { registerVideoExtendedRoutes } from "./videoExtended.js";
 import { registerQuotaRoutes } from "./quota.js";
@@ -48,6 +49,7 @@ export function configureRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
   registerPromptRoutes(app, ctx);
   registerPromptImportRoutes(app, ctx);
   registerGrokRoutes(app, ctx);
+  registerAgyRoutes(app);
   registerVideoRoutes(app, ctx);
   registerVideoExtendedRoutes(app, ctx);
   registerQuotaRoutes(app, ctx);

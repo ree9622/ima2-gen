@@ -10,6 +10,7 @@ import { GalleryModal } from "./components/GalleryModal";
 import { CustomSizeConfirmModal } from "./components/CustomSizeConfirmModal";
 import { MetadataRestoreDialog } from "./components/MetadataRestoreDialog";
 import { ProviderReadinessPopup } from "./components/ProviderReadinessPopup";
+import { OnboardingPopup } from "./components/OnboardingPopup";
 import { TrashUndoToast } from "./components/TrashUndoToast";
 import { MobileSettingsToggle } from "./components/MobileSettingsToggle";
 import { MobileAppBar } from "./components/MobileAppBar";
@@ -166,6 +167,7 @@ export default function App() {
       <GalleryModal />
       <MetadataRestoreDialog />
       <ProviderReadinessPopup />
+      <OnboardingPopup />
       <MobileComposeSheet />
       <MobileSettingsToggle />
       {uiMode === "card-news" ? (

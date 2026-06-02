@@ -163,9 +163,9 @@ function SwitchAccountButton({ provider, onComplete }: { provider: "grok" | "cod
               type="button"
               className="settings-action-btn"
               style={{ flex: 1, fontSize: "11px" }}
-              onClick={() => window.open(state.verificationUrl, "_blank")}
+              onClick={() => { switching.current = false; startSwitch(); }}
             >
-              Open tab again
+              Retry
             </button>
             <button
               type="button"

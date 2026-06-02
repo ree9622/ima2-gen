@@ -68,8 +68,6 @@ export function Canvas() {
   );
   const markGeneratedResultsSeen = useAppStore((s) => s.markGeneratedResultsSeen);
   const activeGenerations = useAppStore((s) => s.activeGenerations);
-  const quality = useAppStore((s) => s.quality);
-  const getResolvedSize = useAppStore((s) => s.getResolvedSize);
   const canvasOpen = useAppStore((s) => s.canvasOpen);
   const openCanvas = useAppStore((s) => s.openCanvas);
   const showToast = useAppStore((s) => s.showToast);
@@ -161,8 +159,8 @@ export function Canvas() {
     );
   }
 
-  const displayQuality = formatQualityAlias(currentImage?.quality ?? quality);
-  const displaySize = formatSizeAlias(currentImage?.size ?? getResolvedSize());
+  const displayQuality = formatQualityAlias(currentImage?.quality);
+  const displaySize = formatSizeAlias(currentImage?.size);
   const displayModel = getImageModelShortLabel(currentImage?.model, currentImage?.provider);
   const imageSrc = currentImage ? getClassicImageSrc(currentImage) : null;
 

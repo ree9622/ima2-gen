@@ -64,6 +64,27 @@ describe("image metadata UI contract", () => {
     assert.match(css, /\.metadata-restore/);
   });
 
+  it("does not render current UI generation settings as selected image metadata", () => {
+    const canvas = readSource("ui/src/components/Canvas.tsx");
+    const canvasMode = readSource("ui/src/components/canvas-mode/CanvasModeWorkspace.tsx");
+    const store = readSource("ui/src/store/useAppStore.ts");
+
+    assert.match(canvas, /const displayQuality = formatQualityAlias\(currentImage\?\.quality\)/);
+    assert.match(canvas, /const displaySize = formatSizeAlias\(currentImage\?\.size\)/);
+    assert.match(canvasMode, /const displayQuality = formatQualityAlias\(currentImage\?\.quality\)/);
+    assert.match(canvasMode, /const displaySize = formatSizeAlias\(currentImage\?\.size\)/);
+
+    assert.doesNotMatch(canvas, /currentImage\?\.quality \?\? quality/);
+    assert.doesNotMatch(canvas, /currentImage\?\.size \?\? getResolvedSize\(\)/);
+    assert.doesNotMatch(canvasMode, /currentImage\?\.quality \?\? quality/);
+    assert.doesNotMatch(canvasMode, /currentImage\?\.size \?\? getResolvedSize\(\)/);
+
+    assert.doesNotMatch(store, /reasoningEffort: res\.reasoningEffort \?\? s\.reasoningEffort/);
+    assert.doesNotMatch(store, /quality: res\.quality \?\? s\.quality/);
+    assert.doesNotMatch(store, /size: res\.size \?\? size/);
+    assert.doesNotMatch(store, /model: res\.model \?\? s\.imageModel/);
+  });
+
   it("defines metadata restore copy in both locales", () => {
     const en = JSON.parse(readSource("ui/src/i18n/en.json"));
     const ko = JSON.parse(readSource("ui/src/i18n/ko.json"));

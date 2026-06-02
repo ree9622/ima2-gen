@@ -105,8 +105,8 @@ export function CanvasModeWorkspace(_props: CanvasModeWorkspaceProps) {
     showToast(t("toast.promptCopied"));
   };
 
-  const displayQuality = formatQualityAlias(currentImage?.quality ?? quality);
-  const displaySize = formatSizeAlias(currentImage?.size ?? getResolvedSize());
+  const displayQuality = formatQualityAlias(currentImage?.quality);
+  const displaySize = formatSizeAlias(currentImage?.size);
   const displayModel = getImageModelShortLabel(currentImage?.model);
   const imageKey = currentImage?.filename ?? currentImage?.url ?? currentImage?.image ?? null;
   const latestCanvasVersion = findCanvasVersionForSource(history, currentImage);

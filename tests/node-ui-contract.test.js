@@ -42,7 +42,7 @@ describe("node UI compact metadata contract", () => {
     assert.match(imageRule, /object-fit:\s*contain/);
   });
 
-  it("persists node output size so aspect-ratio layout survives reload", () => {
+  it("persists returned node output size so aspect-ratio layout survives reload", () => {
     const store = readSource("ui/src/store/useAppStore.ts");
     const api = readSource("ui/src/lib/nodeApi.ts");
     const route = readSource("routes/nodes.ts");
@@ -50,7 +50,7 @@ describe("node UI compact metadata contract", () => {
     assert.match(api, /size\?: string \| null/);
     assert.match(route, /size: effectiveSize,\s*\n\s*moderation/);
     assert.match(store, /size: \(d\.size \?\? null\) as string \| null/);
-    assert.match(store, /size: res\.size \?\? size/);
+    assert.match(store, /size: res\.size \?\? null/);
     assert.match(store, /size: recovered\.size \?\? n\.data\.size \?\? null/);
   });
 

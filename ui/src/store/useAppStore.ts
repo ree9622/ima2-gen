@@ -2880,7 +2880,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 reasoningEffort: res.reasoningEffort,
                 webSearchCalls: res.webSearchCalls,
                 model: res.model ?? null,
-                size: res.size ?? size,
+                size: res.size ?? null,
               },
             };
           }),
@@ -3889,9 +3889,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         requestId: image.requestId ?? res.requestId ?? flightId,
         composerPrompt,
         composerInsertedPrompts,
-        quality: res.quality ?? s.quality,
-        size: res.size ?? size,
-        model: res.model ?? s.imageModel,
+        quality: res.quality,
+        size: res.size,
+        model: res.model ?? null,
       }));
       for (const item of items) {
         await addHistory(item, set, get);
@@ -4046,7 +4046,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const item: GenerateItem = {
             image: img.image,
             filename: img.filename,
-            reasoningEffort: res.reasoningEffort ?? s.reasoningEffort,
+            reasoningEffort: res.reasoningEffort,
             prompt,
             composerPrompt,
             composerInsertedPrompts,
@@ -4054,9 +4054,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             provider: res.provider,
             usage: res.usage,
             requestId: res.requestId ?? flightId,
-            quality: res.quality ?? s.quality,
-            size: res.size ?? size,
-            model: res.model ?? s.imageModel,
+            quality: res.quality,
+            size: res.size,
+            model: res.model ?? null,
           };
           await addHistory(item, set, get);
         }
@@ -4068,7 +4068,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           item = {
             image: first.image,
             filename: first.filename,
-            reasoningEffort: res.reasoningEffort ?? s.reasoningEffort,
+            reasoningEffort: res.reasoningEffort,
             prompt,
             composerPrompt,
             composerInsertedPrompts,
@@ -4076,15 +4076,15 @@ export const useAppStore = create<AppState>((set, get) => ({
             provider: res.provider,
             usage: res.usage,
             requestId: res.requestId ?? flightId,
-            quality: res.quality ?? s.quality,
-            size: res.size ?? size,
-            model: res.model ?? s.imageModel,
+            quality: res.quality,
+            size: res.size,
+            model: res.model ?? null,
           };
         } else {
           item = {
             image: res.image,
             filename: res.filename,
-            reasoningEffort: res.reasoningEffort ?? s.reasoningEffort,
+            reasoningEffort: res.reasoningEffort,
             prompt,
             composerPrompt,
             composerInsertedPrompts,
@@ -4092,9 +4092,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             provider: res.provider,
             usage: res.usage,
             requestId: res.requestId ?? flightId,
-            quality: res.quality ?? s.quality,
-            size: res.size ?? size,
-            model: res.model ?? s.imageModel,
+            quality: res.quality,
+            size: res.size,
+            model: res.model ?? null,
           };
         }
         await addHistory(item, set, get);

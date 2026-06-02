@@ -219,6 +219,7 @@ export function postEdit(payload: GenerateRequest & { mask?: string }): Promise<
 export type HistoryItem = {
   filename: string;
   url: string;
+  thumb?: string | null;
   mediaType?: "image" | "video" | string;
   video?: Record<string, unknown> | null;
   videoSeries?: { topic?: string; chainIndex?: number } | null;

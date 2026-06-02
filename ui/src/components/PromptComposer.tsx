@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 import { SavePromptPopover } from "./SavePromptPopover";
 import { WebSearchToggle } from "./WebSearchToggle";
 import { continueFromItem } from "../lib/continueFromItem";
+import { isVideoItem, extractLastFrame } from "../lib/videoMedia";
 import type { VideoReferenceDragPayload } from "../lib/videoContinuity";
 
 const MAX_REFS = 5;
@@ -31,6 +32,7 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   const refs = useAppStore((s) => s.referenceImages);
   const addReferences = useAppStore((s) => s.addReferences);
   const addReferenceDataUrl = useAppStore((s) => s.addReferenceDataUrl);
+  const useImageAsReference = useAppStore((s) => s.useImageAsReference);
   const readDroppedImageMetadata = useAppStore((s) => s.readDroppedImageMetadata);
   const removeReference = useAppStore((s) => s.removeReference);
   const currentImage = useAppStore((s) => s.currentImage);
@@ -76,9 +78,20 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
   };
 
   const attachInternalReference = async (item: InternalRefDragItem): Promise<void> => {
+    // Add the dragged gallery item as a reference image WITHOUT touching the
+    // prompt. Images go through useImageAsReference (fetch → compress → base64);
+    // videos extract their last frame. Both produce a proper base64 data URL so
+    // downstream generation can decode it.
     try {
-      const src = item.image || item.url || item.filename;
-      if (src) addReferenceDataUrl(src);
+      const src = item.url || item.image;
+      if (!src) return;
+      const refItem = { image: src, url: item.url, filename: item.filename };
+      if (isVideoItem(refItem)) {
+        const frame = await extractLastFrame(src);
+        if (frame) addReferenceDataUrl(frame);
+      } else {
+        await useImageAsReference(refItem as Parameters<typeof useImageAsReference>[0]);
+      }
     } catch { /* non-fatal for drag-drop */ }
   };
 

@@ -619,7 +619,7 @@ function mapHistoryItem(it: Awaited<ReturnType<typeof getHistory>>["items"][numb
     videoSeries: it.videoSeries ?? null,
     videoContinuity: it.videoContinuity ?? null,
     filename: it.filename,
-    thumb: it.url,
+    thumb: it.thumb ?? it.url,
     prompt: it.prompt ?? undefined,
     userPrompt: it.userPrompt ?? null,
     revisedPrompt: it.revisedPrompt ?? null,

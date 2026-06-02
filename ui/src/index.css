@@ -3260,7 +3260,8 @@ body {
 .history-thumb--video {
   position: relative;
 }
-.history-thumb--video img {
+.history-thumb--video img,
+.history-thumb--video video {
   width: 100%;
   height: 100%;
   object-fit: cover;

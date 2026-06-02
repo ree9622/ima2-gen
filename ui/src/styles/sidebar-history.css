@@ -134,6 +134,7 @@
 }
 
 .sidebar-history__thumb img,
+.sidebar-history__thumb video,
 .sidebar-history__sequence-grid img {
   width: 100%;
   height: 100%;

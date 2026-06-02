@@ -179,7 +179,11 @@ export function HistoryStrip() {
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                   >
-                    <img src={seqItem.thumb || seqItem.url || seqItem.image} alt="" loading="lazy" decoding="async" />
+                    {seqItem.thumb ? (
+                      <img src={seqItem.thumb} alt="" loading="lazy" decoding="async" />
+                    ) : (
+                      <video src={seqItem.url || seqItem.image} muted playsInline preload="metadata" />
+                    )}
                     <span className="history-thumb__play-badge" aria-hidden="true">▶</span>
                   </div>
                 );
@@ -222,7 +226,11 @@ export function HistoryStrip() {
                 e.dataTransfer.effectAllowed = "copy";
               }}
             >
-              <img src={item.thumb || item.url || item.image} alt="" loading="lazy" decoding="async" />
+              {item.thumb ? (
+                <img src={item.thumb} alt="" loading="lazy" decoding="async" />
+              ) : (
+                <video src={item.url || item.image} muted playsInline preload="metadata" />
+              )}
               <span className="history-thumb__play-badge" aria-hidden="true">▶</span>
             </div>
           );

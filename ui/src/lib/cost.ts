@@ -50,17 +50,21 @@ export const COST_MAP: Record<Quality, Record<string, number>> = {
   },
 };
 
+// Source: https://ai.google.dev/gemini-api/docs/pricing (image output tokens × per-token rate)
+// Flash 3.1: $60/1M tok — 512px=747tok, 1K=1120tok, 2K=1680tok, 4K=2520tok
 const GEMINI_FLASH_COST: Record<string, number> = {
-  "512": 0.001,
-  "1K": 0.003,
-  "2K": 0.004,
-  "4K": 0.006,
+  "512": 0.045,
+  "1K": 0.067,
+  "2K": 0.101,
+  "4K": 0.151,
 };
 
+// Pro 3: $120/1M tok — 1K/2K=1120tok, 4K=2000tok
 const GEMINI_PRO_COST: Record<string, number> = {
-  "1K": 0.007,
-  "2K": 0.007,
-  "4K": 0.013,
+  "512": 0.134,
+  "1K": 0.134,
+  "2K": 0.134,
+  "4K": 0.240,
 };
 
 function geminiResTier(maxDim: number): string {

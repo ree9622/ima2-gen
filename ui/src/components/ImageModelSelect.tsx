@@ -24,7 +24,9 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
     width: 280,
   });
   const imageModel = useAppStore((s) => s.imageModel);
+  const provider = useAppStore((s) => s.provider);
   const setImageModel = useAppStore((s) => s.setImageModel);
+  const setProvider = useAppStore((s) => s.setProvider);
   const videoModelSelected = useAppStore((s) => s.videoModelSelected);
   const selectVideoModel = useAppStore((s) => s.selectVideoModel);
   const reasoningEffort = useAppStore((s) => s.reasoningEffort);
@@ -236,26 +238,31 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
                 </button>
               ))}
               <div className="image-model-select__subsection-title">{t("sidebar.geminiImageSubLabel")}</div>
-              {GEMINI_IMAGE_MODEL_OPTIONS.map((option, index) => (
-                <button
-                  key={option.value}
-                  ref={(node) => {
-                    menuItemRefs.current[OPENAI_IMAGE_MODEL_OPTIONS.length + GROK_IMAGE_MODEL_OPTIONS.length + index] = node;
-                  }}
-                  type="button"
-                  className={`image-model-select__item${option.value === imageModel && !videoModelSelected ? " is-active" : ""}`}
-                  role="menuitemradio"
-                  aria-checked={option.value === imageModel && !videoModelSelected}
-                  tabIndex={-1}
-                  onClick={() => {
-                    setImageModel(option.value);
-                    setOpen(false);
-                  }}
-                >
-                  <span>{option.shortLabel}</span>
-                  <small>{t(option.fullLabelKey)}</small>
-                </button>
-              ))}
+              {GEMINI_IMAGE_MODEL_OPTIONS.map((option, index) => {
+                const hint = option.providerHint;
+                const isActive = option.value === imageModel && hint === provider && !videoModelSelected;
+                return (
+                  <button
+                    key={`${option.value}-${hint || index}`}
+                    ref={(node) => {
+                      menuItemRefs.current[OPENAI_IMAGE_MODEL_OPTIONS.length + GROK_IMAGE_MODEL_OPTIONS.length + index] = node;
+                    }}
+                    type="button"
+                    className={`image-model-select__item${isActive ? " is-active" : ""}`}
+                    role="menuitemradio"
+                    aria-checked={isActive}
+                    tabIndex={-1}
+                    onClick={() => {
+                      if (hint) setProvider(hint);
+                      setImageModel(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{option.shortLabel}</span>
+                    <small>{t(option.fullLabelKey)}</small>
+                  </button>
+                );
+              })}
             </div>
             <div className="image-model-select__section" role="group" aria-label={t("sidebar.videoSectionLabel")}>
               <div className="image-model-select__section-title">{t("sidebar.videoSectionLabel")}</div>

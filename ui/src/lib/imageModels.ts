@@ -7,16 +7,19 @@ export const IMAGE_MODEL_OPTIONS: Array<{
   value: ImageModel;
   shortLabel: string;
   fullLabelKey: string;
+  providerHint?: Provider;
 }> = [
   { value: "gpt-5.4-mini", shortLabel: "5.4m", fullLabelKey: "settings.imageModel.gpt54Mini" },
   { value: "gpt-5.4", shortLabel: "5.4", fullLabelKey: "settings.imageModel.gpt54" },
   { value: "gpt-5.5", shortLabel: "5.5", fullLabelKey: "settings.imageModel.gpt55" },
   { value: "grok-imagine-image", shortLabel: "grok", fullLabelKey: "settings.imageModel.grokImagine" },
   { value: "grok-imagine-image-quality", shortLabel: "grok+", fullLabelKey: "settings.imageModel.grokImagineQuality" },
-  { value: "nano-banana-2", shortLabel: "agy", fullLabelKey: "settings.imageModel.nanoBanana2" },
+  { value: "nano-banana-2", shortLabel: "agy", fullLabelKey: "settings.imageModel.nanoBanana2", providerHint: "agy" },
+  { value: "nano-banana-2", shortLabel: "api", fullLabelKey: "settings.imageModel.nanoBanana2Api", providerHint: "gemini-api" },
+  { value: "nano-banana-pro", shortLabel: "api", fullLabelKey: "settings.imageModel.nanoBananaPro", providerHint: "gemini-api" },
 ];
 
-const GEMINI_MODEL_VALUES = new Set<string>(["nano-banana-2"]);
+const GEMINI_MODEL_VALUES = new Set<string>(["nano-banana-2", "nano-banana-pro"]);
 
 export const OPENAI_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter(
   (option): option is { value: OpenAIImageModel; shortLabel: string; fullLabelKey: string } =>
@@ -28,7 +31,7 @@ export const GROK_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter((option) =>
 );
 
 export const GEMINI_IMAGE_MODEL_OPTIONS = IMAGE_MODEL_OPTIONS.filter(
-  (option): option is { value: GeminiImageModel; shortLabel: string; fullLabelKey: string } =>
+  (option): option is { value: GeminiImageModel; shortLabel: string; fullLabelKey: string; providerHint?: Provider } =>
     GEMINI_MODEL_VALUES.has(option.value),
 );
 
@@ -52,8 +55,8 @@ export function isGeminiImageModel(value: unknown): boolean {
 }
 
 export function getImageModelOptionsForProvider(provider: Provider) {
-  if (provider === "grok") return GROK_IMAGE_MODEL_OPTIONS;
-  if (provider === "agy") return GEMINI_IMAGE_MODEL_OPTIONS;
+  if (provider === "grok" || provider === "grok-api") return GROK_IMAGE_MODEL_OPTIONS;
+  if (provider === "agy" || provider === "gemini-api") return GEMINI_IMAGE_MODEL_OPTIONS;
   return OPENAI_IMAGE_MODEL_OPTIONS;
 }
 

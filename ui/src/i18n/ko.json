@@ -528,7 +528,13 @@
     "availableAria": "{name}: 사용 가능",
     "unavailableAria": "{name}: 사용 불가",
     "availableSr": "(사용 가능)",
-    "unavailableSr": "(사용 불가)"
+    "unavailableSr": "(사용 불가)",
+    "xaiApiKeyRequired": "xAI API 키 필요",
+    "geminiApiKeyRequired": "Gemini API 키 필요",
+    "comingSoon": "준비 중",
+    "agyCompatTitle": "Gemini (agy)",
+    "agyCompatBody": "1024x1024 고정, JPEG 출력, 최대 3개 참조",
+    "agyCompatBodyLong": "1024x1024 고정 출력, JPEG 형식, 최대 3개 참조 이미지. 웹 검색, 품질/크기 조절 없음."
   },
   "cost": {
     "free": "무료",
@@ -923,9 +929,42 @@
       "grokImagine": "Grok Imagine",
       "grokImagineQuality": "Grok Imagine Quality",
       "nanoBanana2": "Nano Banana 2",
+      "nanoBanana2Api": "Nano Banana 2",
+      "nanoBananaPro": "나노 바나나 Pro",
       "agy": "Antigravity (agy)",
       "gpt53CodexSpark": "GPT-5.3 Codex Spark — 이미지 생성 미지원",
       "unsupportedHelp": "Grok 모델은 번들된 로컬 프록시를 통해 xAI Images API를 사용합니다. GPT 모델은 OpenAI Responses 이미지 생성을 사용합니다."
+    },
+    "apiKeys": {
+      "accordionTitle": "API Keys",
+      "envSource": "환경 변수에서 로드됨",
+      "configSource": "설정 파일에서 로드됨",
+      "openai": {
+        "label": "GPT API Key (OpenAI)",
+        "placeholder": "OpenAI API 키 붙여넣기 (sk-...)"
+      },
+      "xai": {
+        "label": "Grok API Key (xAI)",
+        "placeholder": "xAI API 키 붙여넣기 (xai-...)"
+      },
+      "gemini": {
+        "label": "Gemini (Google)",
+        "placeholder": "Gemini API 키 붙여넣기 (AI...)"
+      },
+      "vertex": {
+        "label": "Vertex AI (서비스 계정)",
+        "placeholder": "Google Cloud 서비스 계정 JSON 붙여넣기 { \"type\": \"service_account\", ... }",
+        "authModeApiKey": "API Key",
+        "authModeVertex": "Vertex JSON"
+      },
+      "save": "저장",
+      "saved": "저장됨 ✓",
+      "saving": "검증 중...",
+      "remove": "삭제",
+      "status": {
+        "valid": "유효",
+        "notConfigured": "미설정"
+      }
     },
     "videoModel": {
       "grokImagine": "Grok Imagine Video",

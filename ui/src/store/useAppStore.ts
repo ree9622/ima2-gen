@@ -70,6 +70,7 @@ import {
 import {
   DEFAULT_IMAGE_MODEL,
   isGrokImageModel,
+  isGeminiImageModel,
   isImageModel,
   deriveVideoModeUI,
   clampVideoDurationUI,
@@ -1255,7 +1256,7 @@ function isModeration(value: unknown): value is Moderation {
 }
 
 function isProvider(value: unknown): value is Provider {
-  return value === "oauth" || value === "api" || value === "grok" || value === "agy";
+  return value === "oauth" || value === "api" || value === "grok" || value === "grok-api" || value === "agy" || value === "gemini-api";
 }
 
 function isPromptMode(value: unknown): value is "auto" | "direct" {
@@ -3144,7 +3145,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ provider: "grok", imageModel });
       return;
     }
-    if (get().provider === "grok") {
+    if (isGeminiImageModel(imageModel)) {
+      const current = get().provider;
+      if (current !== "agy" && current !== "gemini-api") {
+        saveGenerationDefaultsPatch({ provider: "agy" });
+        set({ provider: "agy", imageModel });
+      } else {
+        set({ imageModel });
+      }
+      return;
+    }
+    if (get().provider === "grok" || get().provider === "agy" || get().provider === "gemini-api") {
       saveGenerationDefaultsPatch({ provider: "oauth" });
       set({ provider: "oauth", imageModel });
       return;
@@ -4135,7 +4146,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   showToast(message, error = false) {
     const createdAt = Date.now();
     const entry = { message, error, id: createdAt + Math.random(), createdAt };
-    set((s) => ({ toast: entry, toastLog: [...s.toastLog, entry] }));
+    set((s) => ({ toast: entry, toastLog: [...s.toastLog, entry].slice(-50) }));
   },
   dismissToast(id) {
     set((s) => {

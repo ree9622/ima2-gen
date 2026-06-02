@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { useBilling } from "../hooks/useBilling";
 import { useGrokStatus } from "../hooks/useGrokStatus";
 import { useOAuthStatus } from "../hooks/useOAuthStatus";
 import { useI18n } from "../i18n";
+import { ApiKeyInput } from "./ApiKeyInput";
+import { GeminiKeySection } from "./GeminiKeySection";
+import { useKeyStatus } from "../hooks/useKeyStatus";
 
 function statusLabel(t: (key: string) => string, status?: string): string {
   if (status === "ready") return t("settings.account.status.ready");
@@ -18,6 +22,8 @@ export function AccountSettings() {
   const oauth = useOAuthStatus();
   const grok = useGrokStatus();
   const { data, error } = useBilling();
+  const { data: keyStatus, mutate: mutateKeys } = useKeyStatus();
+  const [keysOpen, setKeysOpen] = useState(false);
   const showApiKeyCard =
     data?.apiKeySource === "env" ||
     data?.apiKeySource === "config" ||
@@ -73,6 +79,45 @@ export function AccountSettings() {
           {statusLabel(t, grok?.status)}
         </div>
       </article>
+
+      {keyStatus && (
+        <article className="settings-row settings-accordion">
+          <button
+            type="button"
+            className="settings-accordion__trigger"
+            onClick={() => setKeysOpen(!keysOpen)}
+          >
+            <h4>{t("settings.apiKeys.accordionTitle")}</h4>
+            <span className={`settings-accordion__arrow${keysOpen ? " is-open" : ""}`}>▼</span>
+          </button>
+          {keysOpen && (
+            <div className="settings-accordion__body">
+              <ApiKeyInput
+                provider="openai"
+                label={t("settings.apiKeys.openai.label")}
+                placeholder={t("settings.apiKeys.openai.placeholder")}
+                maskedKey={keyStatus.openai?.maskedKey ?? null}
+                source={keyStatus.openai?.source ?? "none"}
+                configured={keyStatus.openai?.configured ?? false}
+                onSaved={mutateKeys}
+              />
+              <ApiKeyInput
+                provider="xai"
+                label={t("settings.apiKeys.xai.label")}
+                placeholder={t("settings.apiKeys.xai.placeholder")}
+                maskedKey={keyStatus.xai?.maskedKey ?? null}
+                source={keyStatus.xai?.source ?? "none"}
+                configured={keyStatus.xai?.configured ?? false}
+                onSaved={mutateKeys}
+              />
+              <GeminiKeySection
+                keyStatus={keyStatus}
+                onSaved={mutateKeys}
+              />
+            </div>
+          )}
+        </article>
+      )}
     </>
   );
 }

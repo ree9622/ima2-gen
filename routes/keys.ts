@@ -28,8 +28,8 @@ function isKeyProvider(v: string): v is KeyProvider {
 }
 
 function maskKey(key: string): string {
-  if (key.length <= 7) return "***";
-  return `${key.slice(0, 4)}...${key.slice(-3)}`;
+  if (key.length <= 10) return "***";
+  return `${key.slice(0, 4)}..${key.slice(-2)}`;
 }
 
 function keySourceForProvider(ctx: RuntimeContext, provider: KeyProvider): { key: string | undefined; source: string } {
@@ -71,6 +71,9 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
       return res.status(400).json({ ok: false, error: "Missing serviceAccountJson", code: "MISSING_KEY" });
     }
     const trimmed = serviceAccountJson.trim();
+    if (trimmed.length > 50 * 1024) {
+      return res.status(400).json({ ok: false, error: "Service account JSON too large (max 50KB)", code: "KEY_TOO_LARGE" });
+    }
 
     let parsed: Record<string, unknown>;
     try {
@@ -89,8 +92,8 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
     // Validate by initializing auth (catches key format issues)
     try {
       initVertexAuth(trimmed);
-    } catch (e: any) {
-      return res.status(400).json({ ok: false, error: `Auth init failed: ${e.message}`, code: "KEY_VALIDATION_FAILED" });
+    } catch {
+      return res.status(400).json({ ok: false, error: "Service account validation failed", code: "KEY_VALIDATION_FAILED" });
     }
 
     // Save to config.json
@@ -147,6 +150,9 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
       return res.status(400).json({ ok: false, error: "Missing apiKey", code: "MISSING_KEY" });
     }
     const trimmed = apiKey.trim();
+    if (trimmed.length > 512) {
+      return res.status(400).json({ ok: false, error: "API key too large", code: "KEY_TOO_LARGE" });
+    }
 
     // Format check
     const validPrefix = KEY_PREFIX_MAP[provider].some((p) => trimmed.startsWith(p));
@@ -163,7 +169,8 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
       const url = VALIDATE_URL_MAP[provider];
       const opts: RequestInit = { signal: AbortSignal.timeout(10_000) };
       if (provider === "gemini") {
-        const validateRes = await fetch(`${url}?key=${trimmed}`, opts);
+        opts.headers = { "x-goog-api-key": trimmed };
+        const validateRes = await fetch(url, opts);
         if (!validateRes.ok) throw new Error(`HTTP ${validateRes.status}`);
       } else {
         opts.headers = { Authorization: `Bearer ${trimmed}` };

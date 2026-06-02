@@ -944,6 +944,8 @@ type AppState = {
   sizePreset: SizePreset;
   customW: number;
   customH: number;
+  grokAspectRatio: string;
+  grokResolution: "1k" | "2k";
   format: Format;
   moderation: Moderation;
   imageModel: ImageModel;
@@ -1105,6 +1107,8 @@ type AppState = {
   setQuality: (q: Quality) => void;
   setSizePreset: (s: SizePreset) => void;
   setCustomSize: (w: number, h: number) => void;
+  setGrokAspectRatio: (ar: string) => void;
+  setGrokResolution: (r: "1k" | "2k") => void;
   setFormat: (f: Format) => void;
   setModeration: (m: Moderation) => void;
   setImageModel: (m: ImageModel) => void;
@@ -1354,6 +1358,8 @@ function getCustomSizeConfirmation(
   state: AppState,
   continuation: NonNullable<CustomSizeConfirmState>["continuation"],
 ): CustomSizeConfirmState {
+  // GPT-image pixel limits don't apply to Grok/Gemini — they have their own size systems.
+  if (state.provider === "grok" || state.provider === "grok-api" || state.provider === "agy" || state.provider === "gemini-api") return null;
   if (state.sizePreset !== "custom") return null;
   const result = normalizeCustomSizePairDetailed(
     state.customW,
@@ -1385,6 +1391,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   sizePreset: storedGenerationDefaults.sizePreset ?? "1024x1024",
   customW: storedGenerationDefaults.customW ?? 1920,
   customH: storedGenerationDefaults.customH ?? 1088,
+  grokAspectRatio: (storedGenerationDefaults as any).grokAspectRatio ?? "1:1",
+  grokResolution: (storedGenerationDefaults as any).grokResolution ?? "1k",
   format: storedGenerationDefaults.format ?? "png",
   moderation: storedGenerationDefaults.moderation ?? "low",
   count: storedGenerationDefaults.count ?? 1,
@@ -3102,7 +3110,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setProvider: (provider) => {
     saveGenerationDefaultsPatch({ provider });
     const currentModel = get().imageModel;
-    if (provider === "grok" && !isGrokImageModel(currentModel)) {
+    const supportsVideo = provider === "grok" || provider === "grok-api";
+    if (!supportsVideo && get().videoModelSelected) {
+      set({ videoModelSelected: false });
+      saveVideoDefaults({ model: false });
+    }
+    if ((provider === "grok" || provider === "grok-api") && !isGrokImageModel(currentModel)) {
       const grokModel = "grok-imagine-image";
       saveImageModel(grokModel);
       set({ provider, imageModel: grokModel });
@@ -3110,7 +3123,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const geminiModel = provider === "gemini-api" ? "nano-banana-pro" : "nano-banana-2";
       saveImageModel(geminiModel);
       set({ provider, imageModel: geminiModel });
-    } else if (provider !== "grok" && provider !== "agy" && provider !== "gemini-api" && (isGrokImageModel(currentModel) || isGeminiImageModel(currentModel))) {
+    } else if (provider !== "grok" && provider !== "grok-api" && provider !== "agy" && provider !== "gemini-api" && (isGrokImageModel(currentModel) || isGeminiImageModel(currentModel))) {
       set({ provider, imageModel: DEFAULT_IMAGE_MODEL });
       saveImageModel(DEFAULT_IMAGE_MODEL);
     } else {
@@ -3132,6 +3145,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       saveGenerationDefaultsPatch({ customW, customH });
       return { customW, customH };
     }),
+  setGrokAspectRatio: (grokAspectRatio) => {
+    saveGenerationDefaultsPatch({ grokAspectRatio } as any);
+    set({ grokAspectRatio });
+  },
+  setGrokResolution: (grokResolution) => {
+    saveGenerationDefaultsPatch({ grokResolution } as any);
+    set({ grokResolution });
+  },
   setFormat: (format) => {
     saveGenerationDefaultsPatch({ format });
     set({ format });
@@ -3723,7 +3744,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getResolvedSize: () => {
-    const { sizePreset, customW, customH } = get();
+    const { provider, sizePreset, customW, customH, grokAspectRatio, grokResolution } = get();
+    if (provider === "grok" || provider === "grok-api") {
+      return `grok:${grokAspectRatio}:${grokResolution}`;
+    }
     return sizePreset === "custom" ? `${customW}x${customH}` : sizePreset;
   },
 
@@ -4466,7 +4490,9 @@ async function doSave(
   const graphVersion = get().activeSessionGraphVersion;
   if (!id) return "skipped";
   if (graphVersion == null) return "skipped";
-  const { graphNodes, graphEdges } = get();
+  const { graphNodes, graphEdges, sessionLoading } = get();
+  if (sessionLoading) return "skipped";
+  if (graphNodes.length === 0 && graphVersion > 0) return "skipped";
   const nodes = graphNodes.map((n) => ({
     id: n.id,
     x: n.position.x,
@@ -4565,6 +4591,8 @@ export function flushGraphSaveBeacon(get: () => AppState): void {
   const s = get();
   if (!s.activeSessionId) return;
   if (s.activeSessionGraphVersion == null) return;
+  if (s.sessionLoading) return;
+  if (s.graphNodes.length === 0 && s.activeSessionGraphVersion > 0) return;
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;

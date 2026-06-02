@@ -71,7 +71,9 @@ const genBody = `{
     모드: text-to-video, image-to-video, reference-to-video (2–7개 ref). CLI:
     <code>ima2 video</code>. 확장 표면은 <code>ima2 video edit</code>,
     <code>ima2 video extend</code>, <code>ima2 video frame</code>, <code>ima2 video analyze</code>입니다.
-    frame/analyze는 generated MP4 파일을 대상으로 하며 analyze는 임의 원격 URL을 거부합니다.
+    요청 본문은 <code>plannerModel</code>(기본 <code>grok-4.3</code>)와 순차 클립 연속성용
+    <code>storyboard</code>를 받습니다. frame/analyze는 generated MP4 파일을 대상으로 하며 analyze는
+    임의 원격 URL을 거부합니다.
   </div>
 
   <h2>히스토리</h2>

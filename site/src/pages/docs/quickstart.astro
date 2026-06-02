@@ -61,9 +61,9 @@ ima2 serve</code></pre>
   <p>Video generation requires Grok OAuth (option 2 or 3). Add it later with <code>ima2 grok login</code>, which defaults to the manual-paste flow.</p>
   <p>If your GPT OAuth token expires, re-run <code>ima2 setup</code> (option 1) to refresh it.</p>
   <div class="docs-callout docs-callout-warn">
-    <strong>Updating.</strong> Stop the server with Ctrl+C (v1.1.22+ performs a clean shutdown — closes DB, sockets, and child processes).
-    Then run <code>npm install -g ima2-gen@latest</code>.
-    On older versions or if you see <code>EBUSY</code> on Windows, use the <a href="/ima2-gen/install-windows.ps1">install script</a> which handles stale process cleanup automatically.
+    <strong>Updating.</strong> Stop the server with Ctrl+C — ima2-gen performs a clean shutdown
+    (closes DB, sockets, and child processes). Then run <code>npm install -g ima2-gen@latest</code>.
+    If you see <code>EBUSY</code> on Windows, use the <a href="/ima2-gen/install-windows.ps1">install script</a> which handles stale process cleanup automatically.
   </div>
 
   <h2>Develop from source</h2>

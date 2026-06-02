@@ -59,6 +59,9 @@ const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
     <code>--no-web-search</code>, <code>--model</code>, <code>--mode</code>,
     <code>--moderation</code>, <code>--ref &lt;file&gt;</code> (repeatable, up to 5),
     <code>-q low|medium|high</code>, <code>-n &lt;count&gt;</code>, and <code>-o &lt;file&gt;</code>.
+    Video commands also accept <code>--planner-model &lt;name&gt;</code> (default
+    <code>grok-4.3</code>) and <code>--storyboard</code> for character/scene continuity across
+    sequential clips.
   </p>
   <p><code>ima2 grok login</code> uses the manual-paste login flow by default.</p>
   <pre><code>ima2 gen "a poster of a samurai cat" --model gpt-5.4 --provider api --reasoning-effort high

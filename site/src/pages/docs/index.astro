@@ -47,7 +47,8 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     <li><strong>Node mode</strong> — lock a parent image and fan out children (palette, framing, copy) in a graph.</li>
     <li><strong>Multimode</strong> — launch several Classic candidates from one prompt with slot-by-slot progress.</li>
     <li><strong>Canvas Mode</strong> — zoom, annotate, clean backgrounds, and export alpha or matte-backed versions.</li>
-    <li><strong>Video</strong> — generate short videos from text, images, or up to 7 references via Grok Video models.</li>
+    <li><strong>Video</strong> — generate short videos from text, images, or up to 7 references via Grok Video models; copy First/Mid/Last keyframes from results.</li>
+    <li><strong>Storyboard mode</strong> — composer toggle to maintain character and scene continuity across sequential image and video frames.</li>
     <li><strong>Prompt library</strong> — import prompt packs from files, GitHub folders, and curated sources, indexed locally.</li>
   </ul>
   <p>See <a href={d('concepts/modes')}>Generation Modes</a> for when to reach for each.</p>

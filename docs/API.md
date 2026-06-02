@@ -103,13 +103,17 @@ Text-to-image and reference-guided root generation.
   "provider": "oauth",
   "model": "gpt-5.4",
   "references": [],
-  "requestId": "optional-client-id"
+  "requestId": "optional-client-id",
+  "storyboard": false
 }
 ```
 
 Supported quality values: `low`, `medium`, `high`.
 
 Supported moderation values: `auto`, `low`.
+
+When `storyboard` is `true`, the server prepends storyboard keyframe instructions so image
+generations maintain character and scene continuity for multi-shot video production.
 
 Recommended model: `gpt-5.4`. Current app default: `gpt-5.4-mini`. `gpt-5.5` is the strongest quality option when supported, but callers should expect higher quota pressure and possible Codex CLI/backend capability requirements.
 
@@ -270,13 +274,17 @@ Generate a video via the Grok video provider. Returns Server-Sent Events.
 | `referenceFilenames` | string[] | — | Existing generated files for reference-to-video |
 | `continueFromVideo` | string | — | Generated `.mp4` parent; server extracts its last frame and rebuilds lineage from sidecar |
 | `continuityLineage` | object | — | Optional client hint; used only when `continueFromVideo` is absent |
+| `plannerModel` | string | `grok-4.3` | Grok video planner model override (also via settings UI or `IMA2_GROK_PLANNER_MODEL`) |
+| `storyboard` | boolean | `false` | Enable storyboard mode — maintains character/scene continuity across sequential clips |
 
 Blank prompts return `PROMPT_REQUIRED` with a `guidance` string. The active
 prompt should describe visual flow, motion flow, sound/music/no-music,
 dialogue/no-dialogue, ending frame, and duration pacing. The video planner uses
 the selected duration as the full clip runtime and expands short requests into a
 production-level sequence with opening composition, connected motion/emotion
-change, and a stable ending frame suitable for continuation.
+change, and a stable ending frame suitable for continuation. For multi-character
+scenes, the planner identifies speakers by visual appearance (clothing, physique,
+position, props) rather than names, and attributes each dialogue line accordingly.
 
 When `continueFromVideo` is present, the server treats the generated `.mp4`
 sidecar as authoritative. Client `continuityLineage` cannot override it. The
@@ -316,7 +324,7 @@ Grok prompt surfaces used by video APIs:
 
 | Surface | Model | Responsibility |
 |---|---|---|
-| Video planner | `grok-4.3` | Converts user prompt, search context, refs, and optional continuity lineage into the final English video prompt. It must structure core subject, action/motion, camera/composition, environment/style, dialogue/audio, ending-frame handoff, and constraints. |
+| Video planner | `grok-4.3` (override via `plannerModel`) | Converts user prompt, search context, refs, and optional continuity lineage into the final English video prompt. It must structure core subject, action/motion, camera/composition, environment/style, dialogue/audio, ending-frame handoff, and constraints. Multi-character dialogue uses appearance-based speaker identification. |
 | Video generation | xAI video model | Receives the planner prompt plus `sourceImage` or `referenceImages` when present. |
 | Video analysis | `grok-4.3` | Reads first/last frame images from `/api/video/analyze` and returns recreation/continuation guidance. |
 

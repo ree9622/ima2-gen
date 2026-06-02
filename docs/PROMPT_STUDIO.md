@@ -12,10 +12,12 @@ you want a reproducible way to report a workspace issue.
 | Area | What it does | Notes |
 |---|---|---|
 | Composer | Holds the prompt for the next request. | Selecting an existing image is view-only. It should not overwrite the composer. |
+| Storyboard | Maintains character and scene continuity across sequential frames. | Toggle in the composer. Works for image and video generation; image keyframes are composed for video production. |
 | Multimode | Starts several separate image requests from the current prompt. | Each slot is a candidate output, not a collage panel or a guaranteed scene sequence. |
 | 1:1 Direct | Sends the prompt through with less rewriting by the app. | Use it for exact wording, strict prompt experiments, or provider-side prompt syntax. |
 | Model quick menu | Changes the image model and reasoning effort from the sidebar header. | The full Settings workspace remains the detailed configuration page. |
-| Recent generations | Shows the visible Prompt Studio history domain. | Arrow keys move inside the same visible recent domain instead of hidden older rows. Video items render as video thumbnails. Drag any thumbnail to the composer to add it as a reference image. |
+| Recent generations | Shows the visible Prompt Studio history domain. | Arrow keys move inside the same visible recent domain instead of hidden older rows. Video items render as video thumbnails. Drag any thumbnail to the composer to add it as a reference image. Video results expose First, Mid, and Last frame buttons to copy keyframes. |
+| Video settings | Controls Grok video duration, resolution, aspect ratio, and planner model. | Default planner model is `grok-4.3`; override per request when needed. |
 | Gallery | Browses saved local images, All/Favorites tabs, and folders. | Favorite toggles should preserve the gallery viewport you were browsing. |
 | Prompt library | Imports saved prompt text into the composer intentionally. | Library insert/continue actions are explicit prompt imports; passive image selection is not. |
 

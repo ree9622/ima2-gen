@@ -128,6 +128,8 @@ Video generate flags:
 | `--resolution <480p\|720p>` | Video resolution (default: 480p) |
 | `--aspect-ratio <ratio\|auto>` | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto (default: auto) |
 | `--model <name>` | `grok-imagine-video` or `grok-imagine-video-1.5-preview` |
+| `--planner-model <name>` | Grok planner override (default: `grok-4.3`; also in settings UI and `IMA2_GROK_PLANNER_MODEL`) |
+| `--storyboard` | Enable storyboard mode — maintains character/scene continuity across sequential clips |
 | `--ref <file>` | Attach source/reference image (repeatable, max 7) |
 | `-o, --out <file>` | Output file path |
 | `-d, --out-dir <dir>` | Output directory |
@@ -161,6 +163,8 @@ Video continue flags:
 | `--resolution <480p\|720p>` | New clip resolution (default: 720p) |
 | `--aspect-ratio <ratio\|auto>` | New clip aspect ratio |
 | `--model <name>` | Optional video generation model |
+
+Video continue also accepts `--planner-model` and `--storyboard`.
 
 Video mode is auto-detected from `--ref` count:
 

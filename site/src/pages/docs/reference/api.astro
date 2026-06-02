@@ -73,7 +73,9 @@ const genBody = `{
     Modes: text-to-video, image-to-video, reference-to-video (2–7 refs). CLI:
     <code>ima2 video</code>. Extended CLI/API surfaces include <code>ima2 video edit</code>,
     <code>ima2 video extend</code>, <code>ima2 video frame</code>, and <code>ima2 video analyze</code>.
-    Frame/analyze accept generated MP4 files; analyze rejects arbitrary remote URLs.
+    Request body accepts <code>plannerModel</code> (default <code>grok-4.3</code>) and
+    <code>storyboard</code> for sequential clip continuity. Frame/analyze accept generated MP4 files;
+    analyze rejects arbitrary remote URLs.
   </div>
 
   <h2>History</h2>

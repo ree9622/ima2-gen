@@ -46,7 +46,8 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
     <li><strong>Node 모드</strong> — 기준 이미지를 고정하고 색감·구도·카피로 자식을 그래프로 펼칩니다.</li>
     <li><strong>Multimode</strong> — 하나의 프롬프트에서 여러 Classic 후보를 슬롯별 진행과 함께 실행합니다.</li>
     <li><strong>Canvas Mode</strong> — 확대·주석·배경 정리 후 투명(alpha) 또는 matte 버전으로 export합니다.</li>
-    <li><strong>Video</strong> — 텍스트, 이미지, 또는 최대 7장의 레퍼런스에서 Grok Video로 짧은 영상을 만듭니다.</li>
+    <li><strong>Video</strong> — 텍스트, 이미지, 또는 최대 7장의 레퍼런스에서 Grok Video로 짧은 영상 생성; 결과에서 First/Mid/Last 키프레임 복사.</li>
+    <li><strong>스토리보드 모드</strong> — 컴포저 토글로 순차 이미지·영상 프레임 간 인물·장면 연속성 유지.</li>
     <li><strong>프롬프트 라이브러리</strong> — 파일·GitHub 폴더·추천 소스에서 prompt pack을 가져와 로컬에 인덱싱합니다.</li>
   </ul>
   <p>각각 언제 쓰는지는 <a href={d('concepts/modes')}>생성 모드</a>를 보세요.</p>

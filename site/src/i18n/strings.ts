@@ -53,12 +53,12 @@ const en: Dict = {
   'workflows.node.alt':
     'ima2-gen Node mode with connected generated cards and per-node metadata.',
 
-  // Latest Capabilities
-  'latest.tag': '02 · New in the studio',
+  // Studio capabilities
+  'latest.tag': '02 · Studio capabilities',
   'latest.h.before': 'Video, batch, ',
   'latest.h.em': 'import.',
   'latest.lede':
-    'Grok Video generation, multimode candidate slots, Canvas Mode cleanup tools, and prompt-library imports from files, GitHub folders, and curated sources.',
+    'Grok Video with storyboard continuity and keyframe copy, multimode candidate slots, Canvas Mode cleanup, and prompt-library imports from files, GitHub folders, and curated sources.',
   'latest.multimode.label': 'Multimode',
   'latest.multimode.h': 'Four candidates from one prompt.',
   'latest.multimode.body':
@@ -80,7 +80,7 @@ const en: Dict = {
   'latest.video.label': 'Video',
   'latest.video.h': 'Text, image, or references to video.',
   'latest.video.body':
-    'Generate short videos from a text prompt, a single image, or up to 7 reference images. Real-time progress streaming shows each phase from planning to completion.',
+    'Generate short videos from text, a single image, or up to 7 references. Storyboard mode keeps character and scene continuity across clips; First/Mid/Last buttons copy keyframes from results.',
   'latest.video.alt':
     'ima2-gen video generation with progress percentage and in-flight queue.',
 
@@ -118,7 +118,7 @@ const en: Dict = {
   'install.h.before': 'One command. ',
   'install.h.em': 'Then iterate.',
   'install.lede': 'Install globally. Sign in with ChatGPT or Grok. Start creating.',
-  'install.badge.npm': 'npm v1.1.18',
+  'install.badge.npm': 'npm install',
   'install.badge.node': 'Node ≥20',
   'install.badge.mit': 'MIT',
   'install.links.aria': 'Project links',
@@ -251,12 +251,12 @@ const ko: Dict = {
   'workflows.node.alt':
     'ima2-gen Node 모드 — 연결된 카드들과 노드별 메타.',
 
-  // Latest Capabilities
-  'latest.tag': '02 · 새로 들어온 작업 도구',
+  // Studio capabilities
+  'latest.tag': '02 · 스튜디오 기능',
   'latest.h.before': '영상, 배치, ',
   'latest.h.em': '가져오기.',
   'latest.lede':
-    'Grok Video 생성, 여러 후보를 한 번에 뽑는 multimode, Canvas 정리 도구, 파일/GitHub/추천 소스에서 프롬프트를 가져오는 라이브러리.',
+    '스토리보드 연속성과 키프레임 복사가 있는 Grok Video, multimode 후보 슬롯, Canvas 정리, 파일/GitHub/추천 소스에서 프롬프트를 가져오는 라이브러리.',
   'latest.multimode.label': 'Multimode',
   'latest.multimode.h': '하나의 프롬프트에서 네 후보.',
   'latest.multimode.body':
@@ -278,7 +278,7 @@ const ko: Dict = {
   'latest.video.label': 'Video',
   'latest.video.h': '텍스트, 이미지, 레퍼런스에서 영상으로.',
   'latest.video.body':
-    '텍스트 프롬프트, 단일 이미지, 또는 최대 7장의 레퍼런스에서 짧은 영상을 만듭니다. 기획부터 완성까지 실시간 진행률을 스트리밍으로 보여줍니다.',
+    '텍스트, 단일 이미지, 또는 최대 7장의 레퍼런스에서 짧은 영상을 만듭니다. 스토리보드 모드는 클립 간 인물·장면 연속성을 유지하고, First/Mid/Last 버튼으로 결과에서 키프레임을 복사합니다.',
   'latest.video.alt':
     'ima2-gen 비디오 생성 — 진행률 표시와 대기열.',
 
@@ -318,7 +318,7 @@ const ko: Dict = {
   'install.h.before': '두 줄이면 끝. ',
   'install.h.em': '바로 만들기.',
   'install.lede': 'npm install -g ima2-gen → ima2 serve. 끝입니다.',
-  'install.badge.npm': 'npm v1.1.18',
+  'install.badge.npm': 'npm install',
   'install.badge.node': 'Node ≥20',
   'install.badge.mit': 'MIT',
   'install.links.aria': '프로젝트 링크',

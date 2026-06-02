@@ -54,6 +54,25 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     CLI streams SSE progress events; the UI shows planning → generating → X% progress in the
     in-flight queue.
   </p>
+  <p>
+    A Grok planner (default <code>grok-4.3</code>, overridable in video settings or via
+    <code>--planner-model</code>) rewrites prompts with web-search context before generation.
+    For multi-character scenes, planners identify speakers by visual appearance — clothing,
+    physique, position, and props — rather than names, so dialogue attribution stays consistent
+    across clips.
+  </p>
+  <p>
+    Video results expose <strong>First</strong>, <strong>Mid</strong>, and <strong>Last</strong>
+    frame buttons to extract and copy keyframes for storyboard chaining or reference attachment.
+  </p>
+
+  <h2>Storyboard</h2>
+  <p>
+    Toggle storyboard mode in the composer to maintain character and scene continuity across
+    sequential frames. Image keyframes are composed for video production; video clips inherit
+    character and environment lock rules. Works with both image and video generation. From the CLI,
+    pass <code>--storyboard</code> on <code>ima2 video</code> (and <code>ima2 video continue</code>).
+  </p>
 
   <h2>Agent</h2>
   <p>

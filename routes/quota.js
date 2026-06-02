@@ -102,11 +102,16 @@ async function fetchGrokBilling() {
 }
 export function registerQuotaRoutes(app, _ctx) {
     app.get("/api/quota", async (_req, res) => {
-        const tokens = readCodexTokens();
-        const [codex, grok] = await Promise.all([
-            tokens ? fetchCodexUsage(tokens) : Promise.resolve({ provider: "codex", authenticated: false, windows: [] }),
-            fetchGrokBilling(),
-        ]);
-        res.json({ codex, grok });
+        try {
+            const tokens = readCodexTokens();
+            const [codex, grok] = await Promise.all([
+                tokens ? fetchCodexUsage(tokens) : Promise.resolve({ provider: "codex", authenticated: false, windows: [] }),
+                fetchGrokBilling(),
+            ]);
+            res.json({ codex, grok });
+        }
+        catch (e) {
+            res.status(500).json({ error: "Failed to fetch quota" });
+        }
     });
 }

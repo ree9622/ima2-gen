@@ -16,6 +16,8 @@ Image generation supports OAuth, API-key, Grok, and Gemini (agy) providers.
 - `provider: "api"` uses the OpenAI Responses API with the hosted `image_generation` tool.
 - `provider: "grok"` uses the bundled progrok xAI proxy. Classic, Node, and Agent generation run mandatory xAI Web Search through `/v1/responses`, then run a `grok-4.3` planner call with a forced local `generate_image` function, then ima2 executes xAI `/v1/images/generations`. If reference images, a Node parent image, or an Agent current image are attached, the final step switches to xAI `/v1/images/edits` so image-to-image context is preserved.
 - `provider: "agy"` spawns the Antigravity CLI (`agy -p`) to generate images via Google Gemini's `default_api:generate_image` tool. Model is `nano-banana-2`. Output is fixed at 1024×1024 JPEG. Max 3 reference images (i2i). No web search, quality, size, or mask controls. Multimode returns a single image. Video is unsupported (`AGY_VIDEO_UNSUPPORTED`).
+- `provider: "grok-api"` uses a direct xAI API key instead of the bundled progrok OAuth proxy. Same pipeline as `grok` (Web Search → planner → `/v1/images/generations`), same aspect ratio and resolution options. Requires an xAI API key configured via the web UI key management or `XAI_API_KEY` env var. Also supports video generation.
+- `provider: "gemini-api"` calls the Google Generative Language API directly (or Vertex AI with a service account JSON). Supports models `nano-banana-2` (Gemini 3.1 Flash Image) and `nano-banana-pro` (Gemini 3 Pro Image). Supports variable aspect ratios and resolutions (512px–4K). Requires a `GEMINI_API_KEY` env var, web UI key management, or a Vertex AI service account JSON. No web search or mask controls.
 - API-key generation covers classic generate, edit, mask-guided edit, multimode, and node generation.
 - If `provider: "api"` is requested without an API key, routes fail before upstream with `401` and `API_KEY_REQUIRED`.
 - Grok generation maps `size` to xAI `aspect_ratio` and `resolution`; it does not send an OpenAI-style `size` field upstream. Grok edit uses xAI `/v1/images/edits`; Grok mask edit remains unsupported and returns `GROK_MASK_UNSUPPORTED`.
@@ -462,6 +464,44 @@ Style-sheet extraction can require an API key/openai client. Image generation al
 | `GROK_RATE_LIMITED` | xAI returned a rate-limit response through progrok |
 | `GROK_AUTH_FAILED` | progrok could not authenticate the xAI request |
 | `GROK_SEARCH_TIMEOUT` / `GROK_PLANNER_TIMEOUT` / `GROK_IMAGE_TIMEOUT` | The Grok search, planner, or image API step exceeded its timeout budget |
+| `AGY_GENERATION_FAILED` | Gemini (agy) image generation failed |
+| `AGY_TIMEOUT` | Agy CLI process exceeded its 360-second timeout |
+| `AGY_PROCESS_ERROR` | Agy CLI binary failed to start or crashed |
+| `AGY_QUOTA_EXHAUSTED` | Gemini API quota exhausted (rate limit) |
+| `AGY_PARSE_FAILED` | Could not parse artifact path from agy output |
+| `AGY_ARTIFACT_NOT_FOUND` | Agy reported an artifact path that does not exist |
+| `AGY_PATH_REJECTED` | Agy artifact path was outside allowed directories |
+| `AGY_VIDEO_UNSUPPORTED` | Video generation is not supported by the Gemini (agy) provider |
+| `AGY_MASK_UNSUPPORTED` | Mask-based editing is not supported by the Gemini (agy) provider |
+| `AGY_REF_TOO_MANY` | Too many reference images for agy (max 3) |
+| `GEMINI_API_KEY_MISSING` | Gemini API key or Vertex AI credentials not configured |
+| `GEMINI_API_RATE_LIMITED` | Gemini API rate limited (429) |
+| `GEMINI_API_BAD_REQUEST` | Gemini API bad request (400/403) |
+| `GEMINI_API_SAFETY_BLOCKED` | Gemini API generation blocked by safety filter |
+| `GEMINI_API_NO_IMAGE` | Gemini API returned no image in response |
+| `VIDEO_PROVIDER_UNSUPPORTED` | Video generation requires provider `"grok"` or `"grok-api"` |
+
+## Key Management
+
+API key management endpoints for configuring provider credentials at runtime through the web UI or HTTP API.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/keys/status` | GET | Returns configured/valid/maskedKey status for all providers (openai, xai, gemini, vertex) |
+| `/api/keys/:provider` | PUT | Save an API key. Body: `{ "apiKey": "..." }`. Validates key format and upstream before saving to config.json. Provider: `openai`, `xai`, or `gemini`. |
+| `/api/keys/:provider` | DELETE | Remove a config-sourced API key. Env-sourced keys cannot be removed (`ENV_KEY_IMMUTABLE`). |
+| `/api/keys/vertex` | PUT | Save a Vertex AI service account JSON. Body: `{ "serviceAccountJson": "..." }`. Validates JSON structure (`type: "service_account"`, `project_id` required). |
+| `/api/keys/vertex` | DELETE | Remove a config-sourced Vertex AI service account. |
+
+Keys saved via PUT are stored in `config.json` and hot-updated in the runtime context (no server restart required). Keys loaded from environment variables (`OPENAI_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY`, `VERTEX_SERVICE_ACCOUNT_JSON`) take precedence and are immutable through the API.
+
+## Thumbnail Backfill
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/history/backfill-thumbnails` | POST | Generate missing `.thumb.jpg` thumbnails for all images and videos in the generated directory. Returns `{ ok, total, created, skipped, failed }`. Also available offline via `ima2 backfill-thumbs`. |
+
+Thumbnails are also generated automatically on server startup for any media files that lack them.
 
 ## Endpoint → CLI Mapping
 
@@ -500,6 +540,8 @@ Most server routes under `/api/*` have a CLI wrapper. The exception is **Agent M
 | `GET /api/billing` / `GET /api/providers` / `GET /api/oauth/status` / `GET /api/grok/status` | `ima2 billing` / `ima2 providers` / `ima2 oauth status` / `ima2 grok status` |
 | `GET /api/health` | `ima2 ping` |
 | `GET /api/capabilities` | `ima2 capabilities` |
+| `POST /api/history/backfill-thumbnails` | `ima2 backfill-thumbs` |
+| `GET /api/keys/status`, `PUT/DELETE /api/keys/:provider`, `PUT/DELETE /api/keys/vertex` | Web UI only (Settings > API Keys) |
 | `GET/POST/PATCH/DELETE /api/agent/*` (sessions, turns, queue) | — (Agent Mode; web UI only, no CLI) |
 | `POST /api/prompt-builder/chat` | `ima2 prompt build` |
 

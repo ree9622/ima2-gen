@@ -7,7 +7,7 @@ type CapabilitySource = "local" | "server";
 
 const MAX_GENERATED_IMAGES = 8;
 const VALID_MODES = ["auto", "direct"] as const;
-const VALID_PROVIDERS = ["auto", "oauth", "api", "grok", "agy"] as const;
+const VALID_PROVIDERS = ["auto", "oauth", "api", "grok", "grok-api", "agy", "gemini-api"] as const;
 const AGENT_COMMANDS = [
   "skill",
   "capabilities",

@@ -1,6 +1,6 @@
 import type { AgentGenerationSettings } from "./agentTypes.js";
 
-const PROVIDERS = new Set(["oauth", "api", "grok", "agy"]);
+const PROVIDERS = new Set(["oauth", "api", "grok", "grok-api", "agy", "gemini-api"]);
 const QUALITIES = new Set(["low", "medium", "high"]);
 const FORMATS = new Set(["png", "jpeg", "webp"]);
 const MODERATIONS = new Set(["auto", "low"]);

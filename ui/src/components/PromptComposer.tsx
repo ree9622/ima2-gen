@@ -30,6 +30,7 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
 
   const refs = useAppStore((s) => s.referenceImages);
   const addReferences = useAppStore((s) => s.addReferences);
+  const addReferenceDataUrl = useAppStore((s) => s.addReferenceDataUrl);
   const readDroppedImageMetadata = useAppStore((s) => s.readDroppedImageMetadata);
   const removeReference = useAppStore((s) => s.removeReference);
   const currentImage = useAppStore((s) => s.currentImage);
@@ -76,7 +77,8 @@ export function PromptComposer({ variant = "sidebar" }: PromptComposerProps) {
 
   const attachInternalReference = async (item: InternalRefDragItem): Promise<void> => {
     try {
-      await continueFromItem(item);
+      const src = item.image || item.url || item.filename;
+      if (src) addReferenceDataUrl(src);
     } catch { /* non-fatal for drag-drop */ }
   };
 

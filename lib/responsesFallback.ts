@@ -94,9 +94,11 @@ export async function retryPromptOnlyJsonImage({
         },
       });
     } catch (e) {
-      if (e && typeof e === "object") Object.assign(e, retryMeta);
-      if (attempt === MAX_RETRIES) throw e;
-      logEvent("oauth", "retry_error", { requestId, attempt, error: (e as Error).message });
+      if (attempt === MAX_RETRIES) {
+        if (e && typeof e === "object") Object.assign(e, retryMeta);
+        throw e;
+      }
+      logEvent("oauth", "retry_error", { requestId, attempt, error: (e as Error).message, status: (e as any).status, code: (e as any).code });
       continue;
     }
     const image = lastRetry.images[0];

@@ -3,6 +3,7 @@ import { useAppStore } from "../store/useAppStore";
 import { useOAuthStatus } from "../hooks/useOAuthStatus";
 import { useBilling } from "../hooks/useBilling";
 import { useGrokStatus } from "../hooks/useGrokStatus";
+import { useKeyStatus } from "../hooks/useKeyStatus";
 import { ApiDisabledModal } from "./ApiDisabledModal";
 import type { Provider } from "../types";
 import { useI18n } from "../i18n";
@@ -18,6 +19,7 @@ export function useProviderAvailability(): Record<Provider, ProviderAvailability
   const oauth = useOAuthStatus();
   const { data } = useBilling();
   const grok = useGrokStatus();
+  const { data: keyStatus } = useKeyStatus();
 
   const oauthReady = oauth?.status === "ready";
   let oauthReason = t("provider.oauthNotReady");
@@ -44,6 +46,9 @@ export function useProviderAvailability(): Record<Provider, ProviderAvailability
           ? t("provider.grokNotReady")
           : "";
 
+  const xaiKeyOk = keyStatus?.xai?.valid === true;
+  const geminiKeyOk = keyStatus?.gemini?.valid === true || keyStatus?.vertex?.valid === true;
+
   return {
     oauth: { ok: oauthReady, reason: oauthReason, hint: oauthHint },
     api: {
@@ -55,9 +60,17 @@ export function useProviderAvailability(): Record<Provider, ProviderAvailability
       reason: grokReason,
       hint: grokReady ? undefined : t("provider.grokOfflineHint"),
     },
+    "grok-api": {
+      ok: xaiKeyOk,
+      reason: xaiKeyOk ? "" : t("provider.xaiApiKeyRequired"),
+    },
     agy: {
       ok: true,
       reason: "",
+    },
+    "gemini-api": {
+      ok: geminiKeyOk,
+      reason: geminiKeyOk ? "" : t("provider.geminiApiKeyRequired"),
     },
   };
 }
@@ -80,14 +93,14 @@ const GRID: { header: string; cells: CellDef[] }[] = [
     header: "Grok",
     cells: [
       { value: "grok", label: "OAuth" },
-      { value: "api", label: "API", disabled: true },
+      { value: "grok-api", label: "API" },
     ],
   },
   {
     header: "Gemini",
     cells: [
       { value: "agy", label: "agy" },
-      { value: "api", label: "API", disabled: true },
+      { value: "gemini-api", label: "API" },
     ],
   },
 ];
@@ -143,7 +156,7 @@ export function ProviderSelect({ allowGrok = true }: ProviderSelectProps) {
                   className={`provider-pill${selected ? " selected" : ""}${cell.disabled ? " disabled" : ""}`}
                   onClick={() => handleClick(cell)}
                   disabled={cell.disabled}
-                  title={cell.disabled ? "Coming soon" : ok ? cell.label : providerAvailability[cell.value].reason}
+                  title={cell.disabled ? t("provider.comingSoon") : ok ? cell.label : providerAvailability[cell.value].reason}
                   aria-label={cell.disabled ? `${col.header} ${cell.label} (coming soon)` : ok ? t("provider.availableAria", { name: `${col.header} ${cell.label}` }) : t("provider.unavailableAria", { name: `${col.header} ${cell.label}` })}
                   aria-pressed={selected}
                 >

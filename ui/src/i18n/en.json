@@ -81,6 +81,8 @@
   },
   "size": {
     "title": "Size",
+    "grokAspectTitle": "Aspect Ratio",
+    "grokResolutionTitle": "Resolution",
     "width": "Width",
     "height": "Height",
     "hint": "16px steps, max edge 3840, ratio up to 3:1, 655K–8.29M pixels",
@@ -127,6 +129,7 @@
   "quality": {
     "title": "Quality",
     "grokTitle": "Grok quality",
+    "grokModelTitle": "Model",
     "lowLabel": "Low",
     "lowSub": "Fast",
     "mediumLabel": "Medium",
@@ -533,8 +536,14 @@
     "geminiApiKeyRequired": "Gemini API key required",
     "comingSoon": "Coming soon",
     "agyCompatTitle": "Gemini (agy)",
-    "agyCompatBody": "1024x1024 fixed, JPEG output, max 3 refs",
-    "agyCompatBodyLong": "1024x1024 fixed output, JPEG format, max 3 reference images. No web search, no quality/size control."
+    "agyCompatBody": "1024x1024 fixed, JPEG output, max 3 refs. No quality/size control.",
+    "agyCompatBodyLong": "1024x1024 fixed output, JPEG format, max 3 reference images. No web search, no quality/size control.",
+    "gptCompatTitle": "GPT Image",
+    "gptCompatBody": "OpenAI image generation via Responses API. Supports quality, size, format, moderation, and web search settings."
+  },
+  "grokMode": {
+    "image": "Image",
+    "video": "Video"
   },
   "cost": {
     "free": "free",

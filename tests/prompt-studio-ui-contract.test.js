@@ -168,27 +168,20 @@ describe("prompt studio UI contract", () => {
     assert.match(css, /\.classic-workspace__stage \.result-img\s*\{[\s\S]*?max-height:\s*100%/);
   });
 
-  it("renders video items with <video> in sidebar history cards and supports drag", () => {
+  it("renders video items with thumbnail img + play badge in sidebar history cards and supports drag", () => {
     const imageCard = readSource("ui/src/components/history/SidebarHistoryImageCard.tsx");
     const sequenceCard = readSource("ui/src/components/history/SidebarHistorySequenceCard.tsx");
-    const css = readSource("ui/src/styles/sidebar-history.css");
 
     assert.match(imageCard, /isVideoItem/);
     assert.match(imageCard, /buildVideoDragPayload/);
-    assert.match(imageCard, /<video/);
-    assert.match(imageCard, /muted/);
-    assert.match(imageCard, /playsInline/);
-    assert.match(imageCard, /preload="metadata"/);
+    assert.match(imageCard, /play-badge/);
+    assert.match(imageCard, /item\.thumb/);
     assert.match(imageCard, /draggable/);
     assert.match(imageCard, /onDragStart/);
     assert.match(imageCard, /application\/ima2-ref/);
     assert.match(imageCard, /title=\{item\.prompt/);
 
-    assert.match(sequenceCard, /isVideoItem/);
-    assert.match(sequenceCard, /<video/);
-
-    assert.match(css, /\.sidebar-history__thumb video/);
-    assert.match(css, /\.sidebar-history__sequence-grid video/);
+    assert.match(sequenceCard, /item\.thumb/);
   });
 
   it("extracts classic viewer zoom and pan controls into hook, component, and CSS", () => {

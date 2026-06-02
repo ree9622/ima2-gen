@@ -4,12 +4,14 @@ import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
 import { detectImageMimeFromB64, summarizeReferencePayload, validateAndNormalizeRefs } from "../lib/refs.js";
+import { generateImageThumbnailFromBuffer } from "../lib/imageThumb.js";
 import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateViaResponses } from "../lib/responsesImageAdapter.js";
 import { generateViaGrok, planGrokImage } from "../lib/grokImageAdapter.js";
 import { generateViaAgy } from "../lib/agyImageAdapter.js";
+import { generateViaGeminiApi } from "../lib/geminiApiImageAdapter.js";
 import { isNonRetryableGenerationError, normalizeGenerationFailure, type UpstreamErr } from "../lib/generationErrors.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
@@ -153,7 +155,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         return res.status(400).json({ error: refCheckResult.error, code: refCheckResult.code });
       }
       const refCheck = refCheckResult as Extract<typeof refCheckResult, { refs: string[] }>;
-      if ((activeProvider === "grok" || activeProvider === "agy") && refCheck.refs.length > 3) {
+      if ((activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api") && refCheck.refs.length > 3) {
         finishStatus = "error";
         finishHttpStatus = 400;
         finishErrorCode = activeProvider === "agy" ? "AGY_REF_TOO_MANY" : "GROK_REF_TOO_MANY";
@@ -190,11 +192,12 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
       const startTime = Date.now();
 
       const mimeMap: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
-      const effectiveFormat = activeProvider === "grok" || activeProvider === "agy" ? "jpeg" : String(format);
+      const effectiveFormat = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api" ? "jpeg" : String(format);
       const mime = mimeMap[effectiveFormat] || "image/png";
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
 
-      const sharedGrokPlan = activeProvider === "grok"
+      const grokDirectApiKey = activeProvider === "grok-api" ? ctx.xaiApiKey : undefined;
+      const sharedGrokPlan = activeProvider === "grok" || activeProvider === "grok-api"
         ? await planGrokImage(generationPrompt, ctx, {
           model: quality === "high" ? "grok-imagine-image-quality" : imageModel,
           size: effectiveSize,
@@ -202,10 +205,23 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
           requestId,
           referenceCount: refCheck.refs.length,
           references: refCheck.refDetails,
+          directApiKey: grokDirectApiKey,
         })
         : null;
 
       const generateOne = async () => {
+        if (activeProvider === "gemini-api") {
+          const r = await generateViaGeminiApi(generationPrompt, requireRuntimeContext(ctx), {
+            model: imageModel,
+            size: effectiveSize,
+            signal: cancelController.signal,
+            requestId,
+            references: refCheck.refDetails,
+          });
+          throwIfJobCanceled(requestId);
+          return r;
+        }
+
         if (activeProvider === "agy") {
           const r = await generateViaAgy(generationPrompt, {
             references: refCheck.refDetails,
@@ -216,7 +232,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
           return r;
         }
 
-        if (activeProvider === "grok") {
+        if (activeProvider === "grok" || activeProvider === "grok-api") {
           const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
           const r = await generateViaGrok(generationPrompt, ctx, {
             model: grokModel,
@@ -226,6 +242,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             plannedPrompt: sharedGrokPlan?.prompt,
             webSearchCalls: sharedGrokPlan?.webSearchCalls,
             references: refCheck.refDetails,
+            directApiKey: grokDirectApiKey,
           });
           throwIfJobCanceled(requestId);
           return r;
@@ -282,10 +299,10 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
         if (r.status === "fulfilled" && r.value.b64) {
           throwIfJobCanceled(requestId);
           const valueWithMime = r.value as typeof r.value & { mime?: string };
-          const resultMime = activeProvider === "grok" || activeProvider === "agy"
+          const resultMime = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api"
             ? (valueWithMime.mime || detectImageMimeFromB64(r.value.b64) || mime)
             : mime;
-          const resultFormat = activeProvider === "grok" || activeProvider === "agy" ? imageFormatFromMime(resultMime) : effectiveFormat;
+          const resultFormat = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api" ? imageFormatFromMime(resultMime) : effectiveFormat;
           const retryValue = r.value as typeof r.value & {
             retryKind?: string;
             initialEventCount?: number;
@@ -342,8 +359,10 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
               warning: embedded.warning,
             });
           }
-          await writeFile(join(ctx.config.storage.generatedDir, filename), embedded.buffer);
-          await safeWriteSidecar(join(ctx.config.storage.generatedDir, filename + ".json"), meta);
+          const filePath = join(ctx.config.storage.generatedDir, filename);
+          await writeFile(filePath, embedded.buffer);
+          await safeWriteSidecar(filePath + ".json", meta);
+          generateImageThumbnailFromBuffer(embedded.buffer, filePath).catch(() => {});
           invalidateHistoryIndex();
           images.push({
             image: `data:${resultMime};base64,${r.value.b64}`,
@@ -361,7 +380,7 @@ export function registerGenerateRoutes(app: Express, ctxRaw: RouteRuntimeContext
             }
           }
           if (typeof r.value.webSearchCalls === "number") {
-            totalWebSearchCalls = activeProvider === "grok"
+            totalWebSearchCalls = activeProvider === "grok" || activeProvider === "grok-api"
               ? Math.max(totalWebSearchCalls, r.value.webSearchCalls)
               : totalWebSearchCalls + r.value.webSearchCalls;
           }

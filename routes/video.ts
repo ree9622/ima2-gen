@@ -32,6 +32,7 @@ import {
 } from "../lib/imageModels.js";
 import { errInfo } from "../lib/errInfo.js";
 import { requireRuntimeContext, type RouteRuntimeContext, type RuntimeContext } from "../lib/runtimeContext.js";
+import { generateVideoThumbnail } from "../lib/videoThumb.js";
 
 function sendSse(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
@@ -114,7 +115,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const clientNodeId = typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
       const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
 
-      if (provider !== "grok") return fail(400, provider === "agy" ? "AGY_VIDEO_UNSUPPORTED" : "VIDEO_PROVIDER_UNSUPPORTED", provider === "agy" ? "Gemini (agy) does not support video generation" : "video generation requires provider 'grok'");
+      if (provider !== "grok" && provider !== "grok-api") return fail(400, provider === "agy" ? "AGY_VIDEO_UNSUPPORTED" : "VIDEO_PROVIDER_UNSUPPORTED", provider === "agy" ? "Gemini (agy) does not support video generation" : "video generation requires provider 'grok' or 'grok-api'");
       const storyboardActive = req.body?.storyboard === true;
       const storyboardPrefix = storyboardActive
         ? [
@@ -234,6 +235,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const effectivePrompt = storyboardPrefix + basePrompt;
 
       const plannerModel = typeof req.body?.plannerModel === "string" ? req.body.plannerModel.trim() : undefined;
+      const directApiKey = provider === "grok-api" ? ctx.xaiApiKey : undefined;
 
       const result = await generateVideoViaGrok(effectivePrompt, ctx, {
         model: modelCheck.model,
@@ -247,6 +249,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         requestId,
         continuityLineage: parentLineage,
         plannerModel: plannerModel || undefined,
+        directApiKey,
         onEvent,
       });
 
@@ -268,7 +271,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         prompt: activePrompt,
         userPrompt: activePrompt,
         revisedPrompt: result.revisedPrompt,
-        provider: "grok",
+        provider,
         model: result.effectiveModel,
         requestedModel: result.requestedModel,
         effectiveModel: result.effectiveModel,
@@ -292,6 +295,7 @@ export function registerVideoRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         ...(storyboardActive ? { storyboard: true } : {}),
       };
       await saveGeneratedVideoArtifact(ctx, filename, result.videoBuffer, meta);
+      generateVideoThumbnail(join(ctx.config.storage.generatedDir, filename)).catch(() => {});
       invalidateHistoryIndex();
 
       finishMeta = { filename, xaiVideoRequestId: result.xaiVideoRequestId };

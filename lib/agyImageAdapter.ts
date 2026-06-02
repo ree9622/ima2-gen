@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { readFile, stat, writeFile, unlink, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { readFile, rm, stat, writeFile, mkdir } from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
+import { homedir, tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { logEvent } from "./logger.js";
 import { detectImageMimeFromB64 } from "./refs.js";
@@ -16,6 +16,7 @@ export interface AgyGenerateResult {
 
 const AGY_TIMEOUT_MS = 360_000;
 const AGY_OUTPUT_RESOLUTION = "1024x1024";
+const AGY_MAX_OUTPUT_BYTES = 1024 * 1024;
 
 function agyError(message: string, status: number, code: string): Error {
   const err: any = new Error(message);
@@ -220,7 +221,13 @@ function spawnAgy(prompt: string, signal?: AbortSignal): Promise<{ stdout: strin
   return new Promise((resolve, reject) => {
     const child = spawn("agy", ["-p", "-"], {
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        TMPDIR: process.env.TMPDIR,
+        LANG: process.env.LANG,
+        GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+      },
     });
 
     let stdout = "";
@@ -235,8 +242,8 @@ function spawnAgy(prompt: string, signal?: AbortSignal): Promise<{ stdout: strin
       }
     }, AGY_TIMEOUT_MS);
 
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.stdout.on("data", (chunk: Buffer) => { if (stdout.length < AGY_MAX_OUTPUT_BYTES) stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk: Buffer) => { if (stderr.length < AGY_MAX_OUTPUT_BYTES) stderr += chunk.toString(); });
 
     child.on("error", (err) => {
       if (settled) return;
@@ -269,6 +276,12 @@ function spawnAgy(prompt: string, signal?: AbortSignal): Promise<{ stdout: strin
       child.on("close", () => signal.removeEventListener("abort", onAbort));
     }
 
+    if (signal?.aborted) {
+      settled = true;
+      clearTimeout(timer);
+      child.kill("SIGTERM");
+      return reject(agyError("Generation canceled", 499, "GENERATION_CANCELED"));
+    }
     child.stdin.write(prompt);
     child.stdin.end();
   });
@@ -302,8 +315,7 @@ async function writeRefsToTempFiles(refs: RefDetail[]): Promise<{ paths: string[
   return {
     paths,
     cleanup: async () => {
-      for (const p of paths) await unlink(p).catch(() => {});
-      await unlink(dir).catch(() => {});
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
     },
   };
 }
@@ -340,17 +352,33 @@ export async function generateViaAgy(
 
     const { artifactPath } = parseAgyOutput(stdout);
 
+    // Validate artifact path is within allowed directories
+    const resolvedPath = resolve(artifactPath);
+    const allowedPrefixes = [
+      join(homedir(), ".gemini"),
+      join(homedir(), ".cache"),
+      tmpdir(),
+    ];
+    const isSafePath = allowedPrefixes.some((prefix) => resolvedPath.startsWith(prefix + sep) || resolvedPath.startsWith(prefix));
+    if (!isSafePath) {
+      throw agyError(
+        `Agy artifact path outside allowed directories: ${resolvedPath}`,
+        502,
+        "AGY_PATH_REJECTED",
+      );
+    }
+
     try {
-      await stat(artifactPath);
+      await stat(resolvedPath);
     } catch {
       throw agyError(
-        `Agy artifact not found at parsed path: ${artifactPath}`,
+        `Agy artifact not found at parsed path: ${resolvedPath}`,
         502,
         "AGY_ARTIFACT_NOT_FOUND",
       );
     }
 
-    const buffer = await readFile(artifactPath);
+    const buffer = await readFile(resolvedPath);
     const b64 = buffer.toString("base64");
     const mime = detectImageMimeFromB64(b64) || "image/png";
 

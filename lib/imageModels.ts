@@ -9,6 +9,9 @@ const VALID_REASONING_EFFORTS = new Set(["none", "low", "medium", "high", "xhigh
 const GROK_FALLBACK_IMAGE_MODEL = "grok-imagine-image";
 const VALID_GROK_IMAGE_MODELS = new Set(["grok-imagine-image", "grok-imagine-image-quality"]);
 
+const GEMINI_API_FALLBACK_IMAGE_MODEL = "nano-banana-2";
+const VALID_GEMINI_API_MODELS = new Set(["nano-banana-2", "nano-banana-pro"]);
+
 export function normalizeReasoningEffort(ctx: RouteRuntimeContext | null | undefined, rawEffort: unknown) {
   const configured = (ctx?.config as { imageModels?: { reasoningEffort?: string; validReasoningEfforts?: Set<string> } } | undefined)?.imageModels;
   const fallback = configured?.reasoningEffort ?? FALLBACK_REASONING_EFFORT;
@@ -64,6 +67,20 @@ export function normalizeGrokImageModel(rawModel: unknown) {
     return {
       error: `Grok image model must be one of: ${[...VALID_GROK_IMAGE_MODELS].join(", ")}`,
       code: "INVALID_GROK_IMAGE_MODEL" as const,
+      status: 400 as const,
+    };
+  }
+  return { model: rawModel };
+}
+
+export function normalizeGeminiApiModel(rawModel: unknown) {
+  if (typeof rawModel !== "string" || rawModel.length === 0) {
+    return { model: GEMINI_API_FALLBACK_IMAGE_MODEL };
+  }
+  if (!VALID_GEMINI_API_MODELS.has(rawModel)) {
+    return {
+      error: `Gemini API image model must be one of: ${[...VALID_GEMINI_API_MODELS].join(", ")}`,
+      code: "INVALID_GEMINI_API_IMAGE_MODEL" as const,
       status: 400 as const,
     };
   }

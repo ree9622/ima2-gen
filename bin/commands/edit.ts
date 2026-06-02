@@ -8,7 +8,7 @@ import { createCliRequestId, recoverGeneratedOutputs, formatRecoveryHint } from 
 import { errInfo } from "../../lib/errInfo.js";
 const VALID_MODES = new Set(["auto", "direct"]);
 const VALID_MODERATION = new Set(["auto", "low"]);
-const VALID_PROVIDERS = new Set(["auto", "oauth", "api", "grok"]);
+const VALID_PROVIDERS = new Set(["auto", "oauth", "api", "grok", "grok-api", "agy", "gemini-api"]);
 const KNOWN_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark", "grok-imagine-image", "grok-imagine-image-quality"]);
 
 const SPEC = {
@@ -61,7 +61,7 @@ export default async function editCmd(argv: string[]) {
   if (!VALID_MODES.has(String(args.mode))) die(2, "--mode must be one of: auto, direct");
   if (!VALID_MODERATION.has(String(args.moderation))) die(2, "--moderation must be one of: auto, low");
   if (args.provider && !VALID_PROVIDERS.has(String(args.provider))) {
-    die(2, "--provider must be one of: auto, oauth, api, grok");
+    die(2, "--provider must be one of: auto, oauth, api, grok, grok-api, agy, gemini-api");
   }
   if (args.model && !KNOWN_IMAGE_MODELS.has(String(args.model))) {
     die(2, "--model must be one of: gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark, grok-imagine-image, grok-imagine-image-quality");

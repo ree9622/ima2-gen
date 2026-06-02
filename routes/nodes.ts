@@ -20,6 +20,7 @@ import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateViaResponses, editViaResponses } from "../lib/responsesImageAdapter.js";
 import { generateViaGrok, type GrokReferenceImage } from "../lib/grokImageAdapter.js";
 import { generateViaAgy } from "../lib/agyImageAdapter.js";
+import { generateViaGeminiApi } from "../lib/geminiApiImageAdapter.js";
 import { isNonRetryableGenerationError, normalizeGenerationFailure, type UpstreamErr } from "../lib/generationErrors.js";
 import { logEvent, logError } from "../lib/logger.js";
 
@@ -195,7 +196,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const effectiveSize = providerOptions.size;
       const webSearchEnabled = providerOptions.webSearchEnabled;
       const activeProvider = providerOptions.provider;
-      const effectiveImageModel = activeProvider === "grok" && quality === "high"
+      const effectiveImageModel = (activeProvider === "grok" || activeProvider === "grok-api") && quality === "high"
         ? "grok-imagine-image-quality"
         : imageModel;
       if (contextMode === "ancestry") {
@@ -254,7 +255,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const refsForRequest = contextMode === "parent-only" ? [] : (refCheck.refDetails || refCheck.refs);
       const parentImagePresent = !!parentB64;
       const inputImageCount = (parentImagePresent ? 1 : 0) + refsForRequest.length;
-      if ((activeProvider === "grok" || activeProvider === "agy") && inputImageCount > 3) {
+      if ((activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api") && inputImageCount > 3) {
         finishStatus = "error";
         finishHttpStatus = 400;
         const code = activeProvider === "agy" ? "AGY_REF_TOO_MANY" : "GROK_REF_TOO_MANY";
@@ -301,7 +302,8 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       }
 
       let b64: string | undefined, usage: unknown, webSearchCalls = 0, revisedPrompt: string | null = null;
-      let resultFormat: "png" | "jpeg" | "webp" = activeProvider === "grok" || activeProvider === "agy" ? "jpeg" : format as "png" | "jpeg" | "webp";
+      const grokDirectApiKey = activeProvider === "grok-api" ? ctx.xaiApiKey : undefined;
+      let resultFormat: "png" | "jpeg" | "webp" = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api" ? "jpeg" : format as "png" | "jpeg" | "webp";
       const MAX_RETRIES = 1;
       let lastErr: UpstreamErr | null = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -324,7 +326,17 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
             searchMode,
             webSearchEnabled,
           });
-          const r = activeProvider === "agy"
+          const r = activeProvider === "gemini-api"
+            ? await generateViaGeminiApi(parentB64 ? `Edit this image: ${prompt}` : prompt, requireRuntimeContext(ctx), {
+                model: effectiveImageModel,
+                size: effectiveSize,
+                signal: cancelController.signal,
+                requestId,
+                references: parentB64
+                  ? [{ b64: parentB64, declaredMime: null, detectedMime: null }, ...((refCheck.refDetails || []) as any[])]
+                  : refCheck.refDetails,
+              })
+            : activeProvider === "agy"
             ? await generateViaAgy(parentB64 ? `Edit this image: ${prompt}` : prompt, {
                 references: parentB64
                   ? [{ b64: parentB64, declaredMime: null, detectedMime: null }]
@@ -332,13 +344,14 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
                 signal: cancelController.signal,
                 requestId,
               })
-            : activeProvider === "grok"
+            : activeProvider === "grok" || activeProvider === "grok-api"
             ? await generateViaGrok(prompt, ctx, {
                 model: effectiveImageModel,
                 size: effectiveSize,
                 requestId,
                 signal: cancelController.signal,
                 references: toGrokReferences(parentB64, refsForRequest),
+                directApiKey: grokDirectApiKey,
               })
             : parentB64
               ? await editViaResponses(activeProvider, prompt, parentB64, quality, effectiveSize, moderation, normalizedPromptMode, ctx, requestId, {
@@ -383,7 +396,7 @@ export function registerNodeRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
             usage = r.usage;
             webSearchCalls = r.webSearchCalls || 0;
             revisedPrompt = r.revisedPrompt || null;
-            if (activeProvider === "grok") {
+            if (activeProvider === "grok" || activeProvider === "grok-api" || activeProvider === "gemini-api") {
               resultFormat = imageFormatFromMime(("mime" in r ? r.mime : undefined) || detectImageMimeFromB64(r.b64) || "image/jpeg");
             }
             break;

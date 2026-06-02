@@ -4,12 +4,14 @@ import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
 import { detectImageMimeFromB64 } from "../lib/refs.js";
+import { generateImageThumbnailFromBuffer } from "../lib/imageThumb.js";
 import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { editViaResponses } from "../lib/responsesImageAdapter.js";
 import { editViaGrok } from "../lib/grokImageAdapter.js";
 import { generateViaAgy } from "../lib/agyImageAdapter.js";
+import { generateViaGeminiApi } from "../lib/geminiApiImageAdapter.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
   isGenerationCanceledError,
@@ -159,11 +161,11 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         finishErrorCode = "INVALID_EDIT_INPUT";
         return res.status(400).json({ error: "Prompt and image are required" });
       }
-      if ((activeProvider === "grok" || activeProvider === "agy") && rawMask) {
+      if ((activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api") && rawMask) {
         finishStatus = "error";
         finishHttpStatus = 400;
-        const code = activeProvider === "agy" ? "AGY_MASK_UNSUPPORTED" : "GROK_MASK_UNSUPPORTED";
-        return res.status(400).json({ error: `${activeProvider === "agy" ? "Agy" : "Grok"} provider does not support mask editing`, code });
+        const code = activeProvider === "agy" ? "AGY_MASK_UNSUPPORTED" : activeProvider === "gemini-api" ? "GEMINI_API_MASK_UNSUPPORTED" : "GROK_MASK_UNSUPPORTED";
+        return res.status(400).json({ error: `${activeProvider === "agy" ? "Agy" : activeProvider === "gemini-api" ? "Gemini API" : "Grok"} provider does not support mask editing`, code });
       }
       const maskCheck: any = validateEditMask(imageB64, rawMask);
       if (maskCheck.error) {
@@ -203,7 +205,20 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       let webSearchCalls = 0;
       let resultMimeFromProvider: string | undefined;
 
-      if (activeProvider === "agy") {
+      if (activeProvider === "gemini-api") {
+        const r = await generateViaGeminiApi(`Edit this image: ${prompt}`, requireRuntimeContext(ctx), {
+          model: imageModel,
+          size: effectiveSize,
+          signal: cancelController.signal,
+          requestId,
+          references: [{ b64: imageB64, declaredMime: null, detectedMime: detectImageMimeFromB64(imageB64) || null }],
+        });
+        resultB64 = r.b64;
+        usage = r.usage;
+        revisedPrompt = r.revisedPrompt;
+        webSearchCalls = r.webSearchCalls;
+        resultMimeFromProvider = r.mime;
+      } else if (activeProvider === "agy") {
         const r = await generateViaAgy(`Edit this image: ${prompt}`, {
           references: [{ b64: imageB64, declaredMime: null, detectedMime: detectImageMimeFromB64(imageB64) || null }],
           signal: cancelController.signal,
@@ -214,13 +229,15 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
         revisedPrompt = r.revisedPrompt;
         webSearchCalls = r.webSearchCalls;
         resultMimeFromProvider = r.mime;
-      } else if (activeProvider === "grok") {
+      } else if (activeProvider === "grok" || activeProvider === "grok-api") {
+        const directApiKey = activeProvider === "grok-api" ? ctx.xaiApiKey : undefined;
         const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
         const r = await editViaGrok(prompt, imageB64, ctx, {
           model: grokModel,
           size: effectiveSize,
           signal: cancelController.signal,
           requestId,
+          directApiKey,
         });
         resultB64 = r.b64;
         usage = r.usage;
@@ -256,12 +273,15 @@ export function registerEditRoutes(app: Express, ctxRaw: RouteRuntimeContext) {
       const elapsed = +((Date.now() - startTime) / 1000).toFixed(1);
       await mkdir(ctx.config.storage.generatedDir, { recursive: true });
       throwIfJobCanceled(requestId);
-      const editMime = activeProvider === "grok" || activeProvider === "agy"
+      const editMime = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api"
         ? (resultMimeFromProvider || detectImageMimeFromB64(resultB64) || "image/png")
         : "image/png";
-      const editExt = activeProvider === "grok" || activeProvider === "agy" ? imageFormatFromMime(editMime) : "png";
+      const editExt = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api" ? imageFormatFromMime(editMime) : "png";
       const filename = `${Date.now()}_${randomBytes(ctx.config.ids.generatedHexBytes).toString("hex")}.${editExt}`;
-      await writeFile(join(ctx.config.storage.generatedDir, filename), Buffer.from(resultB64, "base64"));
+      const editBuffer = Buffer.from(resultB64, "base64");
+      const editFilePath = join(ctx.config.storage.generatedDir, filename);
+      await writeFile(editFilePath, editBuffer);
+      generateImageThumbnailFromBuffer(editBuffer, editFilePath).catch(() => {});
       const meta = {
         prompt,
         userPrompt: prompt,

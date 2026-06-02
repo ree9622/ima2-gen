@@ -28,7 +28,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
     "build:server": "tsc -p tsconfig.build.json",
-    "build:cli": "tsc -p tsconfig.bin.json && node scripts/fix-shebangs.mjs"
+    "build:cli": "tsc -p tsconfig.bin.json && node scripts/fix-shebangs.mjs",
+    "postinstall": "echo '\\n  [ima2] Gallery thumbnails will be auto-generated on next server start.\\n  Or run: ima2 backfill-thumbs\\n'"
   },
   "keywords": [
     "openai",
@@ -67,6 +68,7 @@
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
+    "google-auth-library": "^10.6.2",
     "openai": "^5.8.2",
     "openai-oauth": "^1.0.2",
     "progrok": "file:vendor/progrok-0.2.0.tgz",

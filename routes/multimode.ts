@@ -4,12 +4,14 @@ import { join } from "path";
 import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
 import { detectImageMimeFromB64, summarizeReferencePayload, validateAndNormalizeRefs } from "../lib/refs.js";
+import { generateImageThumbnailFromBuffer } from "../lib/imageThumb.js";
 import { classifyUpstreamError } from "../lib/errorClassify.js";
 import { normalizeOAuthParams } from "../lib/oauthNormalize.js";
 import { resolveProviderOptions } from "../lib/providerOptions.js";
 import { generateMultimodeViaResponses } from "../lib/responsesImageAdapter.js";
 import { generateMultimodeViaGrok } from "../lib/grokMultimodeAdapter.js";
 import { generateViaAgy } from "../lib/agyImageAdapter.js";
+import { generateViaGeminiApi } from "../lib/geminiApiImageAdapter.js";
 import { startJob, finishJob, registerJobAbortController, isJobCanceled } from "../lib/inflight.js";
 import {
   isGenerationCanceledError,
@@ -205,7 +207,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
 
       const startTime = Date.now();
       const mimeMap: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
-      const mmFormat = activeProvider === "grok" || activeProvider === "agy" ? "jpeg" : String(format);
+      const mmFormat = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api" ? "jpeg" : String(format);
       const mime = mimeMap[mmFormat] || "image/png";
       const sequenceId = `seq_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
       routeMaxImages = maxImages;
@@ -231,10 +233,10 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
       ) => {
         if (persistedIndexes.has(index)) return;
         throwIfJobCanceled(requestId);
-        const resultMime = activeProvider === "grok" || activeProvider === "agy"
+        const resultMime = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api"
           ? (image.mime || detectImageMimeFromB64(image.b64) || mime)
           : mime;
-        const resultFormat = activeProvider === "grok" || activeProvider === "agy" ? imageFormatFromMime(resultMime) : mmFormat;
+        const resultFormat = activeProvider === "grok" || activeProvider === "agy" || activeProvider === "grok-api" || activeProvider === "gemini-api" ? imageFormatFromMime(resultMime) : mmFormat;
         const rand = randomBytes(ctx.config.ids.generatedHexBytes).toString("hex");
         const filename = `${Date.now()}_${rand}_multimode_${index}.${resultFormat}`;
         const meta = {
@@ -269,8 +271,10 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
         const embedded = await embedImageMetadataBestEffort(rawBuffer, resultFormat, meta, {
           version: ctx.packageVersion,
         });
-        await writeFile(join(ctx.config.storage.generatedDir, filename), embedded.buffer);
-        await safeWriteSidecar(join(ctx.config.storage.generatedDir, filename + ".json"), meta);
+        const mmFilePath = join(ctx.config.storage.generatedDir, filename);
+        await writeFile(mmFilePath, embedded.buffer);
+        await safeWriteSidecar(mmFilePath + ".json", meta);
+        generateImageThumbnailFromBuffer(embedded.buffer, mmFilePath).catch(() => {});
         invalidateHistoryIndex();
         const item = {
           image: `data:${resultMime};base64,${image.b64}`,
@@ -291,7 +295,20 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
 
       let generated: { images: Array<{ b64: string; revisedPrompt?: string | null }>; usage: Record<string, number> | null; webSearchCalls?: number; extraIgnored?: number };
 
-      if (activeProvider === "agy") {
+      if (activeProvider === "gemini-api") {
+        const r = await generateViaGeminiApi(prompt, requireRuntimeContext(ctx), {
+          model: imageModel,
+          size: effectiveSize,
+          signal: cancelController.signal,
+          requestId,
+          references: refCheck.refDetails,
+        });
+        generated = {
+          images: [{ b64: r.b64, revisedPrompt: r.revisedPrompt }],
+          usage: r.usage,
+          webSearchCalls: r.webSearchCalls,
+        };
+      } else if (activeProvider === "agy") {
         const r = await generateViaAgy(prompt, {
           references: refCheck.refDetails,
           signal: cancelController.signal,
@@ -302,7 +319,8 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
           usage: r.usage,
           webSearchCalls: r.webSearchCalls,
         };
-      } else if (activeProvider === "grok") {
+      } else if (activeProvider === "grok" || activeProvider === "grok-api") {
+        const directApiKey = activeProvider === "grok-api" ? ctx.xaiApiKey : undefined;
         const grokModel = quality === "high" ? "grok-imagine-image-quality" : imageModel;
         generated = await generateMultimodeViaGrok(prompt, ctx, {
           model: grokModel,
@@ -311,6 +329,7 @@ export function registerMultimodeRoutes(app: Express, ctxRaw: RouteRuntimeContex
           signal: cancelController.signal,
           requestId,
           references: refCheck.refDetails,
+          directApiKey,
           onFinalImage: async (image, index) => {
             const totalReturned = Math.max(index + 1, images.length + 1);
             await persistAndSendImage(image, index, totalReturned, sequenceStatus(totalReturned, maxImages));

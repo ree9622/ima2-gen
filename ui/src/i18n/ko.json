@@ -81,6 +81,8 @@
   },
   "size": {
     "title": "크기",
+    "grokAspectTitle": "종횡비",
+    "grokResolutionTitle": "해상도",
     "width": "가로",
     "height": "세로",
     "hint": "16px 단위, 최대 변 3840, 비율 3:1 이하, 65.5만-829만 픽셀",
@@ -127,6 +129,7 @@
   "quality": {
     "title": "품질",
     "grokTitle": "Grok 품질",
+    "grokModelTitle": "모델",
     "lowLabel": "낮음",
     "lowSub": "빠름",
     "mediumLabel": "중간",
@@ -533,8 +536,14 @@
     "geminiApiKeyRequired": "Gemini API 키 필요",
     "comingSoon": "준비 중",
     "agyCompatTitle": "Gemini (agy)",
-    "agyCompatBody": "1024x1024 고정, JPEG 출력, 최대 3개 참조",
-    "agyCompatBodyLong": "1024x1024 고정 출력, JPEG 형식, 최대 3개 참조 이미지. 웹 검색, 품질/크기 조절 없음."
+    "agyCompatBody": "1024x1024 고정, JPEG 출력, 최대 3개 참조. 품질/크기 조절 없음.",
+    "agyCompatBodyLong": "1024x1024 고정 출력, JPEG 형식, 최대 3개 참조 이미지. 웹 검색, 품질/크기 조절 없음.",
+    "gptCompatTitle": "GPT Image",
+    "gptCompatBody": "OpenAI Responses API를 통한 이미지 생성. 품질, 크기, 형식, 모더레이션, 웹 검색 설정 지원."
+  },
+  "grokMode": {
+    "image": "이미지",
+    "video": "비디오"
   },
   "cost": {
     "free": "무료",

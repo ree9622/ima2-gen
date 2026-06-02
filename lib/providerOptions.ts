@@ -1,5 +1,5 @@
 import type { RuntimeContext } from "./runtimeContext.js";
-import { normalizeImageModel, normalizeReasoningEffort, normalizeGrokImageModel } from "./imageModels.js";
+import { normalizeImageModel, normalizeReasoningEffort, normalizeGrokImageModel, normalizeGeminiApiModel } from "./imageModels.js";
 
 export function resolveProviderOptions(ctx: RuntimeContext | null | undefined, {
   provider = "oauth",
@@ -19,6 +19,18 @@ export function resolveProviderOptions(ctx: RuntimeContext | null | undefined, {
     };
   }
 
+  if (provider === "gemini-api") {
+    const geminiModelCheck = normalizeGeminiApiModel(rawModel || "nano-banana-2");
+    if (geminiModelCheck.error) return { error: geminiModelCheck.error, code: geminiModelCheck.code, status: geminiModelCheck.status };
+    return {
+      provider: "gemini-api" as const,
+      model: geminiModelCheck.model,
+      reasoningEffort: "none",
+      size: rawSize || "1024x1024",
+      webSearchEnabled: false,
+    };
+  }
+
   if (provider === "grok") {
     const grokCfg: { defaultImageModel?: string } = (ctx?.config as any)?.grokProvider || {};
     const modelInput = rawModel || grokCfg.defaultImageModel;
@@ -26,6 +38,20 @@ export function resolveProviderOptions(ctx: RuntimeContext | null | undefined, {
     if (grokModelCheck.error) return { error: grokModelCheck.error, code: grokModelCheck.code, status: grokModelCheck.status };
     return {
       provider: "grok" as const,
+      model: grokModelCheck.model,
+      reasoningEffort: "none",
+      size: rawSize,
+      webSearchEnabled: true,
+    };
+  }
+
+  if (provider === "grok-api") {
+    const grokCfg: { defaultImageModel?: string } = (ctx?.config as any)?.grokProvider || {};
+    const modelInput = rawModel || grokCfg.defaultImageModel;
+    const grokModelCheck = normalizeGrokImageModel(modelInput);
+    if (grokModelCheck.error) return { error: grokModelCheck.error, code: grokModelCheck.code, status: grokModelCheck.status };
+    return {
+      provider: "grok-api" as const,
       model: grokModelCheck.model,
       reasoningEffort: "none",
       size: rawSize,

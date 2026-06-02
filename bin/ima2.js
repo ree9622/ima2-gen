@@ -288,6 +288,7 @@ function showHelp() {
     cancel <id>    Mark an in-flight job canceled (ima2 cancel --help)
     inflight <sub> Inflight jobs (ls / rm)         (ima2 inflight --help)
     storage <sub>  Storage status / open-dir       (ima2 storage --help)
+    backfill-thumbs  Generate missing thumbnails for gallery performance
     billing        API usage / quota
     providers      Configured providers
     oauth <sub>    GPT OAuth proxy status              (ima2 oauth --help)
@@ -332,7 +333,7 @@ if (args.includes("-v") || args.includes("--version")) {
     process.exit(0);
 }
 if ((!command || args.includes("-h") || args.includes("--help"))
-    && !["doctor", "gen", "video", "edit", "ls", "show", "ps", "cancel", "session", "history", "prompt", "multimode", "node", "annotate", "canvas-versions", "metadata", "comfy", "cardnews", "inflight", "storage", "billing", "providers", "oauth", "grok", "config", "defaults", "capabilities", "skill", "ping"].includes(command)) {
+    && !["doctor", "gen", "video", "edit", "ls", "show", "ps", "cancel", "session", "history", "prompt", "multimode", "node", "annotate", "canvas-versions", "metadata", "comfy", "cardnews", "inflight", "storage", "billing", "providers", "oauth", "grok", "config", "defaults", "capabilities", "skill", "ping", "backfill-thumbs"].includes(command)) {
     showHelp();
     process.exit(command ? 0 : 1);
 }
@@ -404,6 +405,11 @@ switch (command) {
         setCliVersion(pkg.version);
         const mod = await import(`./commands/${command}.js`);
         await mod.default(args.slice(1));
+        break;
+    }
+    case "backfill-thumbs": {
+        const { backfillThumbs } = await import("./commands/backfillThumbs.js");
+        await backfillThumbs();
         break;
     }
     case "storage":

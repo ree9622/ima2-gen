@@ -76,6 +76,7 @@ function QuotaBar({ window: w }: { window: QuotaWindow }) {
 
 function SwitchAccountButton({ provider, onComplete }: { provider: "grok" | "codex"; onComplete: () => void }) {
   const [state, setState] = useState<SwitchState>({ phase: "idle" });
+  const [copied, setCopied] = useState(false);
   const switching = useRef(false);
 
   const startSwitch = useCallback(async () => {
@@ -156,6 +157,31 @@ function SwitchAccountButton({ provider, onComplete }: { provider: "grok" | "cod
         <div style={{ textAlign: "center", fontSize: "18px", fontWeight: 700, fontFamily: "monospace", letterSpacing: "2px", margin: "6px 0" }}>
           {state.userCode}
         </div>
+        {state.verificationUrl && (
+          <div style={{ display: "flex", gap: "4px", margin: "6px 0" }}>
+            <button
+              type="button"
+              className="settings-action-btn"
+              style={{ flex: 1, fontSize: "11px" }}
+              onClick={() => window.open(state.verificationUrl, "_blank")}
+            >
+              Open tab again
+            </button>
+            <button
+              type="button"
+              className="settings-action-btn"
+              style={{ flex: 1, fontSize: "11px" }}
+              onClick={() => {
+                navigator.clipboard?.writeText(state.verificationUrl!).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+          </div>
+        )}
         <div style={{ textAlign: "center", color: "var(--text-dim, #888)", fontSize: "11px" }}>
           Waiting for approval...
         </div>

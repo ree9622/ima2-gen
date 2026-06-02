@@ -50,24 +50,37 @@ export const COST_MAP: Record<Quality, Record<string, number>> = {
   },
 };
 
-const GEMINI_API_COST: Record<string, number> = {
-  "512": 0.002,
-  "1K": 0.004,
-  "2K": 0.006,
-  "4K": 0.010,
+const GEMINI_FLASH_COST: Record<string, number> = {
+  "512": 0.001,
+  "1K": 0.003,
+  "2K": 0.004,
+  "4K": 0.006,
 };
 
-export function estimateGeminiApiCost(size: string): number {
-  const match = size.match(/^(\d+)x(\d+)$/);
-  if (!match) return 0.004;
-  const maxDim = Math.max(Number(match[1]), Number(match[2]));
-  if (maxDim <= 512) return GEMINI_API_COST["512"];
-  if (maxDim <= 1024) return GEMINI_API_COST["1K"];
-  if (maxDim <= 2048) return GEMINI_API_COST["2K"];
-  return GEMINI_API_COST["4K"];
+const GEMINI_PRO_COST: Record<string, number> = {
+  "1K": 0.007,
+  "2K": 0.007,
+  "4K": 0.013,
+};
+
+function geminiResTier(maxDim: number): string {
+  if (maxDim <= 512) return "512";
+  if (maxDim <= 1024) return "1K";
+  if (maxDim <= 2048) return "2K";
+  return "4K";
 }
 
-export function estimateCost(quality: Quality, size: string, provider?: string): number {
-  if (provider === "gemini-api") return estimateGeminiApiCost(size);
+export function estimateGeminiApiCost(size: string, model?: string | null): number {
+  const match = size.match(/^(\d+)x(\d+)$/);
+  if (!match) return 0.003;
+  const maxDim = Math.max(Number(match[1]), Number(match[2]));
+  const tier = geminiResTier(maxDim);
+  const isPro = model === "nano-banana-pro";
+  const costMap = isPro ? GEMINI_PRO_COST : GEMINI_FLASH_COST;
+  return costMap[tier] ?? costMap["1K"] ?? 0.003;
+}
+
+export function estimateCost(quality: Quality, size: string, provider?: string, model?: string | null): number {
+  if (provider === "gemini-api") return estimateGeminiApiCost(size, model);
   return COST_MAP[quality]?.[size] ?? 0;
 }

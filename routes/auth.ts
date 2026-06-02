@@ -146,6 +146,16 @@ function startCodexDeviceCode(): Promise<{ sessionId: string; userCode: string; 
     };
     sessions.set(id, session);
 
+    // Server-side reaper: if the client abandons the flow (closes browser, stops
+    // polling), kill the lingering codex child instead of waiting for it to self-exit.
+    const reaper = setTimeout(() => {
+      if (session.status === "pending") {
+        session.status = "expired";
+        cleanup(id);
+      }
+    }, 16 * 60 * 1000);
+    reaper.unref?.();
+
     child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
       if (resolved) return;

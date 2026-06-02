@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useI18n } from "../i18n";
 import { handleHorizontalWheel } from "../lib/horizontalWheel";
-import { isVideoItem } from "../lib/videoMedia";
+import { isVideoItem, isVideoUrl } from "../lib/videoMedia";
 import { buildVideoDragPayload } from "../lib/videoContinuity";
 import {
   getGalleryItemKey,
@@ -53,16 +53,28 @@ function CollectionThumb({
       onClick={() => showHistorySequence(sequenceId)}
       aria-label={`${images.length} image collection`}
     >
-      {slots.map((img, i) => (
-        <img
-          key={i}
-          className="collection-mini"
-          src={img.thumb || img.url || img.image}
-          alt=""
-          loading="lazy"
-          decoding="async"
-        />
-      ))}
+      {slots.map((img, i) => {
+        const isVid = !img.thumb && (isVideoUrl(img.url) || isVideoUrl(img.image));
+        return isVid ? (
+          <video
+            key={i}
+            className="collection-mini"
+            src={img.url || img.image}
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <img
+            key={i}
+            className="collection-mini"
+            src={img.thumb || img.url || img.image}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        );
+      })}
     </button>
   );
 }

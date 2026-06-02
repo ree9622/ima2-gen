@@ -125,10 +125,16 @@ export function GalleryModal() {
           const narrowedKind: GenerateItem["kind"] =
             k === "classic" || k === "edit" || k === "generate" ||
             k === "card-news-card" || k === "card-news-set" ? k : null;
+          const isVideo = h.mediaType === "video" || /\.(mp4|webm|mov)$/i.test(h.filename ?? "");
           return {
             image: h.url,
             url: h.url,
             filename: h.filename,
+            thumb: h.thumb ?? (isVideo ? undefined : h.url),
+            mediaType: h.mediaType,
+            video: h.video ?? null,
+            videoSeries: h.videoSeries ?? null,
+            videoContinuity: h.videoContinuity ?? null,
             prompt: h.prompt ?? undefined,
             size: h.size ?? undefined,
             quality: h.quality ?? undefined,

@@ -611,6 +611,7 @@ function narrowGenerateKind(k?: string | null): GenerateItem["kind"] {
 
 function mapHistoryItem(it: Awaited<ReturnType<typeof getHistory>>["items"][number]): GenerateItem {
   const composerInsertedPrompts = normalizeInsertedPromptArray(it.composerInsertedPrompts);
+  const isVideo = it.mediaType === "video" || /\.(mp4|webm|mov)$/i.test(it.filename ?? "");
   return {
     image: it.url,
     url: it.url,
@@ -619,7 +620,11 @@ function mapHistoryItem(it: Awaited<ReturnType<typeof getHistory>>["items"][numb
     videoSeries: it.videoSeries ?? null,
     videoContinuity: it.videoContinuity ?? null,
     filename: it.filename,
-    thumb: it.thumb ?? it.url,
+    // Use the server-generated thumbnail. For videos, never fall back to the
+    // raw url — an <img src=*.mp4> can't render. Leaving thumb undefined lets
+    // the UI fall back to a real <video> element. Images can safely use the
+    // original as a last resort.
+    thumb: it.thumb ?? (isVideo ? undefined : it.url),
     prompt: it.prompt ?? undefined,
     userPrompt: it.userPrompt ?? null,
     revisedPrompt: it.revisedPrompt ?? null,

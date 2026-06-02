@@ -9,9 +9,10 @@ export function isVideoUrl(src: string | null | undefined): boolean {
 }
 
 export function isVideoItem(
-  item: Pick<GenerateItem, "filename" | "url" | "image"> | null | undefined,
+  item: Pick<GenerateItem, "filename" | "url" | "image" | "mediaType"> | null | undefined,
 ): boolean {
   if (!item) return false;
+  if (item.mediaType === "video") return true;
   return isVideoUrl(item.filename) || isVideoUrl(item.url) || isVideoUrl(item.image);
 }
 

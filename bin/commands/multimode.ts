@@ -42,8 +42,9 @@ const HELP = `
     -o, --out <file>                    First image (implies --max-images 1)
     -d, --out-dir <dir>                 Output dir for multiple images
         --json
-        --model <gpt-5.5|gpt-5.4|gpt-5.4-mini>
-        --provider <auto|oauth|api|grok>  Provider (oauth = GPT OAuth; grok = xAI Grok)
+        --model <gpt-5.5|gpt-5.4|gpt-5.4-mini|grok-imagine-image|grok-imagine-image-quality|nano-banana-2|nano-banana-pro>
+        --provider <auto|oauth|api|grok|grok-api|agy|gemini-api>
+                                      Provider (oauth = GPT OAuth; grok = xAI Grok; agy/gemini-api = Gemini)
         --mode <auto|direct>            Prompt handling mode. Default: auto
         --ref <file>                    Attach reference image (repeatable, max 5)
         --reasoning-effort <none|low|medium|high|xhigh>

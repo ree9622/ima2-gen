@@ -9,7 +9,7 @@ import { errInfo } from "../../lib/errInfo.js";
 const VALID_MODES = new Set(["auto", "direct"]);
 const VALID_MODERATION = new Set(["auto", "low"]);
 const VALID_PROVIDERS = new Set(["auto", "oauth", "api", "grok", "grok-api", "agy", "gemini-api"]);
-const KNOWN_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark", "grok-imagine-image", "grok-imagine-image-quality"]);
+const KNOWN_IMAGE_MODELS = new Set(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark", "grok-imagine-image", "grok-imagine-image-quality", "nano-banana-2", "nano-banana-pro"]);
 
 const SPEC = {
   flags: {
@@ -43,8 +43,9 @@ const HELP = `
     -s, --size <WxH>
     -o, --out <file>
         --json
-        --model <gpt-5.5|gpt-5.4|gpt-5.4-mini|grok-imagine-image|grok-imagine-image-quality>
-        --provider <auto|oauth|api|grok>  Provider (oauth = GPT OAuth; grok = xAI Grok)
+        --model <gpt-5.5|gpt-5.4|gpt-5.4-mini|grok-imagine-image|grok-imagine-image-quality|nano-banana-2|nano-banana-pro>
+        --provider <auto|oauth|api|grok|grok-api|agy|gemini-api>
+                                      Provider (oauth = GPT OAuth; grok = xAI Grok; agy/gemini-api = Gemini)
         --mode <auto|direct>       Prompt handling mode. Default: auto
         --moderation <auto|low>    Default: low
         --session <id>             Apply session style sheet if enabled
@@ -64,7 +65,7 @@ export default async function editCmd(argv: string[]) {
     die(2, "--provider must be one of: auto, oauth, api, grok, grok-api, agy, gemini-api");
   }
   if (args.model && !KNOWN_IMAGE_MODELS.has(String(args.model))) {
-    die(2, "--model must be one of: gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark, grok-imagine-image, grok-imagine-image-quality");
+    die(2, "--model must be one of: gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark, grok-imagine-image, grok-imagine-image-quality, nano-banana-2, nano-banana-pro");
   }
   const VALID_REASONING = new Set(["none", "low", "medium", "high", "xhigh"]);
   if (args["reasoning-effort"] && !VALID_REASONING.has(String(args["reasoning-effort"]))) {

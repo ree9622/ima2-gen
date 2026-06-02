@@ -12,6 +12,8 @@ describe("CLI feature parity contract", () => {
 
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
     assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok", "grok-api", "agy", "gemini-api"\]\)/);
+    assert.match(src, /--provider <auto\|oauth\|api\|grok\|grok-api\|agy\|gemini-api>/);
+    assert.match(src, /nano-banana-2\|nano-banana-pro/);
     assert.match(src, /--provider must be one of: auto, oauth, api, grok, grok-api, agy, gemini-api/);
     assert.match(src, /if \(args\.provider\) body\.provider = args\.provider/);
     assert.match(src, /body\.webSearchEnabled = false/);
@@ -24,6 +26,8 @@ describe("CLI feature parity contract", () => {
 
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
     assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok", "grok-api", "agy", "gemini-api"\]\)/);
+    assert.match(src, /--provider <auto\|oauth\|api\|grok\|grok-api\|agy\|gemini-api>/);
+    assert.match(src, /nano-banana-2\|nano-banana-pro/);
     assert.match(src, /--provider must be one of: auto, oauth, api, grok, grok-api, agy, gemini-api/);
     assert.match(src, /if \(args\.provider\) editBody\.provider = args\.provider/);
     assert.match(src, /editBody\.webSearchEnabled = false/);
@@ -38,6 +42,8 @@ describe("CLI feature parity contract", () => {
 
     assert.match(src, /fileToDataUri/);
     assert.match(src, /provider:\s*\{\s*type:\s*"string"\s*\}/);
+    assert.match(src, /--provider <auto\|oauth\|api\|grok\|grok-api\|agy\|gemini-api>/);
+    assert.match(src, /nano-banana-2\|nano-banana-pro/);
     assert.match(src, /mode:\s*\{\s*type:\s*"string",\s*default:\s*"auto"\s*\}/);
     assert.match(src, /ref:\s*\{\s*type:\s*"string",\s*repeatable:\s*true\s*\}/);
     assert.match(src, /VALID_PROVIDERS = new Set\(\["auto", "oauth", "api", "grok", "grok-api", "agy", "gemini-api"\]\)/);

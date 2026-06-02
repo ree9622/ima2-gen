@@ -52,11 +52,17 @@ export function ApiKeyInput({ provider, label, placeholder, maskedKey, source, c
 
   const handleDelete = useCallback(async () => {
     try {
-      await fetch(`/api/keys/${provider}`, { method: "DELETE" });
+      const res = await fetch(`/api/keys/${provider}`, { method: "DELETE" });
+      if (!res.ok) {
+        setError("Failed to remove key");
+        return;
+      }
       setKey("");
       setEditing(false);
       onSaved();
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      setError(e.message || "Failed to remove key");
+    }
   }, [provider, onSaved]);
 
   const handleFocus = useCallback(() => {

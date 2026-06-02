@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiKeyInput } from "./ApiKeyInput";
 import { VertexJsonInput } from "./VertexJsonInput";
 import { useI18n } from "../i18n";
@@ -16,6 +16,13 @@ export function GeminiKeySection({ keyStatus, onSaved }: GeminiKeySectionProps) 
   const [authMode, setAuthMode] = useState<"apikey" | "vertex">(
     vertexConfigured && !geminiConfigured ? "vertex" : "apikey",
   );
+  const [userPicked, setUserPicked] = useState(false);
+
+  // Reconcile dropdown with saved status until the user manually picks a mode.
+  useEffect(() => {
+    if (userPicked) return;
+    setAuthMode(vertexConfigured && !geminiConfigured ? "vertex" : "apikey");
+  }, [vertexConfigured, geminiConfigured, userPicked]);
 
   return (
     <div className="gemini-key-section">
@@ -23,7 +30,7 @@ export function GeminiKeySection({ keyStatus, onSaved }: GeminiKeySectionProps) 
         <h5>{t("settings.apiKeys.gemini.label")}</h5>
         <select
           value={authMode}
-          onChange={(e) => setAuthMode(e.target.value as "apikey" | "vertex")}
+          onChange={(e) => { setUserPicked(true); setAuthMode(e.target.value as "apikey" | "vertex"); }}
           className="gemini-auth-mode-select"
         >
           <option value="apikey">{t("settings.apiKeys.vertex.authModeApiKey")}</option>

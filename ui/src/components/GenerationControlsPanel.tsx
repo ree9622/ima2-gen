@@ -175,29 +175,27 @@ export function GenerationControlsPanel() {
       ) : isGeminiApi ? (
         <>
         <div className="option-group">
-          <div className="option-group__title">MODEL</div>
-          <div className="option-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <div className="section-title">{t("quality.grokModelTitle") || "Model"}</div>
+          <div className="option-row">
             <button
               type="button"
               className={`option-btn${imageModel === "nano-banana-2" ? " active" : ""}`}
               onClick={() => setImageModel("nano-banana-2")}
-              style={{ lineHeight: "1.3" }}
             >
-              <span>Nano</span><br /><span>Banana 2</span>
+              <span>Nano Banana 2</span><br /><small>Flash</small>
             </button>
             <button
               type="button"
               className={`option-btn${imageModel === "nano-banana-pro" ? " active" : ""}`}
               onClick={() => setImageModel("nano-banana-pro")}
-              style={{ lineHeight: "1.3" }}
             >
-              <span>Nano</span><br /><span>Banana Pro</span>
+              <span>Nano Banana Pro</span><br /><small>Pro</small>
             </button>
           </div>
         </div>
         <div className="option-group">
-          <div className="option-group__title">{t("size.grokAspectTitle") || "Aspect Ratio"}</div>
-          <div className="option-row" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px" }}>
+          <div className="section-title">{t("size.grokAspectTitle") || "Aspect Ratio"}</div>
+          <div className="option-row" style={{ flexWrap: "wrap" }}>
             {GEMINI_ASPECT_RATIOS.map((ar) => (
               <button
                 key={ar.value}
@@ -211,8 +209,8 @@ export function GenerationControlsPanel() {
           </div>
         </div>
         <div className="option-group">
-          <div className="option-group__title">{t("size.grokResolutionTitle") || "Resolution"}</div>
-          <div className="option-row" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
+          <div className="section-title">{t("size.grokResolutionTitle") || "Resolution"}</div>
+          <div className="option-row">
             {GEMINI_RESOLUTIONS.map((r) => (
               <button
                 key={r.value}
@@ -220,12 +218,9 @@ export function GenerationControlsPanel() {
                 className={`option-btn${geminiSettings.res === r.value ? " active" : ""}`}
                 onClick={() => setGeminiSize(geminiSettings.ratio, r.value)}
               >
-                {r.label}
+                <span>{r.label}</span><br /><small>{GEMINI_RATIO_TO_SIZE[geminiSettings.ratio]?.[r.value]?.replace("x", "×") || ""}</small>
               </button>
             ))}
-          </div>
-          <div style={{ fontSize: "11px", color: "var(--text-dim)", marginTop: "4px", textAlign: "center" }}>
-            {GEMINI_RATIO_TO_SIZE[geminiSettings.ratio]?.[geminiSettings.res] || "1024x1024"}
           </div>
         </div>
         </>

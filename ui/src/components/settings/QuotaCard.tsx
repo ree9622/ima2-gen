@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n";
 
 interface QuotaWindow {
@@ -76,8 +76,11 @@ function QuotaBar({ window: w }: { window: QuotaWindow }) {
 
 function SwitchAccountButton({ provider, onComplete }: { provider: "grok" | "codex"; onComplete: () => void }) {
   const [state, setState] = useState<SwitchState>({ phase: "idle" });
+  const switching = useRef(false);
 
   const startSwitch = useCallback(async () => {
+    if (switching.current) return;
+    switching.current = true;
     setState({ phase: "starting" });
     try {
       const res = await fetch("/api/auth/switch", {
@@ -94,6 +97,7 @@ function SwitchAccountButton({ provider, onComplete }: { provider: "grok" | "cod
       setState({ phase: "waiting", ...data });
       window.open(data.verificationUrl, "_blank");
     } catch (e) {
+      switching.current = false;
       setState({ phase: "error", error: (e as Error).message });
     }
   }, [provider]);
@@ -176,7 +180,7 @@ function SwitchAccountButton({ provider, onComplete }: { provider: "grok" | "cod
         type="button"
         className="settings-action-btn"
         style={{ width: "100%", fontSize: "11px" }}
-        onClick={() => setState({ phase: "idle" })}
+        onClick={() => { switching.current = false; setState({ phase: "idle" }); }}
       >
         Try again
       </button>

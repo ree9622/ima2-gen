@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -22,16 +23,18 @@ interface AuthSession {
   deviceCode?: string;
 }
 
+const MAX_CONCURRENT_SESSIONS = 20;
 const sessions = new Map<string, AuthSession>();
 
 function sid(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  return randomBytes(16).toString("hex");
 }
 
 function cleanup(id: string) {
   const s = sessions.get(id);
   if (s?.pollTimer) clearInterval(s.pollTimer);
   if (s?.child && !s.child.killed) s.child.kill();
+  if (s) delete s.deviceCode;
   setTimeout(() => sessions.delete(id), 120_000);
 }
 
@@ -203,6 +206,9 @@ export function registerAuthRoutes(app: Express) {
     const provider = req.body?.provider;
     if (provider !== "grok" && provider !== "codex") {
       return res.status(400).json({ error: "provider must be grok or codex" });
+    }
+    if (sessions.size >= MAX_CONCURRENT_SESSIONS) {
+      return res.status(429).json({ error: "Too many pending auth sessions" });
     }
     try {
       const result = provider === "grok"

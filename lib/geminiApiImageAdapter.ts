@@ -111,8 +111,8 @@ export async function generateViaGeminiApi(
     url = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${apiModelId}:generateContent`;
     authHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
   } else {
-    url = `https://generativelanguage.googleapis.com/v1beta/models/${apiModelId}:generateContent?key=${apiKey}`;
-    authHeaders = { "Content-Type": "application/json" };
+    url = `https://generativelanguage.googleapis.com/v1beta/models/${apiModelId}:generateContent`;
+    authHeaders = { "Content-Type": "application/json", "x-goog-api-key": apiKey! };
   }
 
   const imageParams = parseGeminiImageParams(options.size);

@@ -17,6 +17,7 @@ interface QuotaResult {
 
 interface QuotaResponse {
   codex?: QuotaResult;
+  grok?: QuotaResult;
 }
 
 function barColor(pct: number): string {
@@ -81,9 +82,14 @@ export function QuotaCard() {
   }, []);
 
   const codex = data?.codex;
+  const grok = data?.grok;
   const hasCodexWindows = codex?.windows && codex.windows.length > 0;
+  const hasGrokWindows = grok?.windows && grok.windows.length > 0;
   const accountLine = codex?.account
     ? [codex.account.email, codex.account.plan].filter(Boolean).join(" · ")
+    : null;
+  const grokAccountLine = grok?.account
+    ? [grok.account.email, grok.account.plan].filter(Boolean).join(" · ")
     : null;
 
   return (
@@ -116,15 +122,24 @@ export function QuotaCard() {
           <div className="quota-card__header">
             <GrokIcon />
             <strong>Grok</strong>
+            {grokAccountLine && <span className="quota-card__account">{grokAccountLine}</span>}
           </div>
-          <a
-            href="https://grok.com/?_s=usage"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="settings-action-btn"
-          >
-            {t("settings.quota.grokUsageLink")}
-          </a>
+          {loading ? (
+            <span className="quota-card__loading">{t("common.loading")}</span>
+          ) : hasGrokWindows ? (
+            grok!.windows.map((w) => <QuotaBar key={w.label} window={w} />)
+          ) : grok?.authenticated === false ? (
+            <span className="quota-card__hint">Run `progrok login` to enable billing bar</span>
+          ) : (
+            <a
+              href="https://grok.com/?_s=usage"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="settings-action-btn"
+            >
+              {t("settings.quota.grokUsageLink")}
+            </a>
+          )}
         </div>
       </div>
     </article>

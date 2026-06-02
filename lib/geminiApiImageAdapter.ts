@@ -24,27 +24,27 @@ const MODEL_ID_MAP: Record<string, string> = {
 
 const GEMINI_TIMEOUT_MS = 120_000;
 
-function parseGeminiImageParams(size?: string): { aspectRatio: string; imageSize: string } {
-  if (!size || size === "auto" || size === "1024x1024") return { aspectRatio: "1:1", imageSize: "1K" };
+function parseGeminiImageParams(size?: string): { aspectRatio: number; imageSize: number } {
+  if (!size || size === "auto" || size === "1024x1024") return { aspectRatio: 1, imageSize: 0 };
   const match = size.match(/^(\d+)x(\d+)$/);
-  if (!match) return { aspectRatio: "1:1", imageSize: "1K" };
+  if (!match) return { aspectRatio: 1, imageSize: 0 };
   const w = Number(match[1]);
   const h = Number(match[2]);
   const ratio = w / h;
-  const ratioMap: Array<[string, number]> = [
-    ["1:1", 1], ["1:4", 0.25], ["1:8", 0.125], ["2:3", 2/3], ["3:2", 3/2],
-    ["3:4", 3/4], ["4:1", 4], ["4:3", 4/3], ["4:5", 4/5], ["5:4", 5/4],
-    ["8:1", 8], ["9:16", 9/16], ["16:9", 16/9], ["21:9", 21/9],
+  const ratioMap: Array<[number, number]> = [
+    [1, 1], [2, 2/3], [3, 3/2], [4, 3/4], [5, 4/3],
+    [6, 4/5], [7, 5/4], [8, 9/16], [9, 16/9], [10, 21/9],
+    [11, 1/8], [12, 8], [13, 1/4], [14, 4],
   ];
-  let bestRatio = "1:1";
+  let bestEnum = 1;
   let bestDist = Infinity;
-  for (const [label, val] of ratioMap) {
+  for (const [enumVal, val] of ratioMap) {
     const dist = Math.abs(ratio - val);
-    if (dist < bestDist) { bestDist = dist; bestRatio = label; }
+    if (dist < bestDist) { bestDist = dist; bestEnum = enumVal; }
   }
   const maxDim = Math.max(w, h);
-  const imageSize = maxDim <= 512 ? "512" : maxDim <= 1024 ? "1K" : maxDim <= 2048 ? "2K" : "4K";
-  return { aspectRatio: bestRatio, imageSize };
+  const imageSize = maxDim <= 512 ? 1 : maxDim <= 1024 ? 2 : maxDim <= 2048 ? 3 : 4;
+  return { aspectRatio: bestEnum, imageSize };
 }
 
 function geminiApiError(message: string, status: number, code: string): Error {
@@ -118,12 +118,12 @@ export async function generateViaGeminiApi(
   const imageParams = parseGeminiImageParams(options.size);
   const body = {
     contents: buildContents(prompt, references),
-    generationConfig: {
-      responseModalities: ["TEXT", "IMAGE"],
-      responseFormat: {
+    generation_config: {
+      response_modalities: ["TEXT", "IMAGE"],
+      response_format: {
         image: {
-          aspectRatio: imageParams.aspectRatio,
-          imageSize: imageParams.imageSize,
+          aspect_ratio: imageParams.aspectRatio,
+          image_size: imageParams.imageSize,
         },
       },
     },

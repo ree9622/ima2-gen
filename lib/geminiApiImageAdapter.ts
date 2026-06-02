@@ -118,6 +118,9 @@ export async function generateViaGeminiApi(
   }
 
   const imageParams = parseGeminiImageParams(options.size);
+  // NOTE: Vertex (aiplatform.googleapis.com) rejects the response_format field that the
+  // direct Gemini API accepts, so the Vertex path can only request modalities — output
+  // defaults to 1K/1:1 regardless of requested size. Direct API path honors aspect/size.
   const generationConfig: Record<string, unknown> = useVertex
     ? { responseModalities: ["TEXT", "IMAGE"] }
     : {

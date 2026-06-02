@@ -69,6 +69,7 @@ export function buildIma2Capabilities({
         supported: toArray(appConfig.imageModels.valid),
         unsupported: toArray(appConfig.imageModels.unsupported),
         grokSupported: ["grok-imagine-image", "grok-imagine-image-quality"],
+        geminiSupported: ["nano-banana-2", "nano-banana-pro"],
       },
       videoModels: {
         supported: ["grok-imagine-video", "grok-imagine-video-1.5-preview"],

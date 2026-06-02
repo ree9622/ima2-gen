@@ -99,6 +99,7 @@ The goal is complete only when:
 | Grok OAuth image | PASS | `/Users/jun/.ima2/generated/ima2-20260602-214647.png` |
 | Gemini OAuth / agy image | PASS | `/Users/jun/.ima2/generated/ima2-20260602-214932.png` |
 | Grok OAuth video V1.5 | PASS | `/Users/jun/.ima2/generated/1780404663937_ea7f47c6.mp4` |
+| Grok OAuth video V/Fast | PASS | `/Users/jun/.ima2/generated/1780405778668_3c328e3f.mp4` |
 
 ### Verification Commands
 
@@ -112,6 +113,8 @@ The goal is complete only when:
 | `npm run build:server` | PASS |
 | `npm run build:cli` | PASS |
 | `npm audit --audit-level=high` | PASS, no high/critical findings |
+| QA-07 targeted secret scan | PASS, no matches for query-string key/token leakage or raw token/apiKey console/logger output |
+| QA-08 live route probes | PASS, `/api/providers`, `/api/capabilities`, `/api/quota`, `/api/auth/switch`, `/api/auth/switch/:sessionId`, and `/api/history/backfill-thumbnails` returned expected shapes |
 
 ### UI Automation Evidence
 
@@ -123,3 +126,8 @@ The goal is complete only when:
 - Exact precondition blocker: current Computer Use MCP transport is unavailable in this session.
 - Supplemental CDP verification confirmed the Grok video V/V1.5 controls and generated-video result UI.
 - Supplemental screenshot: `/Users/jun/.cli-jaw-3470/screenshots/screenshot_1780404702061.png`.
+- CDP screenshot confirmed model picker, provider grid, GPT controls, and generated video result UI: `/Users/jun/.cli-jaw-3470/screenshots/screenshot_1780405445250.png`.
+- CDP screenshot confirmed Grok switch-account waiting state with user code, `Open tab again`, and `Copy link`: `/Users/jun/.cli-jaw-3470/screenshots/screenshot_1780405600996.png`.
+- CDP screenshot confirmed Codex switch-account waiting state with `Open tab again` and `Copy link`: `/Users/jun/.cli-jaw-3470/screenshots/screenshot_1780405624864.png`.
+- CDP walkthrough verified reload/persistence, gallery/history access, video/image thumbnail rails, Grok image controls, and Gemini API controls.
+- Gemini API 21:9 + 4K selection showed `4K 6336×2688` and did not trigger a GPT pixel-limit modal.

@@ -2189,6 +2189,22 @@ body {
   font-size: 12px;
   text-align: center;
 }
+.multimode-sequence__skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--amber) 18%, var(--surface-2)) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+.multimode-sequence__img-fade {
+  animation: thumb-fade-in 200ms ease forwards;
+}
 
 .action-btn {
   padding: 8px 16px;
@@ -2432,6 +2448,59 @@ body {
 .history-thumb--add:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* Gallery skeleton shimmer */
+.history-thumb--skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--amber) 18%, var(--surface-2)) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  opacity: 1;
+}
+.history-thumb--fade-in {
+  animation: thumb-fade-in 200ms ease forwards;
+}
+@keyframes thumb-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 0.6; transform: scale(1); }
+}
+
+/* Collection thumbnail (mini 2x2 grid) */
+.history-thumb--collection,
+.history-thumb--collection-skeleton {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--border);
+  cursor: pointer;
+  opacity: 1;
+}
+.history-thumb--collection-skeleton {
+  border: 1px solid var(--border);
+}
+.collection-mini {
+  aspect-ratio: 1/1;
+  width: 100%;
+  object-fit: cover;
+}
+.collection-mini--skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--amber) 18%, var(--surface-2)) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 
 /* ── Prompt composer (chat-style w/ inline references) ── */

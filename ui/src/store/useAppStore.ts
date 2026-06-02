@@ -1633,16 +1633,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Polling backoff: when there are no local jobs to track AND no active
       // generations counter, stop the interval entirely. Polling is restarted
       // from generation entry points (startGeneration / reconcileInflight).
-      if (cur.length === 0 && get().activeGenerations === 0) {
+      const shouldStop = cur.length === 0 && get().activeGenerations === 0;
+      if (shouldStop) {
         if (w.__ima2InflightTimer) {
           clearInterval(w.__ima2InflightTimer);
           w.__ima2InflightTimer = undefined;
         }
-        return;
+        // Fall through to run one final history fetch so newly completed
+        // items are picked up without requiring a manual F5 refresh (#93).
       }
       let scopedActiveServerIds = new Set<string>();
-      // Merge server-side phase info so the spinner label reflects real progress
-      try {
+      // Merge server-side phase info so the spinner label reflects real progress.
+      // Skip when doing a final grace tick — no jobs to query.
+      if (!shouldStop) try {
         const scopes = getInflightQueryScopes(get());
         const { jobs, terminalJobs = [] } = await fetchInflightScopes(scopes);
         scopedActiveServerIds = new Set(jobs.map((j) => j.requestId));
@@ -3454,10 +3457,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       shouldRestoreComposer && target && !isComposerDirty
         ? getHistoryComposerPatch(target)
         : {};
+    const previewId = get().multimodePreviewFlightId;
+    const activeSeq = previewId ? get().multimodeSequences[previewId] : null;
+    const isWithinGrid = activeSeq && target && activeSeq.images.some(
+      (img) => img.filename === target.filename,
+    );
     set({
       currentImage: target,
       unseenGeneratedCount: 0,
-      multimodePreviewFlightId: null,
+      multimodePreviewFlightId: isWithinGrid ? previewId : null,
       ...composerPatch,
     });
   },

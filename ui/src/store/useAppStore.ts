@@ -3106,7 +3106,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const grokModel = "grok-imagine-image";
       saveImageModel(grokModel);
       set({ provider, imageModel: grokModel });
-    } else if (provider !== "grok" && isGrokImageModel(currentModel)) {
+    } else if ((provider === "agy" || provider === "gemini-api") && !isGeminiImageModel(currentModel)) {
+      const geminiModel = provider === "gemini-api" ? "nano-banana-pro" : "nano-banana-2";
+      saveImageModel(geminiModel);
+      set({ provider, imageModel: geminiModel });
+    } else if (provider !== "grok" && provider !== "agy" && provider !== "gemini-api" && (isGrokImageModel(currentModel) || isGeminiImageModel(currentModel))) {
       set({ provider, imageModel: DEFAULT_IMAGE_MODEL });
       saveImageModel(DEFAULT_IMAGE_MODEL);
     } else {

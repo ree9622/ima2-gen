@@ -229,11 +229,11 @@ export function SettingsWorkspace() {
                   </article>
                   <GrokPlannerSelect />
                 </>
-              ) : provider === "agy" ? (
+              ) : provider === "agy" || provider === "gemini-api" ? (
                 <article className="settings-row">
                   <div className="settings-row__copy">
-                    <h4>Gemini (agy)</h4>
-                    <p>1024x1024 fixed output, JPEG format, max 3 reference images. No web search, no quality/size control.</p>
+                    <h4>{provider === "gemini-api" ? "Gemini API" : t("provider.agyCompatTitle")}</h4>
+                    <p>{provider === "gemini-api" ? "Google Gemini API direct. Supports nano-banana-2 (Flash) and nano-banana-pro (Pro). 1024x1024 default, JPEG output." : t("provider.agyCompatBodyLong")}</p>
                   </div>
                 </article>
               ) : (

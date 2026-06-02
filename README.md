@@ -83,16 +83,6 @@ npm install -g ima2-gen@latest
 
 Ctrl+C now performs a clean shutdown — closing the database, stopping child processes, and releasing file locks. On older versions (< 1.1.22) or if you see `EBUSY` on Windows, use the install script which handles stale process cleanup automatically.
 
-## What's New in v1.1.22
-
-- **Storyboard mode**: composer toggle for maintaining character/scene continuity across sequential frames. Works in both image and video pipelines.
-- **Planner model selection**: choose the Grok planner model (grok-4.3 default) from video settings or via `--planner-model` CLI flag.
-- **Video frame copy**: First/Mid/Last frame extraction buttons on video results for easy keyframe copying.
-- **Multi-character dialogue**: video/image planners now identify characters by visual appearance (clothing + physique + props) instead of names, improving dialogue attribution.
-- **Graceful shutdown**: Ctrl+C now properly closes DB, server sockets, and child processes — fixes Windows EBUSY on npm update.
-- **Cross-platform install scripts**: one-click install for macOS, Windows, and Linux (auto-detects nvm/fnm/brew/winget).
-- **Atomic sidecar writes**: metadata files now use temp+rename to prevent corruption on crash.
-
 ## What It Does
 
 - **Classic mode**: generate, edit, reuse the current image, paste references, and continue from history.

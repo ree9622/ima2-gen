@@ -175,6 +175,27 @@ export function GenerationControlsPanel() {
       ) : isGeminiApi ? (
         <>
         <div className="option-group">
+          <div className="option-group__title">MODEL</div>
+          <div className="option-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+            <button
+              type="button"
+              className={`option-btn${imageModel === "nano-banana-2" ? " active" : ""}`}
+              onClick={() => setImageModel("nano-banana-2")}
+              style={{ lineHeight: "1.3" }}
+            >
+              <span>Nano</span><br /><span>Banana 2</span>
+            </button>
+            <button
+              type="button"
+              className={`option-btn${imageModel === "nano-banana-pro" ? " active" : ""}`}
+              onClick={() => setImageModel("nano-banana-pro")}
+              style={{ lineHeight: "1.3" }}
+            >
+              <span>Nano</span><br /><span>Banana Pro</span>
+            </button>
+          </div>
+        </div>
+        <div className="option-group">
           <div className="option-group__title">{t("size.grokAspectTitle") || "Aspect Ratio"}</div>
           <div className="option-row" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px" }}>
             {GEMINI_ASPECT_RATIOS.map((ar) => (

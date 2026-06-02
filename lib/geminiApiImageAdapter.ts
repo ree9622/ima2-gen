@@ -24,27 +24,27 @@ const MODEL_ID_MAP: Record<string, string> = {
 
 const GEMINI_TIMEOUT_MS = 120_000;
 
-function parseGeminiImageParams(size?: string): { aspectRatio: number; imageSize: number } {
-  if (!size || size === "auto" || size === "1024x1024") return { aspectRatio: 1, imageSize: 0 };
+function parseGeminiImageParams(size?: string): { aspectRatio: string; imageSize: string } {
+  if (!size || size === "auto" || size === "1024x1024") return { aspectRatio: "1:1", imageSize: "1K" };
   const match = size.match(/^(\d+)x(\d+)$/);
-  if (!match) return { aspectRatio: 1, imageSize: 0 };
+  if (!match) return { aspectRatio: "1:1", imageSize: "1K" };
   const w = Number(match[1]);
   const h = Number(match[2]);
   const ratio = w / h;
-  const ratioMap: Array<[number, number]> = [
-    [1, 1], [2, 2/3], [3, 3/2], [4, 3/4], [5, 4/3],
-    [6, 4/5], [7, 5/4], [8, 9/16], [9, 16/9], [10, 21/9],
-    [11, 1/8], [12, 8], [13, 1/4], [14, 4],
+  const ratioMap: Array<[string, number]> = [
+    ["1:1", 1], ["2:3", 2/3], ["3:2", 3/2], ["3:4", 3/4], ["4:3", 4/3],
+    ["4:5", 4/5], ["5:4", 5/4], ["9:16", 9/16], ["16:9", 16/9], ["21:9", 21/9],
+    ["1:8", 1/8], ["8:1", 8], ["1:4", 1/4], ["4:1", 4],
   ];
-  let bestEnum = 1;
+  let bestLabel = "1:1";
   let bestDist = Infinity;
-  for (const [enumVal, val] of ratioMap) {
+  for (const [label, val] of ratioMap) {
     const dist = Math.abs(ratio - val);
-    if (dist < bestDist) { bestDist = dist; bestEnum = enumVal; }
+    if (dist < bestDist) { bestDist = dist; bestLabel = label; }
   }
   const maxDim = Math.max(w, h);
-  const imageSize = maxDim <= 512 ? 1 : maxDim <= 1024 ? 2 : maxDim <= 2048 ? 3 : 4;
-  return { aspectRatio: bestEnum, imageSize };
+  const imageSize = maxDim <= 512 ? "512" : maxDim <= 1024 ? "1K" : maxDim <= 2048 ? "2K" : "4K";
+  return { aspectRatio: bestLabel, imageSize };
 }
 
 function geminiApiError(message: string, status: number, code: string): Error {
@@ -118,19 +118,15 @@ export async function generateViaGeminiApi(
   }
 
   const imageParams = parseGeminiImageParams(options.size);
-  // NOTE: Vertex (aiplatform.googleapis.com) rejects the response_format field that the
-  // direct Gemini API accepts, so the Vertex path can only request modalities — output
-  // defaults to 1K/1:1 regardless of requested size. Direct API path honors aspect/size.
+  const imageConfig = { aspect_ratio: imageParams.aspectRatio, image_size: imageParams.imageSize };
   const generationConfig: Record<string, unknown> = useVertex
-    ? { responseModalities: ["TEXT", "IMAGE"] }
+    ? {
+        responseModalities: ["TEXT", "IMAGE"],
+        responseFormat: { image: imageConfig },
+      }
     : {
         response_modalities: ["TEXT", "IMAGE"],
-        response_format: {
-          image: {
-            aspect_ratio: imageParams.aspectRatio,
-            image_size: imageParams.imageSize,
-          },
-        },
+        response_format: { image: imageConfig },
       };
   const configKey = useVertex ? "generationConfig" : "generation_config";
   const body = { contents: buildContents(prompt, references), [configKey]: generationConfig };

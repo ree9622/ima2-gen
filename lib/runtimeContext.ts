@@ -25,6 +25,16 @@ export interface RuntimeContext {
   serverConfiguredPort: number;
   serverUrl: string;
   startedAt: number;
+  xaiApiKey: string | undefined;
+  xaiApiKeySource: ApiKeySource;
+  hasXaiApiKey: boolean;
+  geminiApiKey: string | undefined;
+  geminiApiKeySource: ApiKeySource;
+  hasGeminiApiKey: boolean;
+  vertexServiceAccountJson: string | undefined;
+  vertexProjectId: string | undefined;
+  hasVertexKey: boolean;
+  geminiAuthMode?: string;
 }
 
 /** A partial used during boot when only some fields are known, or by callers
@@ -90,6 +100,15 @@ export function requireRuntimeContext(ctx: RouteRuntimeContext | undefined): Run
     target.serverUrl = `http://localhost:${port}`;
   }
   if (target.startedAt === undefined) target.startedAt = Date.now();
+  if (target.xaiApiKey === undefined && !Object.prototype.hasOwnProperty.call(target, 'xaiApiKey')) target.xaiApiKey = undefined;
+  if (target.hasXaiApiKey === undefined) target.hasXaiApiKey = false;
+  if (target.xaiApiKeySource === undefined) target.xaiApiKeySource = undefined;
+  if (target.geminiApiKey === undefined && !Object.prototype.hasOwnProperty.call(target, 'geminiApiKey')) target.geminiApiKey = undefined;
+  if (target.hasGeminiApiKey === undefined) target.hasGeminiApiKey = false;
+  if (target.geminiApiKeySource === undefined) target.geminiApiKeySource = undefined;
+  if (target.vertexServiceAccountJson === undefined && !Object.prototype.hasOwnProperty.call(target, 'vertexServiceAccountJson')) target.vertexServiceAccountJson = undefined;
+  if (target.vertexProjectId === undefined) target.vertexProjectId = undefined;
+  if (target.hasVertexKey === undefined) target.hasVertexKey = false;
   return target as unknown as RuntimeContext;
 }
 
@@ -141,6 +160,15 @@ export function createTestRuntimeContext(over: RuntimeContextOverrides = {}): Ru
     serverConfiguredPort: 11783,
     serverUrl: "http://127.0.0.1:11783",
     startedAt: now,
+    xaiApiKey: undefined,
+    xaiApiKeySource: undefined,
+    hasXaiApiKey: false,
+    geminiApiKey: undefined,
+    geminiApiKeySource: undefined,
+    hasGeminiApiKey: false,
+    vertexServiceAccountJson: undefined,
+    vertexProjectId: undefined,
+    hasVertexKey: false,
   };
   return { ...base, ...over };
 }

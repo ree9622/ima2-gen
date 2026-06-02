@@ -59,6 +59,86 @@ async function loadApiKey(): Promise<ApiKeyLoadResult> {
   return { apiKey: null, apiKeySource: "none" };
 }
 
+async function loadXaiApiKey(): Promise<ApiKeyLoadResult> {
+  if (process.env.XAI_API_KEY) {
+    return { apiKey: process.env.XAI_API_KEY, apiKeySource: "env" };
+  }
+  const candidates = [
+    config.storage.configFile,
+    join(rootDir, ".ima2", "config.json"),
+  ];
+  for (const cfgPath of candidates) {
+    if (!existsSync(cfgPath)) continue;
+    try {
+      const cfg = JSON.parse(await readFile(cfgPath, "utf-8")) as { xaiApiKey?: string };
+      if (cfg.xaiApiKey) return { apiKey: cfg.xaiApiKey, apiKeySource: "config" };
+    } catch {}
+  }
+  return { apiKey: null, apiKeySource: "none" };
+}
+
+async function loadGeminiApiKey(): Promise<ApiKeyLoadResult> {
+  if (process.env.GEMINI_API_KEY) {
+    return { apiKey: process.env.GEMINI_API_KEY, apiKeySource: "env" };
+  }
+  const candidates = [
+    config.storage.configFile,
+    join(rootDir, ".ima2", "config.json"),
+  ];
+  for (const cfgPath of candidates) {
+    if (!existsSync(cfgPath)) continue;
+    try {
+      const cfg = JSON.parse(await readFile(cfgPath, "utf-8")) as { geminiApiKey?: string };
+      if (cfg.geminiApiKey) return { apiKey: cfg.geminiApiKey, apiKeySource: "config" };
+    } catch {}
+  }
+  return { apiKey: null, apiKeySource: "none" };
+}
+
+type VertexKeyLoadResult = { json: string | null; projectId: string | null; source: ApiKeySource };
+
+async function loadVertexKey(): Promise<VertexKeyLoadResult> {
+  const envJson = process.env.VERTEX_SERVICE_ACCOUNT_JSON;
+  if (envJson) {
+    try {
+      const parsed = JSON.parse(envJson);
+      return { json: envJson, projectId: parsed.project_id || null, source: "env" };
+    } catch {
+      return { json: null, projectId: null, source: "none" };
+    }
+  }
+  const candidates = [
+    config.storage.configFile,
+    join(rootDir, ".ima2", "config.json"),
+  ];
+  for (const cfgPath of candidates) {
+    if (!existsSync(cfgPath)) continue;
+    try {
+      const cfg = JSON.parse(await readFile(cfgPath, "utf-8")) as { vertexServiceAccountJson?: string };
+      if (cfg.vertexServiceAccountJson) {
+        const parsed = JSON.parse(cfg.vertexServiceAccountJson);
+        return { json: cfg.vertexServiceAccountJson, projectId: parsed.project_id || null, source: "config" };
+      }
+    } catch {}
+  }
+  return { json: null, projectId: null, source: "none" };
+}
+
+async function loadGeminiAuthMode(): Promise<string | undefined> {
+  const candidates = [
+    config.storage.configFile,
+    join(rootDir, ".ima2", "config.json"),
+  ];
+  for (const cfgPath of candidates) {
+    if (!existsSync(cfgPath)) continue;
+    try {
+      const cfg = JSON.parse(await readFile(cfgPath, "utf-8")) as { geminiAuthMode?: string };
+      if (cfg.geminiAuthMode === "vertex" || cfg.geminiAuthMode === "apikey") return cfg.geminiAuthMode;
+    } catch {}
+  }
+  return undefined;
+}
+
 async function createOpenAI(apiKey: string | null | undefined) {
   if (!apiKey) return null;
   const OpenAI = (await import("openai")).default;
@@ -169,6 +249,10 @@ export async function createRuntimeContext(overrides: StartServerOverrides = {})
           apiKeySource: overrides.apiKeySource ?? (overrides.apiKey ? "env" : "none"),
         }
       : await loadApiKey();
+  const loadedXaiKey = await loadXaiApiKey();
+  const loadedGeminiKey = await loadGeminiApiKey();
+  const loadedVertexKey = await loadVertexKey();
+  const geminiAuthMode = await loadGeminiAuthMode();
   const apiKey = loadedKey.apiKey;
   const openai = overrides.openai ?? await createOpenAI(apiKey);
   const oauthPort = config.oauth.proxyPort;
@@ -196,6 +280,16 @@ export async function createRuntimeContext(overrides: StartServerOverrides = {})
     openai,
     startedAt: overrides.startedAt ?? Date.now(),
     packageVersion: overrides.packageVersion ?? readPackageVersion(),
+    xaiApiKey: loadedXaiKey.apiKey ?? undefined,
+    xaiApiKeySource: loadedXaiKey.apiKeySource as ApiKeySource,
+    hasXaiApiKey: !!loadedXaiKey.apiKey,
+    geminiApiKey: loadedGeminiKey.apiKey ?? undefined,
+    geminiApiKeySource: loadedGeminiKey.apiKeySource as ApiKeySource,
+    hasGeminiApiKey: !!loadedGeminiKey.apiKey,
+    vertexServiceAccountJson: loadedVertexKey.json ?? undefined,
+    vertexProjectId: loadedVertexKey.projectId ?? undefined,
+    hasVertexKey: !!loadedVertexKey.json,
+    geminiAuthMode,
     oauthReadyPromise: oauthReadyPromise as unknown as Promise<void>,
     markGrokProxyPort: ({ url, port }: { url?: string; port?: number } = {}) => {
       if (port) ctx.grokActualPort = port;
@@ -214,6 +308,12 @@ export async function createRuntimeContext(overrides: StartServerOverrides = {})
     },
   };
   if (!config.oauth.autoStart) ctx.markOAuthReady({ url: ctx.oauthUrl, port: ctx.oauthPort });
+  if (loadedVertexKey.json) {
+    try {
+      const { initVertexAuth } = await import("./lib/vertexAuth.js");
+      initVertexAuth(loadedVertexKey.json);
+    } catch { /* vertex init failure is non-fatal */ }
+  }
   return ctx;
 }
 
@@ -292,6 +392,39 @@ export async function startServer(overrides: StartServerOverrides = {}) {
     const err = errInfo(e);
     console.error("[db] bootstrap failed:", err.message);
   }
+
+  // Background thumbnail backfill for updated users
+  (async () => {
+    try {
+      const { readdir } = await import("node:fs/promises");
+      const { ensureVideoThumbnail } = await import("./lib/videoThumb.js");
+      const { generateImageThumbnail, imageThumbExists } = await import("./lib/imageThumb.js");
+      const dir = ctx.config.storage.generatedDir;
+      const files = await readdir(dir);
+      const media = files.filter((f: string) => /\.(png|jpe?g|webp|mp4)$/i.test(f) && !f.endsWith(".thumb.jpg"));
+      let created = 0;
+      for (const f of media) {
+        try {
+          if (/\.mp4$/i.test(f)) {
+            await ensureVideoThumbnail(dir, f);
+            created++;
+          } else {
+            const full = join(dir, f);
+            if (await imageThumbExists(full)) continue;
+            await generateImageThumbnail(full);
+            created++;
+          }
+        } catch { /* skip individual failures */ }
+      }
+      if (created > 0) {
+        console.log(`[thumbs] backfill: ${created} thumbnails generated for ${media.length} media files`);
+        const { invalidateHistoryIndex } = await import("./lib/historyIndex.js");
+        invalidateHistoryIndex();
+      }
+    } catch (e) {
+      console.warn("[thumbs] backfill failed:", e instanceof Error ? e.message : e);
+    }
+  })();
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     console.error("[server] Failed to start:", err?.message || err);

@@ -61,7 +61,7 @@ function resolveGeminiModelId(model: string): string {
 function buildContents(
   prompt: string,
   references: GeminiApiRefDetail[],
-): Array<{ parts: unknown[] }> {
+): Array<{ role: string; parts: unknown[] }> {
   const parts: unknown[] = [];
 
   // Add reference images first (if any)
@@ -78,7 +78,7 @@ function buildContents(
   // Add text prompt
   parts.push({ text: prompt });
 
-  return [{ parts }];
+  return [{ role: "user", parts }];
 }
 
 export async function generateViaGeminiApi(
@@ -129,7 +129,8 @@ export async function generateViaGeminiApi(
           },
         },
       };
-  const body = { contents: buildContents(prompt, references), generation_config: generationConfig };
+  const configKey = useVertex ? "generationConfig" : "generation_config";
+  const body = { contents: buildContents(prompt, references), [configKey]: generationConfig };
 
   logEvent("gemini-api", "generate:start", {
     requestId: options.requestId,

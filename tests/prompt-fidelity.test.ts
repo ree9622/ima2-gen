@@ -13,6 +13,7 @@ import {
   MULTIMODE_DEVELOPER_PROMPT,
   MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT,
   PROMPT_FIDELITY_SUFFIX,
+  buildMultimodeSequencePrompt,
   buildEditTextPrompt,
   buildUserTextPrompt,
 } from "../lib/oauthProxy.ts";
@@ -92,9 +93,26 @@ for (const prompt of [GENERATE_DEVELOPER_PROMPT, EDIT_DEVELOPER_PROMPT]) {
 
 for (const prompt of [MULTIMODE_DEVELOPER_PROMPT, MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT]) {
   assert.ok(prompt.includes("separate image_generation_call outputs"), "multimode prompt should require separate image calls");
+  assert.ok(prompt.includes("same complete user prompt"), "multimode prompt should repeat the same complete prompt");
+  assert.ok(prompt.includes("not part of the visual prompt"), "multimode count must not leak into image content");
+  assert.ok(prompt.includes("Do not split"), "multimode prompt should not split user content across outputs");
+  assert.ok(prompt.includes("preserve that request inside every generated output"), "multimode should keep requested quantities in every output");
+  assert.ok(!prompt.includes("one per stage"), "multimode should not use stage-splitting language");
   assert.ok(prompt.includes(SAFETY_INTENT_POLICY), "multimode prompt should include safety intent policy");
   assert.ok(prompt.includes(VISIBLE_TEXT_LANGUAGE_POLICY), "multimode prompt should include visible text language policy");
 }
+
+const multimodePrompt = buildMultimodeSequencePrompt("흰 배경에 도형 다른 색 다른 모양을 한이미지의 하나씩 네개를 그려줘", 4, {
+  webSearchEnabled: false,
+});
+assert.ok(multimodePrompt.includes("same complete user prompt"));
+assert.ok(multimodePrompt.includes("Do not split the user's requested subjects"));
+assert.ok(multimodePrompt.includes("If the prompt asks for multiple items inside one image"));
+assert.ok(multimodePrompt.includes("keep those multiple items inside every output"));
+assert.ok(multimodePrompt.includes("Do not create one combined image_generation_call"));
+assert.ok(!multimodePrompt.includes("stage 1"));
+assert.ok(!multimodePrompt.includes("stage 2"));
+assert.ok(!multimodePrompt.includes("Create a sequence"));
 
 assert.match(responsesAdapterSrc, /MULTIMODE_DEVELOPER_PROMPT/);
 assert.match(responsesAdapterSrc, /MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT/);

@@ -65,8 +65,8 @@ export const EDIT_NO_SEARCH_DEVELOPER_PROMPT =
   SAFETY_INTENT_POLICY;
 
 export const MULTIMODE_DEVELOPER_PROMPT =
-  "You are generating a multimode image sequence. The selected value N is maxImages. You MUST create up to N separate image_generation_call outputs. Return separate image_generation_call outputs, one per stage, up to N. Invoke the image_generation tool separately once per stage. Each stage must be a separate generated image result. Do not satisfy this request with one image. Never collapse multiple stages into one image, collage, grid, contact sheet, storyboard sheet, or multi-panel single image. If you cannot complete all stages, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only. " +
-  "Preserve the user's prompt by default for every stage. If the prompt is visually sufficient, pass it through unchanged and do not search or add clarifiers. Use web_search only when factual visual accuracy is genuinely required and the prompt/context is insufficient; then incorporate only concrete findings as English clarifiers appended after the user's original text. " +
+  "You are generating a multimode batch. The selected value N is an output-count limit only, not part of the visual prompt. You MUST create up to N separate image_generation_call outputs. Invoke the image_generation tool separately once per output. Each output must independently satisfy the same complete user prompt. Do not split, divide, distribute, or sequence the user's requested subjects across outputs. If the user prompt asks for multiple items, quantities, panels, steps, or scenes, preserve that request inside every generated output instead of assigning one item to each output. Do not satisfy this request with one image_generation_call. Never collapse multiple requested outputs into one image. Do not create a collage. Do not create a grid. Do not create a contact sheet. Do not create a storyboard sheet. Do not put multiple panels inside one image. If you cannot complete all outputs, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only. " +
+  "Preserve the user's prompt by default for every output. If the prompt is visually sufficient, pass the same complete user prompt through unchanged for each output and do not search or add clarifiers. Use web_search only when factual visual accuracy is genuinely required and the prompt/context is insufficient; then incorporate only concrete findings as English clarifiers appended after the user's original text. " +
   REAL_PERSON_RESEARCH_DIRECTIVE +
   "\n\n" +
   VISIBLE_TEXT_LANGUAGE_POLICY +
@@ -74,7 +74,7 @@ export const MULTIMODE_DEVELOPER_PROMPT =
   SAFETY_INTENT_POLICY;
 
 export const MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT =
-  "You are generating a multimode image sequence. The selected value N is maxImages. You MUST create up to N separate image_generation_call outputs. Return separate image_generation_call outputs, one per stage, up to N. Invoke the image_generation tool separately once per stage. Each stage must be a separate generated image result. Do not satisfy this request with one image. Never collapse multiple stages into one image, collage, grid, contact sheet, storyboard sheet, or multi-panel single image. If you cannot complete all stages, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only.\n\n" +
+  "You are generating a multimode batch. The selected value N is an output-count limit only, not part of the visual prompt. You MUST create up to N separate image_generation_call outputs. Invoke the image_generation tool separately once per output. Each output must independently satisfy the same complete user prompt. Do not split, divide, distribute, or sequence the user's requested subjects across outputs. If the user prompt asks for multiple items, quantities, panels, steps, or scenes, preserve that request inside every generated output instead of assigning one item to each output. Do not satisfy this request with one image_generation_call. Never collapse multiple requested outputs into one image. Do not create a collage. Do not create a grid. Do not create a contact sheet. Do not create a storyboard sheet. Do not put multiple panels inside one image. If you cannot complete all outputs, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only.\n\n" +
   VISIBLE_TEXT_LANGUAGE_POLICY +
   "\n\n" +
   SAFETY_INTENT_POLICY;
@@ -90,19 +90,21 @@ export function buildUserTextPrompt(userPrompt: string | undefined, mode: string
 export function buildMultimodeSequencePrompt(userPrompt: string, maxImages: number, options: Record<string, unknown> = {}) {
   const n = Math.min(8, Math.max(1, Math.trunc(Number(maxImages) || 1)));
   const researchInstruction = resolveWebSearchEnabled(options)
-    ? [`If factual visual accuracy is required and the prompt/context is not already sufficient, use at least one concise web_search call for references before generating. If the prompt is already visually sufficient, do not search or add clarifiers; pass the user's prompt through for each stage.`]
+    ? [`If factual visual accuracy is required and the prompt/context is not already sufficient, use at least one concise web_search call for references before generating. If the prompt is already visually sufficient, do not search or add clarifiers; pass the same complete user prompt through for each output.`]
     : [];
   return [
-    `Create a sequence of up to ${n} separate generated images from this prompt.`,
-    `For image 1, invoke the image_generation tool for stage 1 only.`,
-    `For image 2, invoke the image_generation tool for stage 2 only.`,
-    `Repeat until ${n} separate image_generation_call outputs are produced.`,
-    `Do not create one combined image.`,
+    `Create up to ${n} separate image_generation_call outputs as independent variations from the same complete user prompt.`,
+    `The number ${n} is only the requested output count. Do not add it to the visual prompt and do not treat it as a requested subject count.`,
+    `For every output, invoke the image_generation tool with the same complete user prompt.`,
+    `Every output must independently satisfy the whole prompt.`,
+    `Do not split the user's requested subjects, quantities, steps, or scenes across outputs.`,
+    `If the prompt asks for multiple items inside one image, keep those multiple items inside every output.`,
+    `Do not create one combined image_generation_call for the whole batch.`,
     `Do not create a collage.`,
     `Do not create a grid.`,
     `Do not create a contact sheet.`,
     `Do not create a storyboard sheet.`,
-    `Do not put multiple panels inside one image.`,
+    `Do not put multiple panels inside one image to represent the batch.`,
     ...researchInstruction,
     "",
     "Prompt:",

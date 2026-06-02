@@ -56,7 +56,14 @@ export interface GrokReferenceImage {
   detectedMime?: string | null;
 }
 
-function getGrokEndpoint(ctx: RouteRuntimeContext, path = "/v1/images/generations"): { url: string; headers: Record<string, string> } {
+function getGrokEndpoint(ctx: RouteRuntimeContext, path = "/v1/images/generations", directApiKey?: string): { url: string; headers: Record<string, string> } {
+  if (directApiKey) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return {
+      url: `https://api.x.ai${normalizedPath}`,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${directApiKey}` },
+    };
+  }
   return {
     url: getGrokProxyUrl(ctx, path),
     headers: { "Content-Type": "application/json", Authorization: "Bearer dummy" },
@@ -132,8 +139,9 @@ export async function postGrokImages(
   payload: Record<string, unknown>,
   signal?: AbortSignal,
   path = "/v1/images/generations",
+  directApiKey?: string,
 ): Promise<GrokImageResponse> {
-  const { url, headers } = getGrokEndpoint(ctx, path);
+  const { url, headers } = getGrokEndpoint(ctx, path, directApiKey);
   const timeoutMs = getGrokTimeout(ctx);
 
   const { combinedSignal, timer } = withTimeoutSignal(signal, timeoutMs);
@@ -320,11 +328,11 @@ export function buildGrokSearchPayload(prompt: string, plannerModel = "grok-4.3"
 export async function searchGrokVisualContext(
   prompt: string,
   ctx: RouteRuntimeContext,
-  options: { signal?: AbortSignal; requestId?: string } = {},
+  options: { signal?: AbortSignal; requestId?: string; directApiKey?: string } = {},
 ): Promise<GrokSearchResult> {
   const planner = getPlannerConfig(ctx);
   const payload = buildGrokSearchPayload(prompt, planner.model);
-  const { url, headers } = getGrokEndpoint(ctx, "/v1/responses");
+  const { url, headers } = getGrokEndpoint(ctx, "/v1/responses", options.directApiKey);
   const { combinedSignal, timer } = withTimeoutSignal(options.signal, planner.timeoutMs);
 
   logEvent("grok", "search:start", { requestId: options.requestId, plannerModel: planner.model, promptChars: prompt.length });
@@ -391,12 +399,13 @@ export async function planGrokImage(
     requestId?: string;
     referenceCount?: number;
     references?: GrokReferenceImage[];
+    directApiKey?: string;
   } = {},
 ): Promise<GrokImagePlan> {
   const imageModel = options.model || (ctx.config as any).grokProvider?.defaultImageModel || "grok-imagine-image";
   const planner = getPlannerConfig(ctx);
   const sizeParams = mapSizeToGrokImageParams(options.size);
-  const search = await searchGrokVisualContext(prompt, ctx, { signal: options.signal, requestId: options.requestId });
+  const search = await searchGrokVisualContext(prompt, ctx, { signal: options.signal, requestId: options.requestId, directApiKey: options.directApiKey });
   const payload = buildGrokPlannerPayload(
     prompt,
     imageModel,
@@ -406,7 +415,7 @@ export async function planGrokImage(
     search.summary,
     options.references || options.referenceCount || 0,
   );
-  const { url, headers } = getGrokEndpoint(ctx, "/v1/chat/completions");
+  const { url, headers } = getGrokEndpoint(ctx, "/v1/chat/completions", options.directApiKey);
   const { combinedSignal, timer } = withTimeoutSignal(options.signal, planner.timeoutMs);
 
   logEvent("grok", "planner:start", { requestId: options.requestId, plannerModel: planner.model, imageModel, size: options.size });
@@ -459,13 +468,14 @@ export async function generateViaGrok(
     plannedPrompt?: string;
     webSearchCalls?: number;
     references?: GrokReferenceImage[];
+    directApiKey?: string;
   } = {},
 ): Promise<GrokGenerateResult> {
   const model = options.model || (ctx.config as any).grokProvider?.defaultImageModel || "grok-imagine-image";
   const references = options.references || [];
   const plan = options.plannedPrompt
     ? { prompt: options.plannedPrompt, model, webSearchCalls: options.webSearchCalls ?? 1 }
-    : await planGrokImage(prompt, ctx, { ...options, referenceCount: references.length });
+    : await planGrokImage(prompt, ctx, { ...options, referenceCount: references.length, directApiKey: options.directApiKey });
   const hasReferences = references.length > 0;
   const payload = hasReferences
     ? imageEditPayload(model, plan.prompt, references, options.size)
@@ -480,7 +490,7 @@ export async function generateViaGrok(
     size: options.size,
     refs: references.length,
   });
-  const result = await postGrokImages(ctx, payload, options.signal, endpoint);
+  const result = await postGrokImages(ctx, payload, options.signal, endpoint, options.directApiKey);
 
   if (!result.data?.[0]?.b64_json) {
     throw grokError("Grok returned empty image data", 502, "GROK_EMPTY_RESPONSE");
@@ -502,14 +512,14 @@ export async function editViaGrok(
   prompt: string,
   imageB64: string,
   ctx: RouteRuntimeContext,
-  options: { model?: string; size?: string; signal?: AbortSignal; requestId?: string } = {},
+  options: { model?: string; size?: string; signal?: AbortSignal; requestId?: string; directApiKey?: string } = {},
 ): Promise<GrokGenerateResult> {
   const model = options.model || (ctx.config as any).grokProvider?.defaultImageModel || "grok-imagine-image";
   const detectedInputMime = detectImageMimeFromB64(imageB64) || "image/png";
   const imageUrl = imageB64.startsWith("data:") ? imageB64 : `data:${detectedInputMime};base64,${imageB64}`;
   const payload: Record<string, unknown> = { model, prompt, n: 1, response_format: "b64_json", image: { type: "image_url", url: imageUrl }, ...mapSizeToGrokImageParams(options.size) };
   logEvent("grok", "edit:start", { requestId: options.requestId, model, promptChars: prompt.length });
-  const result = await postGrokImages(ctx, payload, options.signal, "/v1/images/edits");
+  const result = await postGrokImages(ctx, payload, options.signal, "/v1/images/edits", options.directApiKey);
   if (!result.data?.[0]?.b64_json) {
     throw grokError("Grok edit returned empty image data", 502, "GROK_EMPTY_RESPONSE");
   }

@@ -21,3 +21,7 @@ export function getGrokProxyUrl(ctx: RouteRuntimeContext = {}, path = "/v1"): st
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${getGrokProxyBaseUrl(ctx)}${normalizedPath}`;
 }
+
+export function getGrokDirectBaseUrl(): string {
+  return "https://api.x.ai";
+}

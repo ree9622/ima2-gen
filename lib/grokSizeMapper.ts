@@ -44,7 +44,7 @@ function parseSize(size: string): { w: number; h: number } | null {
 
 function aspectValue(aspect: string): number {
   const [w, h] = aspect.split(":").map(Number);
-  return w / h;
+  return Number.isFinite(h) && h !== 0 ? w / h : 1;
 }
 
 function closestAspect(w: number, h: number): string {
@@ -58,6 +58,19 @@ function closestAspect(w: number, h: number): string {
 
 export function mapSizeToGrokImageParams(size: string | null | undefined): GrokImageSizeParams {
   if (!size || size === "auto") return { aspect_ratio: "auto" };
+
+  // Native format from GrokSizePicker: "grok:<aspect_ratio>:<resolution>"
+  if (size.startsWith("grok:")) {
+    const parts = size.split(":");
+    if (parts.length < 3) return { aspect_ratio: "auto" };
+    const res = parts[parts.length - 1];
+    const aspect = parts.slice(1, -1).join(":");
+    return {
+      aspect_ratio: SUPPORTED_ASPECTS.includes(aspect as any) ? aspect : "auto",
+      resolution: res === "2k" ? "2k" : "1k",
+    };
+  }
+
   const preset = PRESET_MAP[size];
   if (preset) return preset;
 

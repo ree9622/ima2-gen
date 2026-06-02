@@ -27,6 +27,7 @@ export async function generateMultimodeViaGrok(
     signal?: AbortSignal;
     requestId?: string;
     references?: GrokReferenceImage[];
+    directApiKey?: string;
     onFinalImage?: (image: { b64: string; revisedPrompt?: string; mime?: string }, index: number) => void | Promise<void>;
   } = {},
 ): Promise<GrokMultimodeResult> {
@@ -49,6 +50,7 @@ export async function generateMultimodeViaGrok(
       signal: options.signal,
       requestId: options.requestId,
       references,
+      directApiKey: options.directApiKey,
     });
     totalWebSearchCalls += plan.webSearchCalls;
     const endpoint = references.length > 0 ? "/v1/images/edits" : "/v1/images/generations";
@@ -64,7 +66,7 @@ export async function generateMultimodeViaGrok(
         refs: references.length,
         promptChars: plan.prompt.length,
       });
-      const result = await postGrokImages(ctx, payload, options.signal, endpoint);
+      const result = await postGrokImages(ctx, payload, options.signal, endpoint, options.directApiKey);
       if (result.data?.[0]?.b64_json) {
         const img = { b64: result.data[0].b64_json, mime: result.data[0].mime_type, revisedPrompt: plan.prompt };
         images.push(img);

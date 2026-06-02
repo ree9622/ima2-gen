@@ -112,10 +112,10 @@ export function VideoControlsPanel() {
           </select>
         </div>
       )}
-      <div className="provider-compat-note" role="note" style={{ marginTop: 8 }}>
-        <strong>Active prompt</strong>
-        <span>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</span>
-      </div>
+      <details className="provider-compat-details" style={{ marginTop: 8 }}>
+        <summary>Active prompt</summary>
+        <p>{ACTIVE_VIDEO_PROMPT_GUIDANCE}</p>
+      </details>
     </div>
   );
 }

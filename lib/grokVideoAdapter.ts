@@ -75,6 +75,7 @@ export interface GrokVideoOptions {
   webSearchCalls?: number;
   continuityLineage?: VideoContinuityLineage | null;
   plannerModel?: string;
+  directApiKey?: string;
   onEvent?: (ev: GrokVideoEvent) => void;
 }
 
@@ -101,7 +102,14 @@ function videoConfig(ctx: RouteRuntimeContext): VideoConfig {
   };
 }
 
-function videoEndpoint(ctx: RouteRuntimeContext, path: string) {
+function videoEndpoint(ctx: RouteRuntimeContext, path: string, directApiKey?: string) {
+  if (directApiKey) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return {
+      url: `https://api.x.ai${normalizedPath}`,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${directApiKey}` },
+    };
+  }
   return {
     url: getGrokProxyUrl(ctx, path),
     headers: { "Content-Type": "application/json", Authorization: "Bearer dummy" },
@@ -240,7 +248,7 @@ export async function planGrokVideo(prompt: string, ctx: RouteRuntimeContext, op
   const duration = options.duration ?? 5;
   const resolution = options.resolution || "480p";
   const aspectRatio = options.aspectRatio || "auto";
-  const search = await searchGrokVisualContext(prompt, ctx, { signal: options.signal, requestId: options.requestId });
+  const search = await searchGrokVisualContext(prompt, ctx, { signal: options.signal, requestId: options.requestId, directApiKey: options.directApiKey });
   const referenceImageUrls = (options.referenceImages ?? []).map((img) => sourceImageUrl(img, undefined));
   const payload = buildGrokVideoPlannerPayload(prompt, {
     model: cfg.model,
@@ -254,7 +262,7 @@ export async function planGrokVideo(prompt: string, ctx: RouteRuntimeContext, op
     referenceImageUrls,
     continuityLineage: options.continuityLineage,
   });
-  const { url, headers } = videoEndpoint(ctx, "/v1/chat/completions");
+  const { url, headers } = videoEndpoint(ctx, "/v1/chat/completions", options.directApiKey);
   const { combinedSignal, timer } = withTimeoutSignal(options.signal, cfg.plannerTimeoutMs);
   logEvent("grok", "video:planner:start", { requestId: options.requestId, mode, duration, resolution });
   try {
@@ -297,7 +305,7 @@ export function buildVideoGenerationPayload(plan: GrokVideoPlan, opts: { model: 
 
 export async function startVideoRequest(ctx: RouteRuntimeContext, payload: Record<string, unknown>, options: GrokVideoOptions): Promise<string> {
   const cfg = videoConfig(ctx);
-  const { url, headers } = videoEndpoint(ctx, "/v1/videos/generations");
+  const { url, headers } = videoEndpoint(ctx, "/v1/videos/generations", options.directApiKey);
   const { combinedSignal, timer } = withTimeoutSignal(options.signal, cfg.startTimeoutMs);
   try {
     const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload), signal: combinedSignal });
@@ -334,9 +342,9 @@ export function normalizeVideoPoll(data: any): GrokVideoPollResult {
   };
 }
 
-export async function pollVideoOnce(ctx: RouteRuntimeContext, requestId: string, signal?: AbortSignal): Promise<GrokVideoPollResult> {
+export async function pollVideoOnce(ctx: RouteRuntimeContext, requestId: string, signal?: AbortSignal, directApiKey?: string): Promise<GrokVideoPollResult> {
   const cfg = videoConfig(ctx);
-  const { url, headers } = videoEndpoint(ctx, `/v1/videos/${requestId}`);
+  const { url, headers } = videoEndpoint(ctx, `/v1/videos/${requestId}`, directApiKey);
   const { combinedSignal, timer } = withTimeoutSignal(signal, cfg.startTimeoutMs);
   try {
     const res = await fetch(url, { method: "GET", headers, signal: combinedSignal });
@@ -372,7 +380,7 @@ export async function pollVideoUntilDone(ctx: RouteRuntimeContext, requestId: st
   let lastProgressAt = Date.now();
   for (;;) {
     if (Date.now() > deadline) throw grokError("Grok video poll budget exceeded", 504, "GROK_VIDEO_TIMEOUT");
-    const poll = await pollVideoOnce(ctx, requestId, options.signal);
+    const poll = await pollVideoOnce(ctx, requestId, options.signal, options.directApiKey);
     if (poll.status === "done") return poll;
     if (poll.status === "failed" || poll.status === "expired") throw failedToError(poll);
     const progress = poll.progress ?? lastProgress;

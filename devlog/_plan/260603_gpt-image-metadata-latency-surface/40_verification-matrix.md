@@ -16,8 +16,10 @@ Date: 2026-06-03
 | SAFETY_INTENT_POLICY removed | promptSafetyPolicy.ts exports empty or removed | Pending — research complete |
 | Negative prompt injection removed | Developer prompt no longer appends "avoid bad anatomy..." | Pending |
 | Prompt builder safety rules softened | systemPrompt.ts no longer pre-filters with vague rules | Pending |
+| Professional context frame added | Developer prompt includes "professional creative tool" framing | Pending |
+| Moderation error distinguishes Stage 1 vs Stage 2 | Error response includes stage info + actionable guidance | Pending |
 | Simple prompts no longer blocked | "여자 일러스트 그려줘" and equivalent succeed without moderation_blocked | Pending — requires runtime test |
-| Moderation research documented | 05_moderation-censorship-research.md with external+internal evidence | Done |
+| Moderation research documented | 05_moderation-censorship-research.md with 9 techniques, 21 sources | Done |
 
 ## Commands To Re-Run After Implementation
 

@@ -100,19 +100,28 @@ Work (priority order):
    - Remove "Do not directly imitate a living artist" (handled by OpenAI classifier)
    - Keep real-person dignity rule with softer wording
 
-4. **Keep "authorized evaluation session"** in developer prompts
+4. **Add professional context frame** to developer prompt
+   - Add: "You are generating images for a professional creative tool used by designers and artists."
+   - Gives the classifier a benign-intent signal for ambiguous prompts
+
+5. **Keep "authorized evaluation session"** in developer prompts
    - With SAFETY_INTENT_POLICY removed, the contradiction resolves automatically
    - The authorization signal helps reduce unnecessary model-side refusals
 
-5. **A/B test `moderation` parameter default**
-   - Test `"auto"` vs `"low"` block rates with identical prompts
-   - Community reports suggest behavior is inconsistent between the two values
+6. **Moderation error enrichment** (UI/API)
+   - Distinguish Stage 1 (input) vs Stage 2 (output) blocks from error message:
+     - "Your request was rejected" → Stage 1 → suggest prompt rephrasing
+     - "Generated image was filtered" → Stage 2 → suggest quality/style change
+   - Surface which category likely triggered (violence, sexual, person, copyright)
+   - Log blocked prompt + error detail for analysis
 
 Exit criteria:
 
 - `SAFETY_INTENT_POLICY` is empty or removed.
 - No negative prompt injection for human figures in developer prompts.
+- Developer prompt includes professional context frame.
 - Prompt builder does not pre-filter with vague safety rules.
+- Moderation errors distinguish Stage 1 vs Stage 2 with actionable guidance.
 - Simple prompts that previously triggered moderation now succeed.
 - No regression in actual harmful content blocking (OpenAI L5/L6 still active).
 

@@ -332,37 +332,7 @@ OpenAI's own guide says: append explicit artifact prevention as **constraints**,
 "Constraints: accurate human proportions, correct hand count, no duplicated body parts"
 ```
 
-### Technique 5: Pre-Screening with omni-moderation-latest
-
-Source: [OpenAI Moderation API](https://developers.openai.com/api/docs/guides/moderation)
-
-OpenAI provides a free moderation endpoint that can pre-screen prompts before sending to the image API:
-
-```
-POST /v1/moderations
-{
-  "model": "omni-moderation-latest",
-  "input": [
-    { "type": "text", "text": "user's image prompt here" }
-  ]
-}
-```
-
-Returns `category_scores` (0-1 range) for 13 categories.
-
-**ima2-gen application**: Instead of relying on the binary `moderation_blocked` error from the image API, pre-screen with omni-moderation and:
-
-1. If all scores < 0.3: send directly
-2. If any score 0.3-0.7: apply automatic prompt rewriting (Technique 2/3/4) then send
-3. If any score > 0.7: show user a specific warning about which category triggered, instead of a generic "moderation blocked" error
-
-Benefits:
-- Free API call (no generation cost wasted)
-- Granular category scores instead of binary pass/fail
-- User gets actionable feedback ("violence score high → try rephrasing the action")
-- Can build a local trigger word list from accumulated score data
-
-### Technique 6: Developer Prompt Optimization
+### Technique 5: Developer Prompt Optimization
 
 Source: [OpenAI API docs](https://developers.openai.com/api/docs/guides/image-generation), code analysis
 
@@ -386,7 +356,7 @@ legitimate creative, commercial, or educational purposes."
 
 This provides a professional context frame that the classifier can use to interpret ambiguous prompts more leniently.
 
-### Technique 7: Endpoint-Aware Routing
+### Technique 6: Endpoint-Aware Routing
 
 Source: [Apiyi diagnostics](https://help.apiyi.com/en/fix-gpt-image-2-moderation-blocked-400-error-en.html)
 
@@ -398,7 +368,7 @@ The `/v1/images/edits` endpoint enforces **stricter** filtering than `/v1/images
 2. If edit endpoint blocked, try regenerating as a generation (not edit) with the reference image as context
 3. The Responses API `image_generation` tool route may have different moderation behavior than the direct Images API
 
-### Technique 8: Quality/Size Selection Impact
+### Technique 7: Quality/Size Selection Impact
 
 Source: [OpenAI Prompting Guide](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide), community reports
 
@@ -408,7 +378,7 @@ Higher quality settings can reduce moderation triggers:
 - `quality: "low"` may generate artifacts that accidentally resemble flagged content
 - Photorealistic style combined with people is the highest-risk combination — use `quality: "medium"` minimum
 
-### Technique 9: Session Isolation
+### Technique 8: Session Isolation
 
 Source: [OpenAI Community](https://community.openai.com/t/feedback-on-the-new-image-generation-system-too-restrictive-and-disruptive-to-creative-workflows/1158152)
 
@@ -416,17 +386,19 @@ Community-reported "session poisoning" means a blocked prompt can contaminate su
 
 **ima2-gen application**: Each generation request already uses a fresh Responses API call (no `previous_response_id`), which avoids multi-turn context pollution. This is correct behavior — do not add conversation continuity to image generation requests.
 
-### Technique 10: Moderation Error Enrichment
+### Technique 9: Moderation Error Enrichment
 
 Current ima2-gen behavior: returns generic "프롬프트가 모더레이션에 걸렸어요" (prompt blocked by moderation).
 
 Improved behavior:
 
-1. Distinguish Stage 1 (input) vs Stage 2 (output) blocks from error message text
+1. Distinguish Stage 1 (input) vs Stage 2 (output) blocks from error message text:
+   - "Your request was rejected" → Stage 1 (input filter, prompt revision resolves)
+   - "Generated image was filtered" → Stage 2 (output filter, scene/style redesign needed)
 2. If Stage 1: suggest specific trigger words to rephrase
 3. If Stage 2: suggest different quality/style settings
-4. Log the blocked prompt + category for accumulated analysis
-5. Show users which substitutions might help (from Technique 2 map)
+4. Log the blocked prompt + error detail for accumulated analysis
+5. Surface which category likely triggered (violence, sexual, person, copyright) based on error message patterns
 
 ### Summary: Implementation Priority for ima2-gen
 
@@ -436,12 +408,11 @@ Improved behavior:
 | 2 | Replace negative injections with positive constraints | L2 | Small edit | **High** — stops classifier activation |
 | 3 | Add professional context frame to developer prompt | L2 | Small edit | **High** — gives classifier benign intent signal |
 | 4 | Remove vague prompt builder safety rules | L1 | Small edit | **Medium** — stops Auto-mode over-filtering |
-| 5 | Pre-screen with omni-moderation-latest | New | Medium | **Medium** — saves generation cost, gives user feedback |
-| 6 | Trigger word substitution in Auto mode | L1 | Medium | **Medium** — automated desensitization |
-| 7 | Moderation error enrichment | UI/API | Medium | **Medium** — user can self-correct |
-| 8 | Endpoint-aware routing for edits | Backend | Small | **Low-Medium** — edit endpoint workaround |
-| 9 | Quality/size selection guidance | UI | Small | **Low** — reduces Stage 2 triggers |
-| 10 | Session isolation (already correct) | — | None | **Already done** |
+| 5 | Developer prompt optimization (table above) | L2 | Small edit | **High** — consolidated prompt fixes |
+| 6 | Endpoint-aware routing for edits | Backend | Small | **Low-Medium** — edit endpoint workaround |
+| 7 | Quality/size selection guidance | UI | Small | **Low** — reduces Stage 2 triggers |
+| 8 | Session isolation (already correct) | — | None | **Already done** |
+| 9 | Moderation error enrichment (Stage 1/2 구분) | UI/API | Medium | **Medium** — user can self-correct |
 
 ## References
 

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 function readCodexTokens() {
@@ -53,14 +53,59 @@ async function fetchCodexUsage(tokens) {
         return { provider: "codex", error: true, windows: [] };
     }
 }
+function grokTierFromLimit(val) {
+    if (val >= 150_000)
+        return "SuperGrok Heavy";
+    if (val >= 15_000)
+        return "SuperGrok";
+    return `SuperGrok (${val} val)`;
+}
+async function fetchGrokBilling() {
+    try {
+        const authPath = join(homedir(), ".progrok", "auth.json");
+        if (!existsSync(authPath))
+            return { provider: "grok", authenticated: false, windows: [] };
+        const auth = JSON.parse(readFileSync(authPath, "utf8"));
+        if (!auth.accessToken)
+            return { provider: "grok", authenticated: false, windows: [] };
+        const headers = { Authorization: `Bearer ${auth.accessToken}` };
+        const [billingRes, userRes] = await Promise.allSettled([
+            fetch("https://cli-chat-proxy.grok.com/v1/billing", { headers, signal: AbortSignal.timeout(8000) }),
+            fetch("https://cli-chat-proxy.grok.com/v1/user", { headers, signal: AbortSignal.timeout(5000) }),
+        ]);
+        if (billingRes.status !== "fulfilled" || !billingRes.value.ok) {
+            return { provider: "grok", authenticated: true, windows: [] };
+        }
+        const billing = (await billingRes.value.json()).config;
+        const limit = billing.monthlyLimit.val;
+        const used = billing.used.val;
+        let email = null;
+        if (userRes.status === "fulfilled" && userRes.value.ok) {
+            const user = await userRes.value.json();
+            email = user.email ?? null;
+        }
+        const tier = grokTierFromLimit(limit);
+        return {
+            provider: "grok",
+            account: { email, plan: tier },
+            windows: [{
+                    label: "monthly",
+                    percent: limit > 0 ? Math.round((used / limit) * 100) : 0,
+                    resetsAt: billing.billingPeriodEnd,
+                }],
+        };
+    }
+    catch {
+        return { provider: "grok", error: true, windows: [] };
+    }
+}
 export function registerQuotaRoutes(app, _ctx) {
     app.get("/api/quota", async (_req, res) => {
         const tokens = readCodexTokens();
-        if (!tokens) {
-            res.json({ codex: { provider: "codex", authenticated: false, windows: [] } });
-            return;
-        }
-        const codex = await fetchCodexUsage(tokens);
-        res.json({ codex });
+        const [codex, grok] = await Promise.all([
+            tokens ? fetchCodexUsage(tokens) : Promise.resolve({ provider: "codex", authenticated: false, windows: [] }),
+            fetchGrokBilling(),
+        ]);
+        res.json({ codex, grok });
     });
 }

@@ -35,7 +35,6 @@ export function CanvasModeResultDetails({
     displayQuality,
     displaySize,
     displayModel,
-    currentImage.provider ?? null,
   ]
     .filter((value): value is string => Boolean(value))
     .join(" · ");

@@ -170,7 +170,7 @@ function ImageNodeImpl({ id, data, selected }: NodeProps<GraphNode>) {
           d.video?.resolution ?? null,
           d.video?.aspectRatio ?? null,
           formatReasoningLabel(d.reasoningEffort),
-          getImageModelShortLabel(d.model),
+          getImageModelShortLabel(d.model, (d as any).provider),
         ].filter(Boolean).join(" · ");
       case "stale":
         return d.error

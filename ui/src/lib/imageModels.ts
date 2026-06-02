@@ -60,8 +60,12 @@ export function getImageModelOptionsForProvider(provider: Provider) {
   return OPENAI_IMAGE_MODEL_OPTIONS;
 }
 
-export function getImageModelShortLabel(value: string | null | undefined): string | null {
+export function getImageModelShortLabel(value: string | null | undefined, provider?: string | null): string | null {
   if (!value) return null;
+  if (GEMINI_MODEL_VALUES.has(value)) {
+    const suffix = provider === "gemini-api" ? "gemini-api" : provider === "agy" ? "agy" : provider || "agy";
+    return `${value} ${suffix}`;
+  }
   return IMAGE_MODEL_OPTIONS.find((option) => option.value === value)?.shortLabel ?? value;
 }
 

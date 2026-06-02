@@ -163,7 +163,7 @@ export function Canvas() {
 
   const displayQuality = formatQualityAlias(currentImage?.quality ?? quality);
   const displaySize = formatSizeAlias(currentImage?.size ?? getResolvedSize());
-  const displayModel = getImageModelShortLabel(currentImage?.model);
+  const displayModel = getImageModelShortLabel(currentImage?.model, currentImage?.provider);
   const imageSrc = currentImage ? getClassicImageSrc(currentImage) : null;
 
   return (
@@ -280,7 +280,6 @@ export function Canvas() {
                   (currentImage as any).video?.aspectRatio ?? null,
                   continuitySummary(currentImage.videoContinuity),
                   displayModel,
-                  currentImage.provider ?? null,
                 ]
               : [
                   currentImage.elapsed != null ? `${currentImage.elapsed}s` : null,
@@ -291,7 +290,6 @@ export function Canvas() {
                   displayQuality,
                   displaySize,
                   displayModel,
-                  currentImage.provider ?? null,
                 ]
             )
               .filter((value): value is string => Boolean(value))

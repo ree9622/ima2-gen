@@ -1094,6 +1094,26 @@
       "title": "API-key mode is unavailable",
       "body": "This build supports API-key generation, but the current request could not use a configured key. Switch to GPT OAuth or update the API key.",
       "cta": "OK"
+    },
+    "agyGenerationFailed": {
+      "title": "Gemini generation failed",
+      "body": "The Antigravity CLI returned an error. Check that the agy binary is installed and your Gemini account is active.",
+      "cta": "Retry"
+    },
+    "agyTimeout": {
+      "title": "Gemini generation timed out",
+      "body": "The agy process did not respond within the timeout window (360s). Try again or check the agy CLI status.",
+      "cta": "Retry"
+    },
+    "agyProcessError": {
+      "title": "Gemini process error",
+      "body": "The agy CLI exited with an unexpected error. Verify the binary is working with 'agy --version'.",
+      "cta": "Retry"
+    },
+    "agyQuotaExhausted": {
+      "title": "Gemini quota exhausted",
+      "body": "You have exhausted your Gemini image generation capacity. Your quota will reset automatically — check the reset timer in the error details.",
+      "cta": "OK"
     }
   },
   "promptLibrary": {

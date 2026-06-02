@@ -1094,6 +1094,26 @@
       "title": "API-Key 모드를 사용할 수 없어요",
       "body": "이 빌드는 API-Key 생성을 지원하지만 현재 요청에서 설정된 키를 사용할 수 없었습니다. GPT OAuth로 전환하거나 API 키를 갱신해 주세요.",
       "cta": "확인"
+    },
+    "agyGenerationFailed": {
+      "title": "Gemini 생성 실패",
+      "body": "Antigravity CLI에서 오류가 발생했습니다. agy 바이너리가 설치되어 있고 Gemini 계정이 활성화되어 있는지 확인하세요.",
+      "cta": "재시도"
+    },
+    "agyTimeout": {
+      "title": "Gemini 생성 시간 초과",
+      "body": "agy 프로세스가 제한 시간(360초) 내에 응답하지 않았습니다. 다시 시도하거나 agy CLI 상태를 확인하세요.",
+      "cta": "재시도"
+    },
+    "agyProcessError": {
+      "title": "Gemini 프로세스 오류",
+      "body": "agy CLI가 예기치 않은 오류로 종료되었습니다. 'agy --version'으로 바이너리가 정상인지 확인하세요.",
+      "cta": "재시도"
+    },
+    "agyQuotaExhausted": {
+      "title": "Gemini 할당량 소진",
+      "body": "Gemini 이미지 생성 용량이 소진되었습니다. 할당량은 자동으로 리셋됩니다 — 에러 상세에서 리셋 타이머를 확인하세요.",
+      "cta": "확인"
     }
   },
   "promptLibrary": {

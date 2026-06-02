@@ -184,7 +184,16 @@ function parseAgyOutput(stdout: string): { artifactPath: string; ext: string } {
   const errorLine = lines.find((l) => l.startsWith("ERROR|"));
   if (errorLine) {
     const msg = errorLine.slice("ERROR|".length).trim() || "Unknown agy error";
+    const lower = msg.toLowerCase();
+    if (lower.includes("resource exhausted") || lower.includes("exhausted your capacity") || lower.includes("quota will reset")) {
+      throw agyError(`Agy generation failed: ${msg}`, 429, "AGY_QUOTA_EXHAUSTED");
+    }
     throw agyError(`Agy generation failed: ${msg}`, 502, "AGY_GENERATION_FAILED");
+  }
+
+  const fullLower = stdout.toLowerCase();
+  if (fullLower.includes("resource exhausted") || fullLower.includes("exhausted your capacity")) {
+    throw agyError(`Agy quota exhausted: ${stdout.trim().slice(0, 200)}`, 429, "AGY_QUOTA_EXHAUSTED");
   }
 
   const savedPathLine = lines.find((l) => l.startsWith("SAVED_PATH="));

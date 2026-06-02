@@ -949,7 +949,7 @@
     },
     "grokPlanner": {
       "title": "Grok planner 모델",
-      "body": "검색과 이미지/비디오 프롬프트 기획에 사용하는 모델입니다. grok-composer-2.5-fast가 더 빠르고 저렴하며, grok-4.3은 기존 기본값입니다."
+      "body": "검색과 이미지/비디오 프롬프트 기획에 사용하는 모델입니다. grok-4.3이 기본값이며 I2V/Ref2V 기획 시 이미지 입력을 지원합니다."
     },
     "gallery": {
       "defaultScopeTitle": "기본 갤러리 보기",

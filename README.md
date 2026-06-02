@@ -86,7 +86,7 @@ Ctrl+C now performs a clean shutdown — closing the database, stopping child pr
 ## What's New in v1.1.22
 
 - **Storyboard mode**: composer toggle for maintaining character/scene continuity across sequential frames. Works in both image and video pipelines.
-- **Planner model selection**: choose the Grok planner model (grok-composer-2.5-fast, grok-4.3) from video settings or via `--planner-model` CLI flag.
+- **Planner model selection**: choose the Grok planner model (grok-4.3 default) from video settings or via `--planner-model` CLI flag.
 - **Video frame copy**: First/Mid/Last frame extraction buttons on video results for easy keyframe copying.
 - **Multi-character dialogue**: video/image planners now identify characters by visual appearance (clothing + physique + props) instead of names, improving dialogue attribution.
 - **Graceful shutdown**: Ctrl+C now properly closes DB, server sockets, and child processes — fixes Windows EBUSY on npm update.
@@ -113,7 +113,7 @@ Image generation can run through the local Codex/ChatGPT OAuth path, a configure
 
 - `provider: "oauth"` uses the local Codex OAuth proxy.
 - `provider: "api"` calls the OpenAI Responses API with the hosted `image_generation` tool.
-- `provider: "grok"` starts bundled `progrok` on `127.0.0.1:18645`, runs mandatory xAI Web Search plus a planner pass (default: `grok-composer-2.5-fast`, configurable in settings or via `--planner-model`), then calls xAI Images API through the local proxy.
+- `provider: "grok"` starts bundled `progrok` on `127.0.0.1:18645`, runs mandatory xAI Web Search plus a planner pass (default: `grok-4.3`, configurable in settings or via `--planner-model`), then calls xAI Images API through the local proxy.
 - API-key generation supports classic generate, edit, mask-guided edit, multimode, and node generation.
 - Grok generation supports Classic, Node, and Agent flows. If a Classic reference, Node parent image, or Agent current image is present, ima2 switches the final Grok call to xAI image edit so image-to-image context is preserved.
 
@@ -264,7 +264,7 @@ environment variables > ~/.ima2/config.json > built-in defaults
 | `IMA2_GROK_PROXY_HOST` | `127.0.0.1` | Host for the bundled progrok proxy |
 | `IMA2_GROK_PROXY_PORT` | `18645` | Port for the bundled progrok proxy |
 | `IMA2_NO_GROK_PROXY` | — | Set `1` to disable automatic progrok startup |
-| `IMA2_GROK_PLANNER_MODEL` | `grok-composer-2.5-fast` | Grok search/planner model (also configurable via settings UI or `--planner-model` CLI flag) |
+| `IMA2_GROK_PLANNER_MODEL` | `grok-4.3` | Grok search/planner model (also configurable via settings UI or `--planner-model` CLI flag) |
 | `IMA2_GROK_PLANNER_TIMEOUT_MS` | `60000` | Timeout for Grok search and planner calls |
 | `IMA2_GROK_IMAGE_MODEL_DEFAULT` | `grok-imagine-image` | Default final Grok image model |
 | `IMA2_GROK_GENERATION_TIMEOUT_MS` | `120000` | Timeout for the final Grok Images API call |

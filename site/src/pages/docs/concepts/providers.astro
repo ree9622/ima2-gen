@@ -22,7 +22,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   <ul>
     <li><code>provider: "oauth"</code> — uses the local Codex OAuth proxy. The default path; no API key needed.</li>
     <li><code>provider: "api"</code> — calls the OpenAI Responses API with the hosted <code>image_generation</code> tool. Requires <code>OPENAI_API_KEY</code>.</li>
-    <li><code>provider: "grok"</code> — starts bundled <code>progrok</code>, runs mandatory xAI Web Search and a <code>grok-composer-2.5-fast</code> planner, then calls xAI Images API.</li>
+    <li><code>provider: "grok"</code> — starts bundled <code>progrok</code>, runs mandatory xAI Web Search and a <code>grok-4.3</code> planner, then calls xAI Images API.</li>
   </ul>
   <p>OAuth, API-key, and Grok generation cover Classic, Node, and Agent Mode. Agent Mode is web-UI only; Classic and Node also have CLI commands.</p>
 
@@ -69,7 +69,7 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   <h2>Grok pipeline</h2>
   <p>
     Grok Classic, Node, and Agent requests run a three-step pipeline: mandatory xAI Web Search,
-    <code>grok-composer-2.5-fast</code> planning with an English final image prompt, then xAI image creation.
+    <code>grok-4.3</code> planning with an English final image prompt, then xAI image creation.
     Text-only requests use <code>/v1/images/generations</code>; requests with reference images,
     a Node parent image, or an Agent current image use <code>/v1/images/edits</code> so image-to-image
     context is preserved. Grok accepts up to three total input images in this path.

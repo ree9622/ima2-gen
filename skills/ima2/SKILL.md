@@ -60,7 +60,7 @@ ima2 gen "cinematic mountain" --model gpt-5.5 --reasoning-effort high
 ```
 
 Use Grok when the request should run through bundled progrok, mandatory xAI Web
-Search, planner pass (default: `grok-composer-2.5-fast`), and xAI Images API:
+Search, planner pass (default: `grok-4.3`), and xAI Images API:
 
 ```bash
 ima2 grok login
@@ -324,13 +324,13 @@ ima2 video "episode 2: commute" --topic "daily-vlog"
 
 ### Planning Layer
 
-Prompts are NOT sent directly to the video model. A Grok planner rewrites your prompt with web search context for better results. The `revisedPrompt` in the response shows what was actually sent. Default planner model is `grok-composer-2.5-fast` (configurable in settings UI).
+Prompts are NOT sent directly to the video model. A Grok planner rewrites your prompt with web search context for better results. The `revisedPrompt` in the response shows what was actually sent. Default planner model is `grok-4.3` (configurable in settings UI).
 
 Override the planner model per-request:
 
 ```bash
-ima2 video "prompt" --planner-model grok-4.3
-ima2 video "prompt" --planner-model grok-composer-2.5-fast
+ima2 video "prompt" --planner-model gpt-5.5
+ima2 video "prompt" --planner-model gpt-5.4
 ```
 
 ### Grok 4.3 Prompt Surfaces

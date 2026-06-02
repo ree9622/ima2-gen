@@ -85,7 +85,7 @@ function grokStageError(stage: "search" | "planner", message: string, status: nu
 function getPlannerConfig(ctx: RouteRuntimeContext): { model: string; timeoutMs: number } {
   const grokCfg = (ctx.config as any).grokProvider || {};
   return {
-    model: grokCfg.plannerModel || "grok-composer-2.5-fast",
+    model: grokCfg.plannerModel || "grok-4.3",
     timeoutMs: grokCfg.plannerTimeoutMs || 60_000,
   };
 }
@@ -176,7 +176,7 @@ export function buildGrokPlannerPayload(
   model: string,
   size: string | undefined,
   sizeParams: GrokImageSizeParams,
-  plannerModel = "grok-composer-2.5-fast",
+  plannerModel = "grok-4.3",
   searchSummary = "",
   references: GrokReferenceImage[] | number = 0,
 ) {
@@ -293,7 +293,7 @@ export function buildGrokPlannerPayload(
   };
 }
 
-export function buildGrokSearchPayload(prompt: string, plannerModel = "grok-composer-2.5-fast") {
+export function buildGrokSearchPayload(prompt: string, plannerModel = "grok-4.3") {
   return {
     model: plannerModel,
     stream: false,

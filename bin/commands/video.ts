@@ -98,7 +98,7 @@ const HELP = `
         --resolution <480p|720p>        Default: 480p
         --aspect-ratio <ratio|auto>     1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, auto. Default: auto
         --model <name>                  grok-imagine-video, grok-imagine-video-1.5-preview
-        --planner-model <name>          Planner model override (e.g. grok-4.3, grok-composer-2.5-fast)
+        --planner-model <name>          Planner model override (e.g. grok-4.3, gpt-5.5)
         --storyboard                    Enable storyboard mode (maintains character/scene continuity)
         --topic <text>                  Series topic for prompt chain continuity
         --ref <file>                    Attach source/reference image (repeatable, max 7)

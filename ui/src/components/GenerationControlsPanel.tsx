@@ -197,18 +197,25 @@ export function GenerationControlsPanel() {
         </div>
         <div className="option-group">
           <div className="section-title">{t("size.grokAspectTitle") || "Aspect Ratio"}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
-            {GEMINI_ASPECT_RATIOS.map((ar) => (
-              <button
-                key={ar.value}
-                type="button"
-                className={`option-btn${geminiSettings.ratio === ar.value ? " active" : ""}`}
-                onClick={() => setGeminiSize(ar.value, geminiSettings.res)}
-              >
-                {ar.label}
-              </button>
-            ))}
-          </div>
+          {[
+            GEMINI_ASPECT_RATIOS.slice(0, 3),
+            GEMINI_ASPECT_RATIOS.slice(3, 6),
+            GEMINI_ASPECT_RATIOS.slice(6, 8),
+            GEMINI_ASPECT_RATIOS.slice(8),
+          ].map((row, ri) => (
+            <div key={ri} className="option-row">
+              {row.map((ar) => (
+                <button
+                  key={ar.value}
+                  type="button"
+                  className={`option-btn${geminiSettings.ratio === ar.value ? " active" : ""}`}
+                  onClick={() => setGeminiSize(ar.value, geminiSettings.res)}
+                >
+                  {ar.label}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
         <div className="option-group">
           <div className="section-title">{t("size.grokResolutionTitle") || "Resolution"}</div>

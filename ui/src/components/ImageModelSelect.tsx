@@ -172,10 +172,12 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
           onClick={() => setOpen((next) => !next)}
         >
           <span className="image-model-select__trigger-top">
-            <span className="image-model-select__trigger-model">{videoModelSelected ? (VIDEO_MODEL_OPTIONS.find((o) => o.value === videoModelSelected)?.shortLabel ?? VIDEO_MODEL_OPTIONS[0].shortLabel) : current.shortLabel}</span>
+            <span className="image-model-select__trigger-model">{videoModelSelected ? (VIDEO_MODEL_OPTIONS.find((o) => o.value === videoModelSelected)?.shortLabel ?? VIDEO_MODEL_OPTIONS[0].shortLabel) : current.shortLabel.split(" ")[0]}</span>
             <span className="image-model-select__trigger-chevron" aria-hidden="true">▾</span>
           </span>
-          {!isGeminiImageModel(imageModel) && (
+          {isGeminiImageModel(imageModel) ? (
+            <span className="image-model-select__trigger-effort">{current.shortLabel.split(" ")[1] || ""}</span>
+          ) : (
             <span className="image-model-select__trigger-effort">{currentReasoning.shortLabel}</span>
           )}
         </button>

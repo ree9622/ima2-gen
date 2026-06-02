@@ -911,6 +911,14 @@
       "grokEyebrow": "Local xAI proxy",
       "grokTitle": "Grok image provider",
       "grokBody": "Uses progrok at the configured local port for xAI Images API generation.",
+      "agyEyebrow": "Antigravity CLI",
+      "agyTitle": "Gemini (agy)",
+      "agyInstalledBody": "Login status can't be detected. Run `agy login` in your terminal if generation fails.",
+      "agyMissingBody": "Not installed. Get the",
+      "agyMissingLink": "Antigravity CLI",
+      "agyFineprint": "Antigravity models and image quota are billed separately.",
+      "agyInstalled": "Installed",
+      "agyMissing": "Not installed",
       "status": {
         "ready": "Ready",
         "authRequired": "Login required",
@@ -1066,7 +1074,9 @@
     "moderationRefused": {
       "title": "Prompt blocked by moderation",
       "body": "Soften the wording or rephrase. Sensitive/violent content in reference images can also trigger this.",
-      "cta": "Edit prompt"
+      "cta": "Edit prompt",
+      "bodyInput": "Your prompt text was caught by the input filter. Try rephrasing or using different wording.",
+      "bodyOutput": "The generated image was caught by the output filter. Try changing the style or quality settings."
     },
     "emptyResponse": {
       "title": "No image was returned",

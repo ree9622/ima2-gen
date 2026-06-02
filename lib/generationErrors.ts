@@ -1,4 +1,4 @@
-import { classifyUpstreamError, classifyUpstreamErrorCode } from "./errorClassify.js";
+import { classifyUpstreamError, classifyUpstreamErrorCode, classifyModerationStage } from "./errorClassify.js";
 import { safeDiagnosticLabel } from "./responsesParse.js";
 import { RESPONSE_DIAGNOSTIC_CODES } from "./responsesErrors.js";
 
@@ -187,9 +187,11 @@ export function normalizeGenerationFailure(lastErr: UpstreamErr | null | undefin
     return err;
   }
   if (SAFETY_CODES.has(code)) {
+    const stage = classifyModerationStage(lastErr?.message);
     const err: any = new Error(options.safetyMessage || lastErr?.message || "Content generation refused after retries");
     err.code = "SAFETY_REFUSAL";
     err.status = 422;
+    err.moderationStage = stage;
     err.cause = lastErr;
     return err;
   }

@@ -154,12 +154,24 @@ export function classifyError(message: string): ImaErrorCode {
   return "UNKNOWN";
 }
 
+export type ModerationStage = "input" | "output" | "unknown";
+
+export function classifyModerationStage(msg: string): ModerationStage {
+  const s = (msg || "").toLowerCase();
+  if (s.includes("request was rejected") || s.includes("prompt was rejected")) return "input";
+  if (s.includes("image was filtered") || s.includes("generated image")) return "output";
+  return "unknown";
+}
+
 /** Resolve the spec for an arbitrary error-like value. */
-export function resolveErrorSpec(err: unknown): { code: ImaErrorCode; spec: ErrorSpec; message: string } {
-  const e = err as (Error & { code?: string; message?: string }) | undefined;
+export function resolveErrorSpec(err: unknown): { code: ImaErrorCode; spec: ErrorSpec; message: string; moderationStage?: ModerationStage } {
+  const e = err as (Error & { code?: string; message?: string; moderationStage?: string }) | undefined;
   const rawMessage = typeof e?.message === "string" ? e.message : String(err ?? "");
   const rawCode = typeof e?.code === "string" ? e.code : "";
   const code = (rawCode && rawCode in errorCodes ? (rawCode as ImaErrorCode) : classifyError(rawMessage));
   const spec = errorCodes[code] ?? errorCodes.UNKNOWN;
-  return { code, spec, message: rawMessage };
+  const moderationStage = (code === "MODERATION_REFUSED" || code === "SAFETY_REFUSAL")
+    ? ((e?.moderationStage as ModerationStage) || classifyModerationStage(rawMessage))
+    : undefined;
+  return { code, spec, message: rawMessage, moderationStage };
 }

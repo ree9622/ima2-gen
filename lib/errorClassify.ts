@@ -37,6 +37,15 @@ export function classifyUpstreamErrorCode(code: string | undefined | null) {
  * @param {string | undefined | null} msg
  * @returns {ImaErrorCode}
  */
+export type ModerationStage = "input" | "output" | "unknown";
+
+export function classifyModerationStage(msg: string | undefined | null): ModerationStage {
+  const s = String(msg || "").toLowerCase();
+  if (s.includes("request was rejected") || s.includes("prompt was rejected")) return "input";
+  if (s.includes("image was filtered") || s.includes("generated image")) return "output";
+  return "unknown";
+}
+
 export function classifyUpstreamError(msg: string | undefined | null) {
   const s = String(msg || "").toLowerCase();
   if (!s) return "UNKNOWN";

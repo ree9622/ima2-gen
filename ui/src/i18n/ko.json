@@ -911,6 +911,14 @@
       "grokEyebrow": "로컬 xAI 프록시",
       "grokTitle": "Grok 이미지 공급자",
       "grokBody": "설정된 로컬 포트의 progrok을 통해 xAI Images API 생성을 사용합니다.",
+      "agyEyebrow": "Antigravity CLI",
+      "agyTitle": "Gemini (agy)",
+      "agyInstalledBody": "로그인 상태는 확인할 수 없습니다. 생성이 실패하면 터미널에서 agy login 을 실행하세요.",
+      "agyMissingBody": "설치되지 않았습니다. 설치:",
+      "agyMissingLink": "Antigravity CLI",
+      "agyFineprint": "antigravity 모델과 이미지 할당량은 별도입니다.",
+      "agyInstalled": "설치됨",
+      "agyMissing": "미설치",
       "status": {
         "ready": "준비됨",
         "authRequired": "로그인 필요",
@@ -1066,7 +1074,9 @@
     "moderationRefused": {
       "title": "프롬프트가 모더레이션에 걸렸어요",
       "body": "표현 수위를 낮추거나 다른 문구로 바꿔 보세요. 레퍼런스 이미지의 선정적/폭력적 요소도 영향을 줄 수 있어요.",
-      "cta": "프롬프트 수정"
+      "cta": "프롬프트 수정",
+      "bodyInput": "프롬프트 텍스트가 입력 필터에 걸렸어요. 표현을 바꾸거나 다른 문구로 시도해 보세요.",
+      "bodyOutput": "이미지가 생성 후 출력 필터에 걸렸어요. 스타일이나 품질 설정을 바꿔 보세요."
     },
     "emptyResponse": {
       "title": "이미지가 돌아오지 않았어요",

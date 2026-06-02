@@ -12,6 +12,12 @@ const crossLangUrl =
   lang === 'en'
     ? 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/README.ko.md'
     : 'https://lidge-jun.github.io/ima2-gen/?lang=en';
+
+const oneclickCmds = [
+  { os: 'macOS', cmd: 'curl -fsSL https://lidge-jun.github.io/ima2-gen/install-mac.sh | bash' },
+  { os: 'Windows', cmd: 'irm https://lidge-jun.github.io/ima2-gen/install-windows.ps1 | iex' },
+  { os: 'Linux / WSL', cmd: 'curl -fsSL https://lidge-jun.github.io/ima2-gen/install-linux.sh | bash' },
+];
 ---
 
 <section class="hero" id="top">
@@ -34,18 +40,15 @@ const crossLangUrl =
               ? 'Node.js가 없어도 됩니다. 환경을 감지하고, 필요하면 Node LTS를 설치한 뒤 ima2-gen을 설치합니다.'
               : "Don't have Node.js? The script detects your environment, installs Node LTS if needed, then installs ima2-gen."}
           </p>
-          <div class="oneclick-cmd">
-            <span class="oneclick-os">macOS</span>
-            <code>curl -fsSL https://lidge-jun.github.io/ima2-gen/install-mac.sh | bash</code>
-          </div>
-          <div class="oneclick-cmd">
-            <span class="oneclick-os">Windows</span>
-            <code>irm https://lidge-jun.github.io/ima2-gen/install-windows.ps1 | iex</code>
-          </div>
-          <div class="oneclick-cmd">
-            <span class="oneclick-os">Linux / WSL</span>
-            <code>curl -fsSL https://lidge-jun.github.io/ima2-gen/install-linux.sh | bash</code>
-          </div>
+          {
+            oneclickCmds.map((item) => (
+              <div class="oneclick-cmd" data-copy={item.cmd}>
+                <span class="oneclick-os">{item.os}</span>
+                <code>{item.cmd}</code>
+                <button class="oneclick-copy" type="button" aria-label={`Copy ${item.os} install command`}>Copy</button>
+              </div>
+            ))
+          }
         </div>
       </details>
       <a class="ko-link" href={crossLangUrl} target={lang === 'en' ? '_blank' : undefined} rel={lang === 'en' ? 'noopener' : undefined}>
@@ -204,6 +207,25 @@ const crossLangUrl =
     overflow-x: auto;
     white-space: nowrap;
     flex: 1;
+    cursor: pointer;
+  }
+  .oneclick-copy {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 160ms ease, border-color 160ms ease;
+  }
+  .oneclick-copy:hover,
+  .oneclick-copy.copied {
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   @media (max-width: 768px) {
@@ -213,5 +235,33 @@ const crossLangUrl =
     .hero-shot::before { inset: -8px -12px; }
     .oneclick-cmd { flex-direction: column; align-items: flex-start; gap: 4px; }
     .oneclick-os { min-width: auto; }
+    .oneclick-cmd code { width: 100%; }
   }
 </style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.oneclick-cmd').forEach((row) => {
+    const cmd = row.getAttribute('data-copy') ?? '';
+    if (!cmd) return;
+    const btn = row.querySelector<HTMLButtonElement>('.oneclick-copy');
+    const code = row.querySelector<HTMLElement>('code');
+    const doCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(cmd);
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = 'Copied';
+          btn.classList.add('copied');
+          window.setTimeout(() => {
+            btn.textContent = original ?? 'Copy';
+            btn.classList.remove('copied');
+          }, 1400);
+        }
+      } catch (err) {
+        console.warn('Clipboard write failed', err);
+      }
+    };
+    btn?.addEventListener('click', doCopy);
+    code?.addEventListener('click', doCopy);
+  });
+</script>

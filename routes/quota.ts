@@ -16,6 +16,7 @@ export interface QuotaResult {
   windows: QuotaWindow[];
   error?: boolean;
   authenticated?: boolean;
+  billing?: { usedUsd: number; limitUsd: number };
 }
 
 function readCodexTokens(): { access_token: string; account_id: string } | null {
@@ -116,6 +117,7 @@ async function fetchGrokBilling(): Promise<QuotaResult> {
         percent: limit > 0 ? Math.round((used / limit) * 100) : 0,
         resetsAt: billing.billingPeriodEnd,
       }],
+      billing: { usedUsd: used / 100, limitUsd: limit / 100 },
     };
   } catch {
     return { provider: "grok", error: true, windows: [] };

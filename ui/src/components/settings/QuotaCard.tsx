@@ -13,6 +13,7 @@ interface QuotaResult {
   windows: QuotaWindow[];
   error?: boolean;
   authenticated?: boolean;
+  billing?: { usedUsd: number; limitUsd: number };
 }
 
 interface QuotaResponse {
@@ -119,10 +120,15 @@ export function QuotaCard() {
         </div>
 
         <div className="quota-card">
-          <div className="quota-card__header">
+          <div className="quota-card__header" style={{ display: "flex", alignItems: "center" }}>
             <GrokIcon />
             <strong>Grok</strong>
             {grokAccountLine && <span className="quota-card__account">{grokAccountLine}</span>}
+            {grok?.billing && (
+              <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-dim, #888)", whiteSpace: "nowrap" }}>
+                ${grok.billing.usedUsd.toFixed(1)}/${grok.billing.limitUsd}
+              </span>
+            )}
           </div>
           {loading ? (
             <span className="quota-card__loading">{t("common.loading")}</span>

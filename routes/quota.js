@@ -93,6 +93,7 @@ async function fetchGrokBilling() {
                     percent: limit > 0 ? Math.round((used / limit) * 100) : 0,
                     resetsAt: billing.billingPeriodEnd,
                 }],
+            billing: { usedUsd: used / 100, limitUsd: limit / 100 },
         };
     }
     catch {

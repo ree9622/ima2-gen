@@ -1,7 +1,16 @@
 import type { Express, Request, Response } from "express";
-import { readFile, writeFile, chmod } from "node:fs/promises";
+import { readFile, writeFile, rename } from "node:fs/promises";
 import type { RuntimeContext } from "../lib/runtimeContext.js";
 import { initVertexAuth, clearVertexAuth } from "../lib/vertexAuth.js";
+
+// Atomic + 0600 config write: temp file then rename, so a crash or concurrent
+// save can't corrupt config.json (which may hold API keys). Rename also forces
+// 0600 perms even if a looser-perm config pre-existed.
+async function writeConfigAtomic(cfgPath: string, data: unknown): Promise<void> {
+  const tmp = `${cfgPath}.${process.pid}.tmp`;
+  await writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+  await rename(tmp, cfgPath);
+}
 
 type KeyProvider = "openai" | "xai" | "gemini";
 
@@ -104,8 +113,7 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
     } catch { /* new file */ }
     existing.vertexServiceAccountJson = trimmed;
     existing.geminiAuthMode = "vertex";
-    await writeFile(cfgPath, JSON.stringify(existing, null, 2), "utf-8");
-    try { await chmod(cfgPath, 0o600); } catch { /* ignore on Windows */ }
+    await writeConfigAtomic(cfgPath, existing);
 
     // Hot-update runtime
     (ctx as any).vertexServiceAccountJson = trimmed;
@@ -130,7 +138,7 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
       existing = JSON.parse(await readFile(cfgPath, "utf-8"));
     } catch { /* ignore */ }
     delete existing.vertexServiceAccountJson;
-    await writeFile(cfgPath, JSON.stringify(existing, null, 2), "utf-8");
+    await writeConfigAtomic(cfgPath, existing);
 
     clearVertexAuth();
     (ctx as any).vertexServiceAccountJson = undefined;
@@ -192,8 +200,7 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
       existing = JSON.parse(await readFile(cfgPath, "utf-8"));
     } catch { /* new file */ }
     existing[CONFIG_KEY_MAP[provider]] = trimmed;
-    await writeFile(cfgPath, JSON.stringify(existing, null, 2), "utf-8");
-    try { await chmod(cfgPath, 0o600); } catch { /* ignore on Windows */ }
+    await writeConfigAtomic(cfgPath, existing);
 
     // Hot-update runtime context
     if (provider === "openai") {
@@ -237,7 +244,7 @@ export function mountKeyRoutes(app: Express, ctx: RuntimeContext) {
       existing = JSON.parse(await readFile(cfgPath, "utf-8"));
     } catch { /* ignore */ }
     delete existing[CONFIG_KEY_MAP[provider]];
-    await writeFile(cfgPath, JSON.stringify(existing, null, 2), "utf-8");
+    await writeConfigAtomic(cfgPath, existing);
 
     // Clear runtime
     if (provider === "openai") {

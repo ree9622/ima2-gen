@@ -93,11 +93,16 @@ for (const prompt of [GENERATE_DEVELOPER_PROMPT, EDIT_DEVELOPER_PROMPT]) {
 
 for (const prompt of [MULTIMODE_DEVELOPER_PROMPT, MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT]) {
   assert.ok(prompt.includes("separate image_generation_call outputs"), "multimode prompt should require separate image calls");
-  assert.ok(prompt.includes("same complete user prompt"), "multimode prompt should repeat the same complete prompt");
-  assert.ok(prompt.includes("not part of the visual prompt"), "multimode count must not leak into image content");
-  assert.ok(prompt.includes("Do not split"), "multimode prompt should not split user content across outputs");
-  assert.ok(prompt.includes("preserve that request inside every generated output"), "multimode should keep requested quantities in every output");
-  assert.ok(!prompt.includes("one per stage"), "multimode should not use stage-splitting language");
+  assert.ok(prompt.includes("multimode sequence"), "multimode prompt should preserve sequence semantics");
+  assert.ok(prompt.includes("maximum number of sequence outputs"), "multimode count must be a stage limit");
+  assert.ok(prompt.includes("infer the user's intended sequence"), "multimode prompt should ask the model to plan sequence units");
+  assert.ok(prompt.includes("items one per image"), "multimode prompt should split one-per-image requests into outputs");
+  assert.ok(prompt.includes("Korean phrases such as"), "multimode prompt should handle Korean one-per-image phrasing");
+  assert.ok(prompt.includes("'하나씩'"), "multimode prompt should recognize Korean per-item sequence wording");
+  assert.ok(prompt.includes("distinct stage-specific prompt"), "multimode prompt should use distinct stage prompts");
+  assert.ok(prompt.includes("Do not pass the same complete user prompt to every output"), "sequence mode should not be same-prompt batching");
+  assert.ok(prompt.includes("Do not include the whole list of sequence units"), "sequence mode should not send all units to one stage");
+  assert.ok(prompt.includes("only a red circle"), "sequence mode should include a concrete one-shape-per-output example");
   assert.ok(prompt.includes(SAFETY_INTENT_POLICY), "multimode prompt should include safety intent policy");
   assert.ok(prompt.includes(VISIBLE_TEXT_LANGUAGE_POLICY), "multimode prompt should include visible text language policy");
 }
@@ -105,14 +110,16 @@ for (const prompt of [MULTIMODE_DEVELOPER_PROMPT, MULTIMODE_NO_SEARCH_DEVELOPER_
 const multimodePrompt = buildMultimodeSequencePrompt("흰 배경에 도형 다른 색 다른 모양을 한이미지의 하나씩 네개를 그려줘", 4, {
   webSearchEnabled: false,
 });
-assert.ok(multimodePrompt.includes("same complete user prompt"));
-assert.ok(multimodePrompt.includes("Do not split the user's requested subjects"));
-assert.ok(multimodePrompt.includes("If the prompt asks for multiple items inside one image"));
-assert.ok(multimodePrompt.includes("keep those multiple items inside every output"));
+assert.ok(multimodePrompt.includes("Create a multimode sequence"));
+assert.ok(multimodePrompt.includes("maximum sequence length"));
+assert.ok(multimodePrompt.includes("one image_generation_call per sequence unit"));
+assert.ok(multimodePrompt.includes("each output should contain only its own unit"));
+assert.ok(multimodePrompt.includes('"하나씩"'));
+assert.ok(multimodePrompt.includes("Use a distinct stage-specific image prompt"));
+assert.ok(multimodePrompt.includes("Do not pass the same complete user prompt to every output"));
+assert.ok(multimodePrompt.includes("Do not include the whole list of sequence units"));
+assert.ok(multimodePrompt.includes("output 1 only a red circle"));
 assert.ok(multimodePrompt.includes("Do not create one combined image_generation_call"));
-assert.ok(!multimodePrompt.includes("stage 1"));
-assert.ok(!multimodePrompt.includes("stage 2"));
-assert.ok(!multimodePrompt.includes("Create a sequence"));
 
 assert.match(responsesAdapterSrc, /MULTIMODE_DEVELOPER_PROMPT/);
 assert.match(responsesAdapterSrc, /MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT/);

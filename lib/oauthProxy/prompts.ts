@@ -65,8 +65,8 @@ export const EDIT_NO_SEARCH_DEVELOPER_PROMPT =
   SAFETY_INTENT_POLICY;
 
 export const MULTIMODE_DEVELOPER_PROMPT =
-  "You are generating a multimode batch. The selected value N is an output-count limit only, not part of the visual prompt. You MUST create up to N separate image_generation_call outputs. Invoke the image_generation tool separately once per output. Each output must independently satisfy the same complete user prompt. Do not split, divide, distribute, or sequence the user's requested subjects across outputs. If the user prompt asks for multiple items, quantities, panels, steps, or scenes, preserve that request inside every generated output instead of assigning one item to each output. Do not satisfy this request with one image_generation_call. Never collapse multiple requested outputs into one image. Do not create a collage. Do not create a grid. Do not create a contact sheet. Do not create a storyboard sheet. Do not put multiple panels inside one image. If you cannot complete all outputs, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only. " +
-  "Preserve the user's prompt by default for every output. If the prompt is visually sufficient, pass the same complete user prompt through unchanged for each output and do not search or add clarifiers. Use web_search only when factual visual accuracy is genuinely required and the prompt/context is insufficient; then incorporate only concrete findings as English clarifiers appended after the user's original text. " +
+  "You are generating a multimode sequence. The selected value N is the maximum number of sequence outputs, not a visual subject count. You MUST create up to N separate image_generation_call outputs. First infer the user's intended sequence from the prompt. If the prompt explicitly asks for several images, steps, states, endings, or items one per image, map each requested unit to its own output up to N. Korean phrases such as '하나씩', '각각', '한 장씩', '이미지마다', and '네개를 그려줘' in a sequence context mean separate outputs, not four subjects inside one output. If the prompt uses arrows or ordered wording such as A -> B, generate the endpoint/state for A, then the endpoint/state for B, and continue in order up to N. Invoke the image_generation tool separately once per sequence output with a distinct stage-specific prompt. Each stage prompt must describe only that stage's single unit/state. Do not pass the same complete user prompt to every output when the user described a sequence. Do not include the whole list of sequence units inside any single image_generation prompt. Do not use words like all, four, 네개, collection, lineup, grid, sheet, or panels inside a stage prompt when the stage should contain one unit. Example: if the user asks for four different colored shapes one per image, call the tool four times: one image with only a red circle; one image with only a blue square; one image with only a green triangle; one image with only a yellow star. Do not satisfy this request with one image_generation_call. Never collapse multiple sequence outputs into one image. Do not create a collage. Do not create a grid. Do not create a contact sheet. Do not create a storyboard sheet. Do not put multiple panels inside one image. If you cannot complete all outputs, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only. " +
+  "Preserve the user's original intent, language, style, and constraints inside each stage-specific prompt. If a stage needs factual visual accuracy and the prompt/context is insufficient, use web_search only for that need; then incorporate only concrete findings as English clarifiers appended after the relevant stage prompt. " +
   REAL_PERSON_RESEARCH_DIRECTIVE +
   "\n\n" +
   VISIBLE_TEXT_LANGUAGE_POLICY +
@@ -74,7 +74,7 @@ export const MULTIMODE_DEVELOPER_PROMPT =
   SAFETY_INTENT_POLICY;
 
 export const MULTIMODE_NO_SEARCH_DEVELOPER_PROMPT =
-  "You are generating a multimode batch. The selected value N is an output-count limit only, not part of the visual prompt. You MUST create up to N separate image_generation_call outputs. Invoke the image_generation tool separately once per output. Each output must independently satisfy the same complete user prompt. Do not split, divide, distribute, or sequence the user's requested subjects across outputs. If the user prompt asks for multiple items, quantities, panels, steps, or scenes, preserve that request inside every generated output instead of assigning one item to each output. Do not satisfy this request with one image_generation_call. Never collapse multiple requested outputs into one image. Do not create a collage. Do not create a grid. Do not create a contact sheet. Do not create a storyboard sheet. Do not put multiple panels inside one image. If you cannot complete all outputs, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only.\n\n" +
+  "You are generating a multimode sequence. The selected value N is the maximum number of sequence outputs, not a visual subject count. You MUST create up to N separate image_generation_call outputs. First infer the user's intended sequence from the prompt. If the prompt explicitly asks for several images, steps, states, endings, or items one per image, map each requested unit to its own output up to N. Korean phrases such as '하나씩', '각각', '한 장씩', '이미지마다', and '네개를 그려줘' in a sequence context mean separate outputs, not four subjects inside one output. If the prompt uses arrows or ordered wording such as A -> B, generate the endpoint/state for A, then the endpoint/state for B, and continue in order up to N. Invoke the image_generation tool separately once per sequence output with a distinct stage-specific prompt. Each stage prompt must describe only that stage's single unit/state. Do not pass the same complete user prompt to every output when the user described a sequence. Do not include the whole list of sequence units inside any single image_generation prompt. Do not use words like all, four, 네개, collection, lineup, grid, sheet, or panels inside a stage prompt when the stage should contain one unit. Example: if the user asks for four different colored shapes one per image, call the tool four times: one image with only a red circle; one image with only a blue square; one image with only a green triangle; one image with only a yellow star. Do not satisfy this request with one image_generation_call. Never collapse multiple sequence outputs into one image. Do not create a collage. Do not create a grid. Do not create a contact sheet. Do not create a storyboard sheet. Do not put multiple panels inside one image. If you cannot complete all outputs, return as many separate image_generation_call outputs as possible. Stop after N image_generation_call outputs. Never respond with plain text only.\n\n" +
   VISIBLE_TEXT_LANGUAGE_POLICY +
   "\n\n" +
   SAFETY_INTENT_POLICY;
@@ -90,21 +90,26 @@ export function buildUserTextPrompt(userPrompt: string | undefined, mode: string
 export function buildMultimodeSequencePrompt(userPrompt: string, maxImages: number, options: Record<string, unknown> = {}) {
   const n = Math.min(8, Math.max(1, Math.trunc(Number(maxImages) || 1)));
   const researchInstruction = resolveWebSearchEnabled(options)
-    ? [`If factual visual accuracy is required and the prompt/context is not already sufficient, use at least one concise web_search call for references before generating. If the prompt is already visually sufficient, do not search or add clarifiers; pass the same complete user prompt through for each output.`]
+    ? [`If factual visual accuracy is required and the prompt/context is not already sufficient for a stage, use one concise web_search call for references before generating that stage. If a stage is already visually sufficient, do not search or add clarifiers for that stage.`]
     : [];
   return [
-    `Create up to ${n} separate image_generation_call outputs as independent variations from the same complete user prompt.`,
-    `The number ${n} is only the requested output count. Do not add it to the visual prompt and do not treat it as a requested subject count.`,
-    `For every output, invoke the image_generation tool with the same complete user prompt.`,
-    `Every output must independently satisfy the whole prompt.`,
-    `Do not split the user's requested subjects, quantities, steps, or scenes across outputs.`,
-    `If the prompt asks for multiple items inside one image, keep those multiple items inside every output.`,
-    `Do not create one combined image_generation_call for the whole batch.`,
+    `Create a multimode sequence with up to ${n} separate image_generation_call outputs.`,
+    `The number ${n} is only the maximum sequence length. Do not add it to the visual prompt and do not treat it as a requested subject count unless the user's prompt itself asks for that many sequence units.`,
+    `Infer the user's intended sequence and create one image_generation_call per sequence unit.`,
+    `If the prompt asks for multiple images, steps, states, endings, or items one per image, each output should contain only its own unit.`,
+    `Korean phrases such as "하나씩", "각각", "한 장씩", "이미지마다", and "네개를 그려줘" in this sequence mode mean separate outputs, not four subjects inside one output.`,
+    `For arrow or ordered prompts such as A -> B -> C, output A's endpoint/state, then B's endpoint/state, then C's endpoint/state, up to the maximum.`,
+    `Use a distinct stage-specific image prompt for each output.`,
+    `Do not pass the same complete user prompt to every output when the user described a sequence.`,
+    `Do not include the whole list of sequence units inside any single image_generation prompt.`,
+    `Do not use words like all, four, 네개, collection, lineup, grid, sheet, or panels inside a stage prompt when the stage should contain one unit.`,
+    `Example for "four different colored shapes, one per image": output 1 only a red circle, output 2 only a blue square, output 3 only a green triangle, output 4 only a yellow star.`,
+    `Do not create one combined image_generation_call for the whole sequence.`,
     `Do not create a collage.`,
     `Do not create a grid.`,
     `Do not create a contact sheet.`,
     `Do not create a storyboard sheet.`,
-    `Do not put multiple panels inside one image to represent the batch.`,
+    `Do not put multiple panels inside one image.`,
     ...researchInstruction,
     "",
     "Prompt:",

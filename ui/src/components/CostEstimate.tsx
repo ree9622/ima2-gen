@@ -12,7 +12,7 @@ export function CostEstimate() {
   const size = getResolvedSize();
 
   const free = provider === "oauth" || provider === "grok" || provider === "agy";
-  const cost = estimateCost(quality, size);
+  const cost = estimateCost(quality, size, provider);
   const label = free
     ? t("cost.free")
     : multimode

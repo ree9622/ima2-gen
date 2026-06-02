@@ -33,7 +33,8 @@ export function ImageModelSelect({ variant }: ImageModelSelectProps) {
   const setReasoningEffort = useAppStore((s) => s.setReasoningEffort);
   const id = variant === "settings" ? "settings-image-model" : "sidebar-image-model";
   const modelOptions = IMAGE_MODEL_OPTIONS;
-  const current = modelOptions.find((option) => option.value === imageModel)
+  const current = modelOptions.find((option) => option.value === imageModel && (!option.providerHint || option.providerHint === provider))
+    ?? modelOptions.find((option) => option.value === imageModel)
     ?? modelOptions[0];
   const currentReasoning = REASONING_EFFORT_OPTIONS.find((option) => option.value === reasoningEffort)
     ?? REASONING_EFFORT_OPTIONS[0];

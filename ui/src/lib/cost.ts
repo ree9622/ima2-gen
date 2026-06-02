@@ -50,6 +50,24 @@ export const COST_MAP: Record<Quality, Record<string, number>> = {
   },
 };
 
-export function estimateCost(quality: Quality, size: string): number {
+const GEMINI_API_COST: Record<string, number> = {
+  "512": 0.002,
+  "1K": 0.004,
+  "2K": 0.006,
+  "4K": 0.010,
+};
+
+export function estimateGeminiApiCost(size: string): number {
+  const match = size.match(/^(\d+)x(\d+)$/);
+  if (!match) return 0.004;
+  const maxDim = Math.max(Number(match[1]), Number(match[2]));
+  if (maxDim <= 512) return GEMINI_API_COST["512"];
+  if (maxDim <= 1024) return GEMINI_API_COST["1K"];
+  if (maxDim <= 2048) return GEMINI_API_COST["2K"];
+  return GEMINI_API_COST["4K"];
+}
+
+export function estimateCost(quality: Quality, size: string, provider?: string): number {
+  if (provider === "gemini-api") return estimateGeminiApiCost(size);
   return COST_MAP[quality]?.[size] ?? 0;
 }

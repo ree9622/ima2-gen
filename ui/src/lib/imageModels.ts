@@ -14,9 +14,9 @@ export const IMAGE_MODEL_OPTIONS: Array<{
   { value: "gpt-5.5", shortLabel: "5.5", fullLabelKey: "settings.imageModel.gpt55" },
   { value: "grok-imagine-image", shortLabel: "grok", fullLabelKey: "settings.imageModel.grokImagine" },
   { value: "grok-imagine-image-quality", shortLabel: "grok+", fullLabelKey: "settings.imageModel.grokImagineQuality" },
-  { value: "nano-banana-2", shortLabel: "agy", fullLabelKey: "settings.imageModel.nanoBanana2", providerHint: "agy" },
-  { value: "nano-banana-2", shortLabel: "api", fullLabelKey: "settings.imageModel.nanoBanana2Api", providerHint: "gemini-api" },
-  { value: "nano-banana-pro", shortLabel: "api", fullLabelKey: "settings.imageModel.nanoBananaPro", providerHint: "gemini-api" },
+  { value: "nano-banana-2", shortLabel: "nb2 agy", fullLabelKey: "settings.imageModel.nanoBanana2", providerHint: "agy" },
+  { value: "nano-banana-2", shortLabel: "nb2 api", fullLabelKey: "settings.imageModel.nanoBanana2Api", providerHint: "gemini-api" },
+  { value: "nano-banana-pro", shortLabel: "nbp api", fullLabelKey: "settings.imageModel.nanoBananaPro", providerHint: "gemini-api" },
 ];
 
 const GEMINI_MODEL_VALUES = new Set<string>(["nano-banana-2", "nano-banana-pro"]);

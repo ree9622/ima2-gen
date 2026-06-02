@@ -100,19 +100,21 @@ export function HistoryStrip() {
     return cards;
   }, [inFlight, multimodeSequences]);
 
-  const completedSequences = useMemo(() => {
+  const { completedSequences, sequenceFirstKeys } = useMemo(() => {
     const seqMap = new Map<string, typeof visibleHistory>();
+    const firstKeys = new Set<string>();
     for (const item of visibleHistory) {
-      if (item.sequenceId && (item as any).sequenceTotalRequested > 1) {
+      if (item.sequenceId && (item.sequenceTotalRequested ?? 0) > 1) {
+        if (!seqMap.has(item.sequenceId)) {
+          firstKeys.add(getGalleryItemKey(item));
+        }
         const arr = seqMap.get(item.sequenceId) || [];
         arr.push(item);
         seqMap.set(item.sequenceId, arr);
       }
     }
-    return seqMap;
+    return { completedSequences: seqMap, sequenceFirstKeys: firstKeys };
   }, [visibleHistory]);
-
-  const renderedSequenceIds = new Set<string>();
 
   useEffect(() => {
     if (!activeKey) return;
@@ -153,8 +155,7 @@ export function HistoryStrip() {
         const key = getGalleryItemKey(item);
         const active = activeKey === key;
 
-        if (item.sequenceId && completedSequences.has(item.sequenceId) && !renderedSequenceIds.has(item.sequenceId)) {
-          renderedSequenceIds.add(item.sequenceId);
+        if (item.sequenceId && completedSequences.has(item.sequenceId) && sequenceFirstKeys.has(key)) {
           const seqImages = completedSequences.get(item.sequenceId)!;
           return [
             <CollectionThumb
@@ -205,7 +206,7 @@ export function HistoryStrip() {
           ];
         }
 
-        if (item.sequenceId && renderedSequenceIds.has(item.sequenceId)) {
+        if (item.sequenceId && completedSequences.has(item.sequenceId) && !sequenceFirstKeys.has(key)) {
           return null;
         }
 

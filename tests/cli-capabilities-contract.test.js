@@ -27,8 +27,7 @@ describe("CLI capabilities contract", () => {
     assert.match(src, /moderation:\s*toArray\(appConfig\.oauth\.validModeration\)/);
     assert.match(src, /modes:\s*\[\.\.\.VALID_MODES\]/);
     assert.match(src, /providers:\s*\[\.\.\.VALID_PROVIDERS\]/);
-    assert.match(src, /const VALID_PROVIDERS = \["auto", "oauth", "api", "grok"\]/);
-    assert.doesNotMatch(src, /"agent",/);
+    assert.match(src, /const VALID_PROVIDERS = \["auto", "oauth", "api", "grok", "agy"\]/);
     assert.match(src, /"grok status"/);
     assert.match(src, /"prompt build"/);
     assert.match(src, /configKeys:/);

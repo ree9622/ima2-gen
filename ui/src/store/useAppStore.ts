@@ -3908,21 +3908,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         const nextControllers = { ...state.multimodeAbortControllers };
         delete nextControllers[flightId];
         let nextPreview = state.multimodePreviewFlightId;
-        if (nextPreview === flightId) {
-          const finalStatus = state.multimodeSequences[flightId]?.status;
-          const isCleanFinish = finalStatus === "complete" || finalStatus === "partial";
-          if (!isCleanFinish) {
-            const fallbackIds = Object.keys(nextControllers);
-            nextPreview = fallbackIds.length > 0
-              ? fallbackIds[fallbackIds.length - 1]
-              : null;
-          }
+        const finalStatus = state.multimodeSequences[flightId]?.status;
+        const isCleanFinish = finalStatus === "complete" || finalStatus === "partial";
+        if (nextPreview === flightId && !isCleanFinish) {
+          const fallbackIds = Object.keys(nextControllers);
+          nextPreview = fallbackIds.length > 0
+            ? fallbackIds[fallbackIds.length - 1]
+            : null;
+        }
+        const nextSequences = { ...state.multimodeSequences };
+        if (isCleanFinish && nextPreview !== flightId) {
+          delete nextSequences[flightId];
         }
         return {
           activeGenerations: Math.max(0, state.activeGenerations - 1),
           inFlight: remaining,
           multimodeAbortControllers: nextControllers,
           multimodePreviewFlightId: nextPreview,
+          multimodeSequences: nextSequences,
         };
       });
     }

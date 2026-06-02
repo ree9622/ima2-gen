@@ -10,14 +10,14 @@ http://localhost:3333
 
 ## Provider Policy
 
-Image generation supports OAuth, API-key, Grok, and Gemini (agy) providers.
+Image generation supports OAuth, API-key, Grok, and Gemini (`agy` and `gemini-api`) providers.
 
 - `provider: "oauth"` uses the local Codex OAuth proxy.
 - `provider: "api"` uses the OpenAI Responses API with the hosted `image_generation` tool.
 - `provider: "grok"` uses the bundled progrok xAI proxy. Classic, Node, and Agent generation run mandatory xAI Web Search through `/v1/responses`, then run a `grok-4.3` planner call with a forced local `generate_image` function, then ima2 executes xAI `/v1/images/generations`. If reference images, a Node parent image, or an Agent current image are attached, the final step switches to xAI `/v1/images/edits` so image-to-image context is preserved.
 - `provider: "agy"` spawns the Antigravity CLI (`agy -p`) to generate images via Google Gemini's `default_api:generate_image` tool. Model is `nano-banana-2`. Output is fixed at 1024×1024 JPEG. Max 3 reference images (i2i). No web search, quality, size, or mask controls. Multimode returns a single image. Video is unsupported (`AGY_VIDEO_UNSUPPORTED`).
 - `provider: "grok-api"` uses a direct xAI API key instead of the bundled progrok OAuth proxy. Same pipeline as `grok` (Web Search → planner → `/v1/images/generations`), same aspect ratio and resolution options. Requires an xAI API key configured via the web UI key management or `XAI_API_KEY` env var. Also supports video generation.
-- `provider: "gemini-api"` calls the Google Generative Language API directly (or Vertex AI with a service account JSON). Supports models `nano-banana-2` (Gemini 3.1 Flash Image) and `nano-banana-pro` (Gemini 3 Pro Image). Supports variable aspect ratios and resolutions (512px–4K). Requires a `GEMINI_API_KEY` env var, web UI key management, or a Vertex AI service account JSON. No web search or mask controls.
+- `provider: "gemini-api"` calls the Google Generative Language API directly (or Vertex AI with a service account JSON). Supports models `nano-banana-2` (Gemini 3.1 Flash Image) and `nano-banana-pro` (Gemini 3 Pro Image). Supports variable aspect ratios (1:1 through 21:9) and four resolution tiers (512px, 1K, 2K, 4K); these are honored only on the direct API path — the Vertex AI endpoint (`aiplatform.googleapis.com`) rejects the `response_format` field and always returns a default 1K/1:1 image regardless of requested size. Auth: `GEMINI_API_KEY` env var, web UI key management (`/api/keys/gemini`), or a Vertex AI service account JSON (`VERTEX_SERVICE_ACCOUNT_JSON` or `/api/keys/vertex`). When both Vertex credentials and an API key are configured, Vertex takes priority. The chosen auth mode (`apikey` or `vertex`) persists to `~/.ima2/config.json` as `geminiAuthMode` and is restored on server startup. Per-model cost: `nano-banana-2` (Flash): 512=$0.001, 1K=$0.003, 2K=$0.004, 4K=$0.006; `nano-banana-pro`: 1K=$0.007, 2K=$0.007, 4K=$0.013. No web search or mask controls.
 - API-key generation covers classic generate, edit, mask-guided edit, multimode, and node generation.
 - If `provider: "api"` is requested without an API key, routes fail before upstream with `401` and `API_KEY_REQUIRED`.
 - Grok generation maps `size` to xAI `aspect_ratio` and `resolution`; it does not send an OpenAI-style `size` field upstream. Grok edit uses xAI `/v1/images/edits`; Grok mask edit remains unsupported and returns `GROK_MASK_UNSUPPORTED`.
@@ -35,6 +35,16 @@ Generation section below for the full endpoint specification.
 | `GET` | `/api/oauth/status` | OAuth proxy status and visible models |
 | `GET` | `/api/grok/status` | Bundled progrok status and visible xAI image models |
 | `GET` | `/api/billing` | Billing/status probe, including API key source when configured |
+| `GET` | `/api/quota` | Provider quota: returns `{ codex, grok }`. Grok result includes `billing: { usedUsd, limitUsd }` and a `monthly` percent window drawn from the xAI billing API. |
+
+## Account Switching
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/auth/switch` | Start a device-code OAuth flow. Body: `{ "provider": "grok" \| "codex" }`. Returns `{ sessionId, userCode, verificationUrl }`. |
+| `GET` | `/api/auth/switch/:sessionId` | Poll switch-account session status. Returns `{ status }` where status is `pending`, `complete`, `error`, or `expired`. |
+
+The Switch Account flow opens a browser verification URL. Once the user completes the device-code step, the server saves the new credentials (Grok: `~/.progrok/auth.json`; Codex: via `codex login --device-auth`) and the session transitions to `complete`. This endpoint is surfaced as a **Switch Account** button in the Settings QuotaCard for Grok and Codex providers.
 
 ## Storage
 
@@ -546,6 +556,8 @@ Most server routes under `/api/*` have a CLI wrapper. The exception is **Agent M
 | `GET /api/inflight` / `DELETE /api/inflight/:id` | `ima2 inflight ls` (alias `ps`) / `ima2 inflight rm` (alias `cancel`) |
 | `GET /api/storage/status` / `POST /api/storage/open-generated-dir` | `ima2 storage status` / `ima2 storage open` |
 | `GET /api/billing` / `GET /api/providers` / `GET /api/oauth/status` / `GET /api/grok/status` | `ima2 billing` / `ima2 providers` / `ima2 oauth status` / `ima2 grok status` |
+| `GET /api/quota` | `ima2 billing` (includes Grok `usedUsd`/`limitUsd`) |
+| `POST /api/auth/switch` / `GET /api/auth/switch/:sessionId` | Web UI only (Settings > QuotaCard > Switch Account) |
 | `GET /api/health` | `ima2 ping` |
 | `GET /api/capabilities` | `ima2 capabilities` |
 | `POST /api/history/backfill-thumbnails` | `ima2 backfill-thumbs` |

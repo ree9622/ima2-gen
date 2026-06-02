@@ -9,13 +9,13 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
   lang="ko"
   active="concepts/providers"
   title="프로바이더 & 모델"
-  description="OAuth, API key, 번들 Grok 프로바이더 경로 선택, 모델 선택, 품질·moderation·reasoning 기본값 설정."
+  description="OAuth, API key, 번들 Grok, Gemini API 프로바이더 경로 선택, 모델 선택, 품질·moderation·reasoning 기본값 설정."
 >
   <p class="docs-eyebrow">핵심 개념</p>
   <h1>프로바이더 &amp; 모델</h1>
   <p class="lead">
-    이미지 생성은 세 프로바이더 경로 중 하나로 실행됩니다: 로컬 Codex/ChatGPT OAuth 로그인,
-    설정된 OpenAI API key, 또는 번들 Grok/progrok xAI 경로.
+    이미지 생성은 네 프로바이더 경로 중 하나로 실행됩니다: 로컬 Codex/ChatGPT OAuth 로그인,
+    설정된 OpenAI API key, 번들 Grok/progrok xAI 경로, 또는 Google Gemini(Antigravity CLI 또는 직접 API).
   </p>
 
   <h2>프로바이더 경로</h2>
@@ -24,11 +24,12 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
     <li><code>provider: "api"</code> — 호스티드 <code>image_generation</code> 도구로 OpenAI Responses API를 호출합니다. <code>OPENAI_API_KEY</code>가 필요합니다.</li>
     <li><code>provider: "grok"</code> — 번들 <code>progrok</code>을 시작하고, 필수 xAI Web Search와 planner pass(기본 <code>grok-4.3</code>, 설정 또는 <code>--planner-model</code>로 변경)를 거친 뒤 xAI Images API를 호출합니다.</li>
     <li><code>provider: "agy"</code> — Antigravity CLI(<code>agy -p</code>)를 통해 Google Gemini(<code>nano-banana-2</code>)로 이미지를 생성합니다. 고정 1024×1024 JPEG 출력, 최대 3장 참조.</li>
+    <li><code>provider: "gemini-api"</code> — Google Generative Language API 또는 Vertex AI를 직접 호출합니다. 모델 <code>nano-banana-2</code>(Gemini 3.1 Flash Image)와 <code>nano-banana-pro</code>(Gemini 3 Pro Image) 지원. 가변 화면비와 해상도(512px–4K) 지원. <code>GEMINI_API_KEY</code> 또는 Vertex AI 서비스 계정 JSON이 필요합니다.</li>
   </ul>
   <p>OAuth, API key, Grok, Gemini 생성은 Classic, Node, Agent Mode를 지원합니다. Agent Mode는 웹 UI 전용이고, Classic과 Node는 CLI도 있습니다.</p>
 
   <h2>요청 단위 오버라이드</h2>
-  <p>생성 명령은 <code>--provider &lt;auto|oauth|api|grok|agy&gt;</code>를 받습니다:</p>
+  <p>생성 명령은 <code>--provider &lt;auto|oauth|api|grok|grok-api|agy|gemini-api&gt;</code>를 받습니다:</p>
   <table>
     <thead><tr><th>값</th><th>동작</th></tr></thead>
     <tbody>
@@ -36,7 +37,9 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
       <tr><td><code>oauth</code></td><td>로컬 OAuth 프록시 경로 강제.</td></tr>
       <tr><td><code>api</code></td><td>API key Responses 경로 강제; 설정된 key가 필요합니다.</td></tr>
       <tr><td><code>grok</code></td><td><code>127.0.0.1:18645</code>의 번들 xAI 경로 강제. 최초 1회 <code>ima2 grok login</code>으로 manual-paste 인증을 진행합니다.</td></tr>
+      <tr><td><code>grok-api</code></td><td>번들 OAuth 대신 xAI API key를 직접 사용. <code>grok</code>과 동일한 파이프라인(Web Search → planner → 이미지 생성). 웹 UI key 관리 또는 <code>XAI_API_KEY</code> env var 필요. 비디오 생성도 지원.</td></tr>
       <tr><td><code>agy</code></td><td>Antigravity CLI로 Gemini 이미지 생성. <code>agy</code> 바이너리 필요. 1024×1024 고정, JPEG, 최대 3장 참조, 품질/크기/마스크 미지원.</td></tr>
+      <tr><td><code>gemini-api</code></td><td>Google Generative Language API 또는 Vertex AI 직접 호출. 모델 <code>nano-banana-2</code>/<code>nano-banana-pro</code>. 가변 화면비·해상도 지원. API key 또는 Vertex 서비스 계정 JSON 필요.</td></tr>
     </tbody>
   </table>
 
@@ -55,7 +58,8 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
       <tr><td><code>grok-imagine-image-quality</code></td><td>고품질 Grok 이미지 모델. Grok Node high quality 요청에서도 선택됩니다.</td></tr>
       <tr><td><code>grok-imagine-video</code></td><td>기본 Grok 비디오 모델 (T2V/I2V).</td></tr>
       <tr><td><code>grok-imagine-video-1.5-preview</code></td><td>개선된 품질의 프리뷰 Grok 비디오 모델.</td></tr>
-      <tr><td><code>nano-banana-2</code></td><td>Antigravity CLI를 통한 Gemini 이미지 모델. 고정 1024×1024 출력.</td></tr>
+      <tr><td><code>nano-banana-2</code></td><td>Gemini 이미지 모델(Flash). <code>agy</code> 경로는 1024×1024 고정. <code>gemini-api</code> 경로는 512px–4K·가변 화면비 지원.</td></tr>
+      <tr><td><code>nano-banana-pro</code></td><td>Gemini Pro 이미지 모델. <code>gemini-api</code> 전용. 1K–4K 해상도, 10개 화면비 지원.</td></tr>
     </tbody>
   </table>
   <p>
@@ -90,6 +94,27 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'ko', slug);
     <code>POST /api/video/generate</code>는 SSE 이벤트를 스트리밍합니다: planning → submitted →
     progress → done. CLI: <code>ima2 video "prompt" --duration 5 --resolution 720p</code>.
   </p>
+
+  <h2>Grok 청구 &amp; 계정 전환</h2>
+  <p>
+    설정의 QuotaCard에서 Grok 청구 현황(<code>$used/$limit</code>)과 월간 사용량 바를 확인할 수 있습니다.
+    <strong>Switch Account</strong> 버튼을 누르면 server-side device-code 흐름으로 xAI OAuth 재인증이
+    시작됩니다 — 새 탭이 열리고, 표시된 device code를 확인한 뒤 서버가 폴링해 자동 완료합니다.
+    Codex(GPT OAuth) 계정도 동일한 흐름으로 전환할 수 있습니다.
+  </p>
+
+  <h2>Gemini API (직접)</h2>
+  <p>
+    <code>provider: "gemini-api"</code>는 Google Generative Language API 또는 Vertex AI를 직접 호출합니다.
+  </p>
+  <ul>
+    <li><strong>모델</strong>: <code>nano-banana-2</code>(Gemini 3.1 Flash Image) 또는 <code>nano-banana-pro</code>(Gemini 3 Pro Image). UI의 2열 모델 선택기로 전환합니다.</li>
+    <li><strong>화면비</strong>: 1:1·2:3·3:2·3:4·4:3·4:5·5:4·9:16·16:9·21:9 — 10개 버튼.</li>
+    <li><strong>해상도(imageSize)</strong>: 512px·1K·2K·4K — 화면비와 조합해 정확한 픽셀 크기로 매핑됩니다.</li>
+    <li><strong>비용 예상</strong>: Flash(<code>nano-banana-2</code>): 512px=$0.045, 1K=$0.067, 2K=$0.101, 4K=$0.151. Pro(<code>nano-banana-pro</code>): 1K/2K=$0.134, 4K=$0.240 (이미지당).</li>
+    <li><strong>인증</strong>: API key(<code>GEMINI_API_KEY</code> 또는 웹 UI) 또는 Vertex AI 서비스 계정 JSON. 둘 다 설정된 경우 <strong>Vertex AI가 우선</strong>합니다. 인증 모드는 마지막으로 저장한 설정이 영속됩니다.</li>
+    <li><strong>Vertex AI 제한</strong>: Vertex 경로(<code>aiplatform.googleapis.com</code>)는 <code>response_format</code> 필드를 지원하지 않아 화면비·해상도 요청이 무시됩니다 — 출력은 기본 1K/1:1로 고정됩니다. 직접 API 경로는 화면비·해상도를 모두 반영합니다.</li>
+  </ul>
 
   <h2>API 프로바이더 기본값</h2>
   <p>API 경로를 명시적 옵션 없이 사용하면 다음 기본값이 적용됩니다:</p>

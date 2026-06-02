@@ -48,6 +48,8 @@ const cliMd = 'https://github.com/lidge-jun/ima2-gen/blob/main/docs/CLI.md';
       <tr><td><code>IMA2_GROK_IMAGE_MODEL_DEFAULT</code></td><td><code>grok-imagine-image</code></td><td>Default xAI image model for Grok image calls.</td></tr>
       <tr><td><code>IMA2_GROK_GENERATION_TIMEOUT_MS</code></td><td><code>120000</code></td><td>Timeout for final Grok image generation/edit calls.</td></tr>
       <tr><td><code>IMA2_GROK_STATUS_TIMEOUT_MS</code></td><td><code>3000</code></td><td>Timeout for <code>/api/grok/status</code> model probes.</td></tr>
+      <tr><td><code>GEMINI_API_KEY</code></td><td>—</td><td>API key for the <code>gemini-api</code> provider direct path.</td></tr>
+      <tr><td><code>VERTEX_SERVICE_ACCOUNT_JSON</code></td><td>—</td><td>Google Cloud service-account JSON (inline) for Vertex AI auth on the <code>gemini-api</code> provider. When both <code>GEMINI_API_KEY</code> and this are set, Vertex takes priority unless the last-saved <code>geminiAuthMode</code> overrides it.</td></tr>
       <tr><td><code>IMA2_OAUTH_MASKED_EDIT_ENABLED</code></td><td><code>false</code></td><td>Opt-in masked-edit flag on the OAuth path (#31, groundwork only).</td></tr>
     </tbody>
   </table>

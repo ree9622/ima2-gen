@@ -60,10 +60,11 @@ const genBody = `{
   <h4>POST /api/generate — request body</h4>
   <pre><code>{genBody}</code></pre>
   <p>
-    Quality: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api, grok.
-    Recommended OpenAI model <code>gpt-5.4</code>; app default <code>gpt-5.4-mini</code>.
-    Grok models are <code>grok-imagine-image</code> and
-    <code>grok-imagine-image-quality</code>. SSE routes emit <code>phase</code>,
+    Quality: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api, grok, grok-api,
+    agy, gemini-api. Recommended OpenAI model <code>gpt-5.4</code>; app default
+    <code>gpt-5.4-mini</code>. Grok image models: <code>grok-imagine-image</code> and
+    <code>grok-imagine-image-quality</code>. Gemini API models: <code>nano-banana-2</code>
+    (default) and <code>nano-banana-pro</code>. SSE routes emit <code>phase</code>,
     <code>partial</code>, <code>done</code>, and <code>error</code> when the client sends
     <code>Accept: text/event-stream</code>.
   </p>
@@ -136,6 +137,21 @@ const genBody = `{
     </tbody>
   </table>
 
+  <h2>Keys &amp; auth</h2>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /api/keys/status</code></td><td>Key status for all providers (openai, xai, gemini, vertex) — masked key and source.</td></tr>
+      <tr><td><code>PUT /api/keys/:provider</code></td><td>Save and validate an API key for openai, xai, or gemini. Validates against the provider API before saving to config.</td></tr>
+      <tr><td><code>DELETE /api/keys/:provider</code></td><td>Remove a config-layer API key (env-sourced keys are immutable).</td></tr>
+      <tr><td><code>PUT /api/keys/vertex</code></td><td>Save and validate a Google Cloud service-account JSON for Vertex AI auth. Sets <code>geminiAuthMode: "vertex"</code> in config.</td></tr>
+      <tr><td><code>DELETE /api/keys/vertex</code></td><td>Remove the Vertex AI service-account from config.</td></tr>
+      <tr><td><code>GET /api/quota</code></td><td>Usage bars for Codex (GPT OAuth) and Grok. Grok result includes <code>billing.usedUsd</code> / <code>billing.limitUsd</code> for the dollar display.</td></tr>
+      <tr><td><code>POST /api/auth/switch</code></td><td>Start a device-code auth flow for <code>grok</code> or <code>codex</code>. Returns <code>sessionId</code>, <code>userCode</code>, and <code>verificationUrl</code>.</td></tr>
+      <tr><td><code>GET /api/auth/switch/:sessionId</code></td><td>Poll auth flow status: <code>pending</code>, <code>complete</code>, <code>error</code>, or <code>expired</code>.</td></tr>
+    </tbody>
+  </table>
+
   <h2>Common error codes</h2>
   <table>
     <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
@@ -155,6 +171,9 @@ const genBody = `{
       <tr><td><code>INVALID_GROK_IMAGE_MODEL</code></td><td>Grok request used an unsupported image model.</td></tr>
       <tr><td><code>GROK_RATE_LIMITED</code> · <code>GROK_AUTH_FAILED</code></td><td>xAI rate-limit or auth failure through progrok.</td></tr>
       <tr><td><code>GROK_SEARCH_TIMEOUT</code> · <code>GROK_PLANNER_TIMEOUT</code> · <code>GROK_IMAGE_TIMEOUT</code></td><td>One Grok phase exceeded its timeout budget.</td></tr>
+      <tr><td><code>GEMINI_API_KEY_MISSING</code></td><td>Gemini API provider requested without a configured API key or Vertex AI credentials.</td></tr>
+      <tr><td><code>INVALID_GEMINI_API_IMAGE_MODEL</code></td><td>Gemini API model is not one of the valid values (nano-banana-2, nano-banana-pro).</td></tr>
+      <tr><td><code>GENERATION_TIMEOUT</code></td><td>Gemini API generation timed out (120s limit).</td></tr>
     </tbody>
   </table>
 

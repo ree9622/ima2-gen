@@ -58,9 +58,10 @@ const genBody = `{
   <h4>POST /api/generate — 요청 바디</h4>
   <pre><code>{genBody}</code></pre>
   <p>
-    품질: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api, grok.
+    품질: low, medium, high. Moderation: auto, low. Provider: auto, oauth, api, grok, grok-api, agy, gemini-api.
     권장 OpenAI 모델은 <code>gpt-5.4</code>; 앱 기본값은 <code>gpt-5.4-mini</code>입니다.
     Grok 모델은 <code>grok-imagine-image</code>와 <code>grok-imagine-image-quality</code>입니다.
+    Gemini 모델은 <code>nano-banana-2</code>(Flash)와 <code>nano-banana-pro</code>(Pro)입니다.
     SSE 라우트는 클라이언트가
     <code>Accept: text/event-stream</code>을 보내면 <code>phase</code>, <code>partial</code>,
     <code>done</code>, <code>error</code> 이벤트를 보냅니다.
@@ -152,8 +153,32 @@ const genBody = `{
       <tr><td><code>INVALID_GROK_IMAGE_MODEL</code></td><td>Grok 요청이 지원하지 않는 이미지 모델을 사용함.</td></tr>
       <tr><td><code>GROK_RATE_LIMITED</code> · <code>GROK_AUTH_FAILED</code></td><td>progrok을 통한 xAI rate-limit 또는 auth 실패.</td></tr>
       <tr><td><code>GROK_SEARCH_TIMEOUT</code> · <code>GROK_PLANNER_TIMEOUT</code> · <code>GROK_IMAGE_TIMEOUT</code></td><td>Grok 단계 중 하나가 timeout budget을 초과함.</td></tr>
+      <tr><td><code>AGY_GENERATION_FAILED</code></td><td>Gemini(agy) 이미지 생성 실패.</td></tr>
+      <tr><td><code>AGY_TIMEOUT</code></td><td>agy CLI 프로세스가 360초 timeout 초과.</td></tr>
+      <tr><td><code>AGY_QUOTA_EXHAUSTED</code></td><td>Gemini API 할당량 소진(rate limit).</td></tr>
+      <tr><td><code>AGY_VIDEO_UNSUPPORTED</code></td><td>Gemini(agy) 프로바이더는 비디오 생성 미지원.</td></tr>
+      <tr><td><code>AGY_REF_TOO_MANY</code></td><td>agy 레퍼런스 이미지 초과(최대 3장).</td></tr>
+      <tr><td><code>GEMINI_API_KEY_MISSING</code></td><td>Gemini API key 또는 Vertex AI 자격증명 미설정.</td></tr>
+      <tr><td><code>GEMINI_API_RATE_LIMITED</code></td><td>Gemini API rate limit(429).</td></tr>
+      <tr><td><code>GEMINI_API_SAFETY_BLOCKED</code></td><td>Gemini API safety 필터로 생성 차단.</td></tr>
+      <tr><td><code>GEMINI_API_NO_IMAGE</code></td><td>Gemini API 응답에 이미지 없음.</td></tr>
+      <tr><td><code>VIDEO_PROVIDER_UNSUPPORTED</code></td><td>비디오 생성은 <code>"grok"</code> 또는 <code>"grok-api"</code> 프로바이더가 필요함.</td></tr>
     </tbody>
   </table>
+
+  <h2>키 관리</h2>
+  <p>설정 UI 또는 HTTP API로 런타임에 프로바이더 자격증명을 설정합니다.</p>
+  <table>
+    <thead><tr><th>엔드포인트</th><th>메서드</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td><code>/api/keys/status</code></td><td>GET</td><td>모든 프로바이더(openai, xai, gemini, vertex) 키 설정·유효성·마스킹 상태 반환.</td></tr>
+      <tr><td><code>/api/keys/:provider</code></td><td>PUT</td><td>API key 저장. 바디: <code>{"{"}"apiKey": "..."{"}"}</code>. 프로바이더: <code>openai</code>·<code>xai</code>·<code>gemini</code>.</td></tr>
+      <tr><td><code>/api/keys/:provider</code></td><td>DELETE</td><td>설정 파일 기반 API key 제거. env var 기반 키는 제거 불가(<code>ENV_KEY_IMMUTABLE</code>).</td></tr>
+      <tr><td><code>/api/keys/vertex</code></td><td>PUT</td><td>Vertex AI 서비스 계정 JSON 저장. 바디: <code>{"{"}"serviceAccountJson": "..."{"}"}</code>.</td></tr>
+      <tr><td><code>/api/keys/vertex</code></td><td>DELETE</td><td>설정 파일 기반 Vertex 서비스 계정 제거.</td></tr>
+    </tbody>
+  </table>
+  <p>PUT으로 저장된 키는 <code>config.json</code>에 기록되고 런타임에 즉시 반영됩니다(서버 재시작 불필요). 환경 변수(<code>GEMINI_API_KEY</code>, <code>VERTEX_SERVICE_ACCOUNT_JSON</code> 등)는 설정 파일보다 우선하며 API로 변경할 수 없습니다.</p>
 
   <div class="docs-callout docs-callout-info">
     전체 엔드포인트 → CLI 매핑, 레퍼런스 이미지 에러 코드, 스타일 시트 라우트는

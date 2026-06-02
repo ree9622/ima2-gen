@@ -14,8 +14,9 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
   <p class="docs-eyebrow">Concepts</p>
   <h1>Providers &amp; Models</h1>
   <p class="lead">
-    Image generation runs through one of four provider paths: your local Codex/ChatGPT OAuth login,
-    a configured OpenAI API key, the bundled Grok/progrok xAI path, or the Gemini/Antigravity CLI.
+    Image generation runs through one of five provider paths: your local Codex/ChatGPT OAuth login,
+    a configured OpenAI API key, the bundled Grok/progrok xAI path, the direct Google Gemini API,
+    or the Gemini/Antigravity CLI.
   </p>
 
   <h2>Provider paths</h2>
@@ -23,19 +24,23 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     <li><code>provider: "oauth"</code> — uses the local Codex OAuth proxy. The default path; no API key needed.</li>
     <li><code>provider: "api"</code> — calls the OpenAI Responses API with the hosted <code>image_generation</code> tool. Requires <code>OPENAI_API_KEY</code>.</li>
     <li><code>provider: "grok"</code> — starts bundled <code>progrok</code>, runs mandatory xAI Web Search and a planner pass (default <code>grok-4.3</code>, configurable in settings or via <code>--planner-model</code>), then calls xAI Images API.</li>
-    <li><code>provider: "agy"</code> — spawns the Antigravity CLI (<code>agy -p</code>) to generate via Google Gemini (<code>nano-banana-2</code>). Fixed 1024×1024 JPEG output, max 3 refs.</li>
+    <li><code>provider: "grok-api"</code> — same xAI pipeline as <code>grok</code> but uses a direct <code>XAI_API_KEY</code> instead of the OAuth proxy.</li>
+    <li><code>provider: "gemini-api"</code> — calls the Google Gemini image API directly. Supports two models (<code>nano-banana-2</code> and <code>nano-banana-pro</code>), aspect ratio and resolution controls, and two auth modes: a <code>GEMINI_API_KEY</code> or a Vertex AI service-account JSON (<code>VERTEX_SERVICE_ACCOUNT_JSON</code>). When both are configured, Vertex AI takes priority unless overridden by the last-saved auth mode. Cost varies by model and resolution (see Gemini API section below).</li>
+    <li><code>provider: "agy"</code> — spawns the Antigravity CLI (<code>agy -p</code>) to generate via Google Gemini (<code>nano-banana-2</code>). Fixed 1024×1024 JPEG output, max 3 refs. Free (no token cost).</li>
   </ul>
-  <p>OAuth, API-key, Grok, and Gemini generation cover Classic, Node, and Agent Mode. Agent Mode is web-UI only; Classic and Node also have CLI commands.</p>
+  <p>All provider paths cover Classic, Node, and Agent Mode. Agent Mode is web-UI only; Classic and Node also have CLI commands.</p>
 
   <h2>Per-request override</h2>
-  <p>Generation commands accept <code>--provider &lt;auto|oauth|api|grok|agy&gt;</code>:</p>
+  <p>Generation commands accept <code>--provider &lt;auto|oauth|api|grok|grok-api|agy|gemini-api&gt;</code>:</p>
   <table>
     <thead><tr><th>Value</th><th>Behavior</th></tr></thead>
     <tbody>
       <tr><td><code>auto</code></td><td>Preserve route default behavior; currently resolves to OAuth.</td></tr>
       <tr><td><code>oauth</code></td><td>Force the local OAuth proxy path.</td></tr>
       <tr><td><code>api</code></td><td>Force the API-key Responses path; requires a configured key.</td></tr>
-      <tr><td><code>grok</code></td><td>Force the bundled xAI path through <code>127.0.0.1:18645</code>; run <code>ima2 grok login</code> once to authorize with the manual-paste flow.</td></tr>
+      <tr><td><code>grok</code></td><td>Force the bundled xAI path through <code>127.0.0.1:18645</code>; run <code>ima2 grok login</code> once to authorize.</td></tr>
+      <tr><td><code>grok-api</code></td><td>Same xAI pipeline but authenticates with a direct <code>XAI_API_KEY</code>.</td></tr>
+      <tr><td><code>gemini-api</code></td><td>Direct Google Gemini API. Requires <code>GEMINI_API_KEY</code> or <code>VERTEX_SERVICE_ACCOUNT_JSON</code>. Supports aspect ratio and resolution controls. No quality/format/moderation/multimode controls.</td></tr>
       <tr><td><code>agy</code></td><td>Spawn Antigravity CLI for Gemini image generation. Requires <code>agy</code> binary installed. 1024×1024 fixed, JPEG, max 3 refs, no quality/size/mask controls.</td></tr>
     </tbody>
   </table>
@@ -51,11 +56,12 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
       <tr><td><code>gpt-5.4-mini</code></td><td>Current default. Faster draft model.</td></tr>
       <tr><td><code>gpt-5.4</code></td><td>Recommended balanced choice.</td></tr>
       <tr><td><code>gpt-5.5</code></td><td>Strongest quality when your Codex CLI/OAuth backend supports it. May use more quota or need an updated Codex CLI.</td></tr>
-      <tr><td><code>grok-imagine-image</code></td><td>Default Grok image model.</td></tr>
-      <tr><td><code>grok-imagine-image-quality</code></td><td>Higher quality Grok image model; also selected by high-quality Grok Node requests.</td></tr>
-      <tr><td><code>grok-imagine-video</code></td><td>Default Grok video model (T2V/I2V).</td></tr>
-      <tr><td><code>grok-imagine-video-1.5-preview</code></td><td>Preview Grok video model with improved quality.</td></tr>
-      <tr><td><code>nano-banana-2</code></td><td>Gemini image model via Antigravity CLI. Fixed 1024×1024 output.</td></tr>
+      <tr><td><code>grok-imagine-image</code></td><td>Default Grok image model ("Grok" / Fast in the UI).</td></tr>
+      <tr><td><code>grok-imagine-image-quality</code></td><td>Higher quality Grok image model ("Grok+" / Best in the UI).</td></tr>
+      <tr><td><code>grok-imagine-video</code></td><td>Default Grok video model (T2V/I2V). Shown as "Grok V / Fast" in the video model picker.</td></tr>
+      <tr><td><code>grok-imagine-video-1.5-preview</code></td><td>Preview Grok video model with improved quality. Shown as "Grok V1.5 / Preview" in the video model picker.</td></tr>
+      <tr><td><code>nano-banana-2</code></td><td>Gemini Flash image model (maps to <code>gemini-3.1-flash-image</code>). Used by both <code>gemini-api</code> and <code>agy</code> providers.</td></tr>
+      <tr><td><code>nano-banana-pro</code></td><td>Gemini Pro image model (maps to <code>gemini-3-pro-image</code>). Available on the <code>gemini-api</code> provider only.</td></tr>
     </tbody>
   </table>
   <p>
@@ -68,6 +74,47 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     <code>ima2 defaults set reasoning high</code> write both OAuth and API-provider default keys, so
     your "default model" stays one concept across provider paths.
   </div>
+
+  <h2>Gemini API provider</h2>
+  <p>
+    The <code>gemini-api</code> provider calls Google's image generation API directly without the
+    Antigravity CLI. It supports two models selectable in the UI or via <code>--model</code>:
+  </p>
+  <ul>
+    <li><code>nano-banana-2</code> (default) — Gemini Flash; faster, lower cost.</li>
+    <li><code>nano-banana-pro</code> — Gemini Pro; higher quality, higher cost.</li>
+  </ul>
+  <p>
+    <strong>Auth modes.</strong> Configure either a Gemini API key (<code>GEMINI_API_KEY</code> env
+    var or via the Settings UI) or a Google Cloud service-account JSON
+    (<code>VERTEX_SERVICE_ACCOUNT_JSON</code> env var or via the Settings UI Vertex JSON input).
+    When both are present the server respects the last-saved mode
+    (<code>geminiAuthMode: "apikey"</code> or <code>"vertex"</code> in config), defaulting to Vertex
+    when both are configured and no mode is saved.
+  </p>
+  <p>
+    <strong>Aspect ratio and resolution.</strong> The direct API path exposes 10 aspect ratios
+    (1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9) and 4 resolution tiers
+    (512px, 1K, 2K, 4K). Selections are mapped to exact pixel dimensions and passed as
+    <code>aspect_ratio</code> and <code>image_size</code> protobuf enum values.
+    <strong>The Vertex AI path ignores these controls</strong> — the Vertex endpoint does not accept
+    the <code>response_format</code> field, so output defaults to 1K / 1:1 regardless.
+  </p>
+  <p>
+    <strong>Per-image cost estimates</strong> (based on output token counts × official rates):
+  </p>
+  <table>
+    <thead><tr><th>Model</th><th>512px</th><th>1K</th><th>2K</th><th>4K</th></tr></thead>
+    <tbody>
+      <tr><td><code>nano-banana-2</code> (Flash 3.1, $60/1M tok)</td><td>$0.045</td><td>$0.067</td><td>$0.101</td><td>$0.151</td></tr>
+      <tr><td><code>nano-banana-pro</code> (Pro 3, $120/1M tok)</td><td>$0.134</td><td>$0.134</td><td>$0.134</td><td>$0.240</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The <code>agy</code> provider (Antigravity CLI) uses <code>nano-banana-2</code> only, at fixed
+    1024×1024 with no resolution or aspect controls, and is estimated as free (no API token charge
+    in the cost estimator).
+  </p>
 
   <h2>Grok pipeline</h2>
   <p>
@@ -84,13 +131,33 @@ const d = (slug: string) => docsPath(import.meta.env.BASE_URL, 'en', slug);
     controls. Grok mask edit is not wired in this release and returns
     <code>GROK_MASK_UNSUPPORTED</code>.
   </p>
+  <p>
+    <strong>Model and size pickers.</strong> The UI exposes a two-button image model picker
+    ("Grok" / Fast = <code>grok-imagine-image</code>; "Grok+" / Best = <code>grok-imagine-image-quality</code>)
+    and a size picker with native xAI <code>aspect_ratio</code> and <code>resolution</code> (1k/2k) values.
+  </p>
+  <p>
+    <strong>Billing and quota.</strong> When Grok is authorized, <code>GET /api/quota</code> returns
+    a <code>grok</code> object with a monthly usage bar and a
+    <code>billing</code> field (<code>usedUsd</code> / <code>limitUsd</code>) displayed as
+    "$used/$limit" in the QuotaCard header (e.g. "$134.80/$1500.00").
+  </p>
+  <p>
+    <strong>Switch Account.</strong> The QuotaCard exposes a "Switch Account" button for Grok that
+    starts a server-side xAI device-code flow
+    (<code>POST /api/auth/switch</code> → <code>GET /api/auth/switch/:sessionId</code>). The button
+    opens the verification URL in a new tab, displays the user code, and the server polls until
+    complete. The same flow is available for Codex/GPT OAuth.
+  </p>
   <h2>Grok video</h2>
   <p>
-    Grok video generation uses <code>grok-imagine-video</code> (default) or
-    <code>grok-imagine-video-1.5-preview</code>. Three modes are auto-detected from reference count:
-    text-to-video (0 refs), image-to-video (1 ref), and reference-to-video (2–7 refs, max 10s).
-    Controls include duration (1–15s), resolution (480p, 720p), and aspect ratio. Choose the
-    planner model in video settings or pass <code>--planner-model</code> on CLI video commands.
+    Grok video generation uses <code>grok-imagine-video</code> (default, "Grok V / Fast") or
+    <code>grok-imagine-video-1.5-preview</code> ("Grok V1.5 / Preview"). A two-button video model
+    picker at the top of the video controls panel lets you switch between them. Three modes are
+    auto-detected from reference count: text-to-video (0 refs), image-to-video (1 ref), and
+    reference-to-video (2–7 refs, max 10s). Controls include duration (1–15s), resolution
+    (480p, 720p), and aspect ratio. Choose the planner model in video settings or pass
+    <code>--planner-model</code> on CLI video commands.
     The endpoint <code>POST /api/video/generate</code> streams SSE events: planning → submitted →
     progress → done. From the CLI: <code>ima2 video "prompt" --duration 5 --resolution 720p</code>.
   </p>

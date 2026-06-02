@@ -12,10 +12,7 @@ import { getDb } from "../lib/db.js";
 
 import { errInfo } from "../lib/errInfo.js";
 import { requireRuntimeContext, type RouteRuntimeContext } from "../lib/runtimeContext.js";
-import { ensureVideoThumbnail } from "../lib/videoThumb.js";
-import { generateImageThumbnail, imageThumbExists } from "../lib/imageThumb.js";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { backfillThumbnails } from "../lib/thumbBackfill.js";
 
 function asStr(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -190,30 +187,9 @@ export function registerHistoryRoutes(app: Express, ctxRaw: RouteRuntimeContext)
 
   app.post("/api/history/backfill-thumbnails", async (_req: Request, res: Response) => {
     try {
-      const dir = ctx.config.storage.generatedDir;
-      const files = await readdir(dir);
-      const mediaFiles = files.filter((f) => /\.(png|jpe?g|webp|mp4)$/i.test(f) && !f.endsWith(".thumb.jpg"));
-      let created = 0;
-      let skipped = 0;
-      let failed = 0;
-      for (const f of mediaFiles) {
-        try {
-          if (/\.mp4$/i.test(f)) {
-            const ok = await ensureVideoThumbnail(dir, f);
-            if (ok) created++; else failed++;
-          } else {
-            const fullPath = join(dir, f);
-            const exists = await imageThumbExists(fullPath);
-            if (exists) { skipped++; continue; }
-            await generateImageThumbnail(fullPath);
-            created++;
-          }
-        } catch {
-          failed++;
-        }
-      }
-      invalidateHistoryIndex();
-      res.json({ ok: true, total: mediaFiles.length, created, skipped, failed });
+      const r = await backfillThumbnails(ctx.config.storage.generatedDir);
+      if (r.created > 0) invalidateHistoryIndex();
+      res.json({ ok: true, ...r });
     } catch (e) {
       const err = errInfo(e);
       res.status(500).json({ error: err.message });

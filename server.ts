@@ -393,31 +393,14 @@ export async function startServer(overrides: StartServerOverrides = {}) {
     console.error("[db] bootstrap failed:", err.message);
   }
 
-  // Background thumbnail backfill for updated users
+  // Background thumbnail backfill for updated users (recursive — covers video
+  // series subdirectories like continuous_*/clip_NN.mp4, not just top level).
   (async () => {
     try {
-      const { readdir } = await import("node:fs/promises");
-      const { ensureVideoThumbnail } = await import("./lib/videoThumb.js");
-      const { generateImageThumbnail, imageThumbExists } = await import("./lib/imageThumb.js");
-      const dir = ctx.config.storage.generatedDir;
-      const files = await readdir(dir);
-      const media = files.filter((f: string) => /\.(png|jpe?g|webp|mp4)$/i.test(f) && !f.endsWith(".thumb.jpg"));
-      let created = 0;
-      for (const f of media) {
-        try {
-          if (/\.mp4$/i.test(f)) {
-            await ensureVideoThumbnail(dir, f);
-            created++;
-          } else {
-            const full = join(dir, f);
-            if (await imageThumbExists(full)) continue;
-            await generateImageThumbnail(full);
-            created++;
-          }
-        } catch { /* skip individual failures */ }
-      }
-      if (created > 0) {
-        console.log(`[thumbs] backfill: ${created} thumbnails generated for ${media.length} media files`);
+      const { backfillThumbnails } = await import("./lib/thumbBackfill.js");
+      const r = await backfillThumbnails(ctx.config.storage.generatedDir);
+      if (r.created > 0) {
+        console.log(`[thumbs] backfill: ${r.created} created, ${r.skipped} skipped, ${r.failed} failed (${r.total} media files)`);
         const { invalidateHistoryIndex } = await import("./lib/historyIndex.js");
         invalidateHistoryIndex();
       }

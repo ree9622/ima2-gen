@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { backfillPreviews } from "../lib/imageVariants.js";
@@ -61,6 +61,22 @@ describe("backfillPreviews", () => {
       assert.equal(second.total, 2);
       assert.equal(second.processed, 2);
       assert.equal(second.created, 0);
+    });
+  });
+
+  it("reports invalid image variant failures", async () => {
+    await withTempRoot(async (root) => {
+      const target = join(root, "generated", "bad.png");
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, "not an image");
+
+      const result = await backfillPreviews(root);
+      assert.equal(result.ok, false);
+      assert.equal(result.total, 1);
+      assert.equal(result.processed, 1);
+      assert.equal(result.created, 0);
+      assert.equal(result.failed, 2);
+      assert.equal(result.errors.length, 2);
     });
   });
 });

@@ -23,8 +23,8 @@
   --amber: #f59e0b;
   --red: #ef4444;
   --radius: 10px;
-  --sidebar-width: 260px;
-  --right-panel-width: 280px;
+  --sidebar-width: 380px;
+  --right-panel-width: 340px;
   --font: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
   --mono: "Geist Mono", ui-monospace, monospace;
@@ -97,7 +97,10 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
+  grid-template-columns:
+    minmax(320px, var(--sidebar-width))
+    minmax(420px, 1fr)
+    auto;
   height: 100dvh;
   overflow: hidden;
 }
@@ -394,8 +397,10 @@ body {
 /* ── Canvas area ── */
 .canvas {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   padding: 24px 24px 16px;
   position: relative;
   overflow: auto;
@@ -664,11 +669,12 @@ body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   gap: 10px;
   max-width: 100%;
   max-height: 100%;
+  flex: 1 1 auto;
 }
 .result-container.visible {
   display: flex;
@@ -865,6 +871,19 @@ body {
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
+.history-strip--canvas {
+  position: static;
+  width: min(760px, calc(100% - 48px));
+  transform: none;
+  margin: 0 auto;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+  z-index: 4;
+}
 .history-strip::-webkit-scrollbar {
   height: 4px;
 }
@@ -976,6 +995,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  container-type: inline-size;
 }
 .composer--drag {
   border-color: var(--accent);
@@ -1056,6 +1076,107 @@ body {
 .composer__chip-remove:focus-visible {
   background: var(--red);
   opacity: 1;
+}
+.celebrity-prompt {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.celebrity-prompt__toggle {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.celebrity-prompt__toggle span:last-child {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+.celebrity-prompt__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.celebrity-prompt__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.celebrity-prompt__field--wide,
+.celebrity-prompt__actions {
+  grid-column: 1 / -1;
+}
+.celebrity-prompt__field span {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.celebrity-prompt__field input,
+.celebrity-prompt__field select {
+  width: 100%;
+  min-height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+}
+.celebrity-prompt__field input:focus-visible,
+.celebrity-prompt__field select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+.celebrity-prompt__actions {
+  display: flex;
+  gap: 8px;
+}
+.celebrity-prompt__button {
+  flex: 1 1 0;
+  min-height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.celebrity-prompt__button--primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.celebrity-prompt__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@container (min-width: 340px) {
+  .celebrity-prompt__body {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .celebrity-prompt__field--wide {
+    grid-column: span 2;
+  }
+  .celebrity-prompt__actions {
+    grid-column: span 2;
+    align-self: end;
+  }
 }
 .composer__textarea {
   border: none;
@@ -1984,7 +2105,7 @@ body {
   .sidebar {
     border-right: none;
     border-bottom: 1px solid var(--border);
-    max-height: 50dvh;
+    max-height: 70dvh;
     height: auto;
   }
   .sidebar__scroll {
@@ -2347,6 +2468,9 @@ body {
   flex-shrink: 0;
   min-height: 0;
 }
+.activity-log.is-collapsed {
+  max-height: none;
+}
 .activity-log .in-flight-list {
   overflow-y: auto;
   min-height: 0;
@@ -2358,11 +2482,43 @@ body {
   gap: 8px;
   margin-bottom: 6px;
 }
+.activity-log.is-collapsed .activity-log-header {
+  margin-bottom: 0;
+}
+.activity-log-toggle {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.activity-log-toggle:hover,
+.activity-log-toggle:focus-visible {
+  border-color: var(--text-dim);
+  outline: none;
+}
 .activity-log-title {
   font-size: 11px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-dim);
+}
+.activity-log-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
 }
 .activity-log-clear {
   background: none;
@@ -3142,17 +3298,28 @@ body {
    breakpoint with stronger defaults; narrower breakpoints below stack on top. */
 @media (max-width: 800px) {
   .sidebar {
-    /* Allow the prompt + history strip to breathe; the canvas still gets
-       at least 40dvh. */
-    max-height: 60dvh;
+    /* Allow the prompt + history strip to breathe while preserving a
+       visible result area below the editor. */
+    max-height: 72dvh;
   }
   .sidebar__scroll {
     padding: 12px 12px env(safe-area-inset-bottom);
     gap: 10px;
   }
+  .composer {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .composer__textarea {
+    flex: 0 0 auto;
+  }
   .canvas {
     padding: 16px;
     padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .history-strip--canvas {
+    width: calc(100% - 8px);
+    margin-top: 16px;
   }
   .canvas-empty {
     padding: 0 16px;
@@ -3226,11 +3393,12 @@ body {
    catch tall narrow tablets in split view. */
 @media (max-width: 480px) {
   body { font-size: 14px; }
-  .sidebar { max-height: 58dvh; }
+  .sidebar { max-height: 74dvh; }
   .sidebar__scroll { padding: 10px 10px env(safe-area-inset-bottom); gap: 8px; }
   .logo { font-size: 16px; gap: 6px; }
   .logo-badge { font-size: 10px; padding: 1px 6px; }
   .canvas { padding: 12px; }
+  .canvas { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   .canvas-empty__icon { width: 60px; height: 60px; border-radius: 14px; }
   .canvas-empty__title { font-size: 16px; }
   .canvas-empty__hint { font-size: 12px; }
@@ -3260,6 +3428,7 @@ body {
   .sidebar__scroll { padding: 8px; gap: 6px; }
   .logo-badge { display: none; }
   .canvas { padding: 10px; }
+  .canvas { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .canvas-empty { padding: 0 12px; }
   .canvas-empty__title { font-size: 15px; }
   .canvas-empty__example { padding: 8px 10px; font-size: 11px; }
@@ -3284,7 +3453,7 @@ body {
    matching the desktop layout but with a slim sidebar. */
 @media (max-width: 800px) and (orientation: landscape) and (max-height: 540px) {
   .app {
-    grid-template-columns: minmax(200px, var(--sidebar-width)) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(280px, var(--sidebar-width)) minmax(0, 1fr) auto;
     grid-template-rows: 100dvh;
     height: 100dvh;
     overflow: hidden;

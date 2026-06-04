@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { ResultActions } from "./ResultActions";
+import { HistoryStrip } from "./HistoryStrip";
 import { webVariant, fallbackTo } from "../lib/imageVariants";
 
 export function Canvas() {
@@ -205,6 +206,7 @@ export function Canvas() {
           <ResultActions />
         </div>
       ) : null}
+      <HistoryStrip className="history-strip--canvas" />
     </main>
   );
 }

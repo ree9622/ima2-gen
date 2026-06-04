@@ -35,7 +35,7 @@ function buildTooltip(item: {
   return meta ? `${head}\n${meta}` : head;
 }
 
-export function HistoryStrip() {
+export function HistoryStrip({ className = "" }: { className?: string }) {
   const history = useAppStore((s) => s.history);
   const currentImage = useAppStore((s) => s.currentImage);
   const selectHistory = useAppStore((s) => s.selectHistory);
@@ -44,7 +44,7 @@ export function HistoryStrip() {
 
   const favCount = history.filter((h) => h.favorite).length;
   return (
-    <div className="history-strip">
+    <div className={`history-strip${className ? ` ${className}` : ""}`}>
       <button
         type="button"
         className="history-thumb history-thumb--add"

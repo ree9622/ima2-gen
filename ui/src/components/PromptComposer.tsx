@@ -7,6 +7,13 @@ import { RefBundlesModal } from "./RefBundlesModal";
 import { PromptBundlesModal } from "./PromptBundlesModal";
 import { MetadataRestoreCard } from "./MetadataRestoreCard";
 import { enhancePrompt as apiEnhance, closeBatch as apiCloseBatch } from "../lib/api";
+import {
+  buildCelebrityPrompt,
+  getCelebrityPromptDefaults,
+  type CelebrityFacePriority,
+  type CelebrityPromptInput,
+  type CelebrityPromptTone,
+} from "../lib/celebrityPrompt";
 
 const MAX_REFS = 5;
 
@@ -72,8 +79,39 @@ export function PromptComposer() {
   const [txtBatchRunning, setTxtBatchRunning] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
+  const [celebrityPromptOpen, setCelebrityPromptOpen] = useState(false);
+  const [celebrityDraft, setCelebrityDraft] = useState<CelebrityPromptInput>(
+    getCelebrityPromptDefaults,
+  );
 
   const canAddMore = refs.length < MAX_REFS;
+  const celebrityPromptReady =
+    celebrityDraft.celebrityName.trim().length > 0 && celebrityDraft.outfit.trim().length > 0;
+
+  const updateCelebrityDraft = <K extends keyof CelebrityPromptInput>(
+    key: K,
+    value: CelebrityPromptInput[K],
+  ) => {
+    setCelebrityDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const applyCelebrityPrompt = async (generateNow = false) => {
+    if (!celebrityPromptReady) {
+      showToast("연예인 이름과 복장을 입력해 주세요.", true);
+      return;
+    }
+    try {
+      const next = buildCelebrityPrompt(celebrityDraft);
+      setPrompt(next);
+      showToast(generateNow ? "연예인 프롬프트로 생성 시작" : "연예인 프롬프트를 채웠습니다.");
+      if (generateNow) {
+        await generate({ overridePrompt: next });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "프롬프트를 만들 수 없습니다.";
+      showToast(message, true);
+    }
+  };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -472,6 +510,99 @@ export function PromptComposer() {
           ))}
         </div>
       )}
+
+      <div className="celebrity-prompt">
+        <button
+          type="button"
+          className="celebrity-prompt__toggle"
+          onClick={() => setCelebrityPromptOpen((open) => !open)}
+          aria-expanded={celebrityPromptOpen}
+        >
+          <span>연예인 프롬프트</span>
+          <span aria-hidden="true">{celebrityPromptOpen ? "접기" : "열기"}</span>
+        </button>
+
+        {celebrityPromptOpen && (
+          <div className="celebrity-prompt__body">
+            <label className="celebrity-prompt__field">
+              <span>이름</span>
+              <input
+                value={celebrityDraft.celebrityName}
+                placeholder="장원영"
+                onChange={(e) => updateCelebrityDraft("celebrityName", e.target.value)}
+              />
+            </label>
+            <label className="celebrity-prompt__field">
+              <span>그룹</span>
+              <input
+                value={celebrityDraft.groupName ?? ""}
+                placeholder="IVE"
+                onChange={(e) => updateCelebrityDraft("groupName", e.target.value)}
+              />
+            </label>
+            <label className="celebrity-prompt__field celebrity-prompt__field--wide">
+              <span>복장</span>
+              <input
+                value={celebrityDraft.outfit}
+                placeholder="검정 원피스 수영복 + 흰 린넨 셔츠"
+                onChange={(e) => updateCelebrityDraft("outfit", e.target.value)}
+              />
+            </label>
+            <label className="celebrity-prompt__field celebrity-prompt__field--wide">
+              <span>장소</span>
+              <input
+                value={celebrityDraft.scene ?? ""}
+                placeholder="리조트 인피니티풀"
+                onChange={(e) => updateCelebrityDraft("scene", e.target.value)}
+              />
+            </label>
+            <label className="celebrity-prompt__field">
+              <span>톤</span>
+              <select
+                value={celebrityDraft.tone ?? "natural"}
+                onChange={(e) =>
+                  updateCelebrityDraft("tone", e.target.value as CelebrityPromptTone)
+                }
+              >
+                <option value="natural">자연스냅</option>
+                <option value="resort">리조트</option>
+                <option value="stage">무대</option>
+              </select>
+            </label>
+            <label className="celebrity-prompt__field">
+              <span>얼굴</span>
+              <select
+                value={celebrityDraft.facePriority ?? "strong"}
+                onChange={(e) =>
+                  updateCelebrityDraft("facePriority", e.target.value as CelebrityFacePriority)
+                }
+              >
+                <option value="strong">강하게</option>
+                <option value="balanced">균형</option>
+                <option value="soft">자연스럽게</option>
+              </select>
+            </label>
+            <div className="celebrity-prompt__actions">
+              <button
+                type="button"
+                className="celebrity-prompt__button"
+                disabled={!celebrityPromptReady}
+                onClick={() => void applyCelebrityPrompt(false)}
+              >
+                프롬프트 채우기
+              </button>
+              <button
+                type="button"
+                className="celebrity-prompt__button celebrity-prompt__button--primary"
+                disabled={!celebrityPromptReady}
+                onClick={() => void applyCelebrityPrompt(true)}
+              >
+                바로 생성
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <textarea
         className="prompt-area composer__textarea"

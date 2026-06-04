@@ -21,21 +21,21 @@ type PanelResizeConfig = {
 const PANEL_RESIZE: Record<PanelResizeTarget, PanelResizeConfig> = {
   sidebar: {
     cssVar: "--sidebar-width",
-    defaultWidth: 260,
+    defaultWidth: 380,
     label: "왼쪽 패널 폭 조절",
-    max: 420,
-    min: 220,
+    max: 560,
+    min: 300,
     selector: ".sidebar",
-    storageKey: "ima2.sidebarWidth",
+    storageKey: "ima2.sidebarWidth.v2",
   },
   "right-panel": {
     cssVar: "--right-panel-width",
-    defaultWidth: 280,
+    defaultWidth: 340,
     label: "오른쪽 설정 패널 폭 조절",
-    max: 480,
-    min: 240,
+    max: 560,
+    min: 300,
     selector: ".right-panel:not(.collapsed)",
-    storageKey: "ima2.rightPanelWidth",
+    storageKey: "ima2.rightPanelWidth.v2",
   },
 };
 

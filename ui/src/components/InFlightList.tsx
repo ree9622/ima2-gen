@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 
 function truncate(s: string, max = 28) {
@@ -31,6 +32,7 @@ function statusLabel(status: string | undefined, phase: string | undefined): str
 }
 
 export function InFlightList() {
+  const [expanded, setExpanded] = useState(false);
   const inFlight = useAppStore((s) => s.inFlight);
   const dismissActivity = useAppStore((s) => s.dismissActivity);
   const clearActivityHistory = useAppStore((s) => s.clearActivityHistory);
@@ -41,12 +43,28 @@ export function InFlightList() {
   if (inFlight.length === 0) return null;
 
   const hasTerminal = inFlight.some((f) => (f.status ?? "running") !== "running");
+  const runningCount = inFlight.filter((f) => (f.status ?? "running") === "running").length;
+  const failedCount = inFlight.filter((f) => (f.status ?? "running") === "error").length;
+  const doneCount = inFlight.filter((f) => (f.status ?? "running") === "success").length;
+  const summary = [
+    runningCount > 0 ? `생성 중 ${runningCount}` : null,
+    failedCount > 0 ? `실패 ${failedCount}` : null,
+    doneCount > 0 ? `완료 ${doneCount}` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div className="activity-log">
-      {hasTerminal && (
-        <div className="activity-log-header">
+    <div className={`activity-log${expanded ? " is-expanded" : " is-collapsed"}`}>
+      <div className="activity-log-header">
+        <button
+          type="button"
+          className="activity-log-toggle"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+        >
           <span className="activity-log-title">최근 생성</span>
+          <span className="activity-log-summary">{summary || `${inFlight.length}건`}</span>
+        </button>
+        {hasTerminal && expanded && (
           <button
             type="button"
             className="activity-log-clear"
@@ -55,8 +73,9 @@ export function InFlightList() {
           >
             모두 지우기
           </button>
-        </div>
-      )}
+        )}
+      </div>
+      {expanded && (
       <ul className="in-flight-list">
         {inFlight.map((f) => {
           const status = (f.status ?? "running") as "running" | "success" | "error";
@@ -152,6 +171,7 @@ export function InFlightList() {
           );
         })}
       </ul>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ _e2e_*.png
 _e2e_*.json
 _debug_*.png
 _debug_*.json
+help-out/
 
 # Timestamped backups created by hand-edits (e.g. file.bak.20260503-081839)
 *.bak.*

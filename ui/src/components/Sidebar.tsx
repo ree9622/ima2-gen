@@ -4,7 +4,6 @@ import { PromptComposer } from "./PromptComposer";
 import { SystemPromptSection } from "./SystemPromptSection";
 import { GenerateButton } from "./GenerateButton";
 import { InFlightList } from "./InFlightList";
-import { HistoryStrip } from "./HistoryStrip";
 import { SessionPicker } from "./SessionPicker";
 import { OAuthIndicator } from "./OAuthIndicator";
 import { UserMenu } from "./UserMenu";
@@ -115,7 +114,6 @@ export function Sidebar() {
           </>
         )}
       </div>
-      <HistoryStrip />
       <PanelResizeHandle target="sidebar" />
     </aside>
   );

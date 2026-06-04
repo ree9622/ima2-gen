@@ -48,7 +48,7 @@ test("thumbnail backfill recursively covers nested media and skips trash", async
 
     const result = await backfillThumbnails(root);
 
-    assert.deepEqual(result, { total: 2, created: 1, skipped: 1, failed: 0 });
+    assert.deepEqual(result, { total: 2, created: 1, skipped: 1, failed: 0, failures: [] });
     assert.equal(await exists(thumbPathForImage(imagePath)), true);
     assert.equal(await exists(thumbPathForImage(trashImagePath)), false);
   } finally {
@@ -61,5 +61,26 @@ test("thumbnail backfill treats a missing generated directory as empty", async (
 
   const result = await backfillThumbnails(missing);
 
-  assert.deepEqual(result, { total: 0, created: 0, skipped: 0, failed: 0 });
+  assert.deepEqual(result, { total: 0, created: 0, skipped: 0, failed: 0, failures: [] });
+});
+
+test("thumbnail backfill reports files that fail thumbnail generation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ima2-thumb-backfill-failure-"));
+  try {
+    const badImagePath = join(root, "bad.png");
+    await writeFile(badImagePath, "not an image");
+
+    const result = await backfillThumbnails(root);
+
+    assert.equal(result.total, 1);
+    assert.equal(result.created, 0);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.failed, 1);
+    assert.equal(result.failures.length, 1);
+    assert.equal(result.failures[0].file, badImagePath);
+    assert.equal(result.failures[0].kind, "image");
+    assert.match(result.failures[0].reason, /unsupported image format|Input file/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

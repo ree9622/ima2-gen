@@ -177,6 +177,19 @@ app.use((req, _res, next) => {
   }
   next();
 });
+
+// API responses represent live job, history, and auth state. Browsers and
+// nginx may otherwise reuse Express ETags and turn API fetches into 304s,
+// leaving the UI with stale in-flight/history data after a deploy or refresh.
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 app.use(cookieParserMiddleware);
 app.use(authMiddleware);
 
@@ -236,19 +249,6 @@ function canAccess(meta, authUser) {
 // Structured /api/* request logging (echoes/issues X-Request-Id, redacts body
 // and query). Mounted after the auth-user middleware so authUser is captured.
 app.use(createRequestLogger());
-
-// API responses represent live job, history, and auth state. Browsers and
-// nginx may otherwise reuse Express ETags and turn API fetches into 304s,
-// leaving the UI with stale in-flight/history data after a deploy or refresh.
-app.use((req, res, next) => {
-  if (!req.path.startsWith("/api/")) return next();
-  delete req.headers["if-none-match"];
-  delete req.headers["if-modified-since"];
-  res.setHeader("Cache-Control", "no-store, max-age=0");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  next();
-});
 
 // ─────────────────────────────────────────────────────────────────────────
 // Graceful shutdown gate (2026-04-29).

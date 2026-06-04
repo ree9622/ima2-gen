@@ -2,7 +2,7 @@ import "./lib/timestampConsole.js";
 import "dotenv/config";
 import express from "express";
 import sharp from "sharp";
-import { writeFile, mkdir, readFile, readdir, stat, rename } from "fs/promises";
+import { writeFile, mkdir, readFile, readdir, stat } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { request as httpRequest } from "http";
@@ -12,7 +12,8 @@ import { existsSync, writeFileSync, unlinkSync, mkdirSync, readFileSync as fsRea
 import { homedir } from "os";
 import { randomBytes } from "crypto";
 import { newNodeId, saveNode, loadNodeB64, loadNodeMeta, loadAssetB64, loadAssetSidecar, importExistingFile, writeNodeResult, readNodeResult, pruneNodeResults } from "./lib/nodeStore.js";
-import { derivePreviews, variantUrls } from "./lib/imageVariants.js";
+import { derivePreviews, variantUrls, backfillPreviews } from "./lib/imageVariants.js";
+import { atomicWriteJson } from "./lib/atomicWrite.js";
 import { startJob, finishJob, listJobs, listJobsRaw, setJobPhase, setJobAttempt, getJob, purgeStaleJobs } from "./lib/inflight.js";
 import {
   enqueueGenerationJob,
@@ -235,6 +236,19 @@ function canAccess(meta, authUser) {
 // Structured /api/* request logging (echoes/issues X-Request-Id, redacts body
 // and query). Mounted after the auth-user middleware so authUser is captured.
 app.use(createRequestLogger());
+
+// API responses represent live job, history, and auth state. Browsers and
+// nginx may otherwise reuse Express ETags and turn API fetches into 304s,
+// leaving the UI with stale in-flight/history data after a deploy or refresh.
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // Graceful shutdown gate (2026-04-29).
@@ -1334,7 +1348,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       ...(outfitModule ? { outfitModule } : {}),
       ...(batchId ? { batchId, batchIndex } : {}),
     };
-    await writeFile(join(dir, `${id}.json`), JSON.stringify(record));
+    await atomicWriteJson(join(dir, `${id}.json`), record);
     return id;
   } catch (e) {
     console.warn("[failed-sidecar] write failed:", e.message);
@@ -1533,11 +1547,7 @@ async function loadBundles() {
 }
 
 async function saveBundles(bundles) {
-  await mkdir(BUNDLES_DIR, { recursive: true });
-  const tmp = BUNDLES_FILE + ".tmp";
-  await writeFile(tmp, JSON.stringify({ bundles }, null, 2));
-  // Atomic rename so a crash mid-write can't truncate the file.
-  await rename(tmp, BUNDLES_FILE);
+  await atomicWriteJson(BUNDLES_FILE, { bundles }, { spaces: 2 });
 }
 
 function bundleVisibleTo(bundle, authUser) {
@@ -2050,6 +2060,29 @@ app.get("/api/history", async (req, res) => {
   } catch (err) {
     console.error("[history] error:", err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/history/backfill-thumbnails", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const limit = body.limit === undefined || body.limit === null
+      ? Infinity
+      : clampPositiveNumber(body.limit, Infinity, { min: 1, max: 20000 });
+    const result = await backfillPreviews(__dirname, {
+      dryRun: body.dryRun === true,
+      force: body.force === true,
+      limit,
+      concurrency: clampPositiveNumber(body.concurrency, 4, { min: 1, max: 16 }),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[history:backfill-thumbnails] error:", err.message);
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+      code: "BACKFILL_THUMBNAILS_FAILED",
+    });
   }
 });
 
@@ -2960,7 +2993,7 @@ app.post("/api/generate", async (req, res) => {
           ...(outfitModule ? { outfitModule } : {}),
           ...(batchId ? { batchId, batchIndex } : {}),
         };
-        await writeFile(join(__dirname, "generated", filename + ".json"), JSON.stringify(meta)).catch(() => {});
+        await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
         images.push({
           image: `data:${mime};base64,${r.value.b64}`,
           filename,
@@ -3310,7 +3343,7 @@ app.post("/api/edit", async (req, res) => {
       owner: req.authUser || LEGACY_OWNER,
       requestId,
     };
-    await writeFile(join(__dirname, "generated", filename + ".json"), JSON.stringify(meta)).catch(() => {});
+    await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
 
     res.json({
       image: `data:image/png;base64,${resultB64}`,

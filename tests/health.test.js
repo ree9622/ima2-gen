@@ -98,6 +98,7 @@ describe("Server: /api/health + advertisement", () => {
   it("GET /api/health returns expected shape", async () => {
     const r = await fetch(`http://localhost:${PORT}/api/health`);
     assert.strictEqual(r.status, 200);
+    assert.match(r.headers.get("cache-control") || "", /no-store/);
     const body = await r.json();
     assert.strictEqual(body.ok, true);
     assert.ok(typeof body.version === "string");
@@ -106,6 +107,38 @@ describe("Server: /api/health + advertisement", () => {
     assert.ok(Number.isFinite(body.activeJobs));
     assert.ok(Number.isFinite(body.pid));
     assert.ok(Number.isFinite(body.startedAt));
+  });
+
+  it("does not return 304 for API conditional requests", async () => {
+    const first = await fetch(`http://localhost:${PORT}/api/health`);
+    assert.strictEqual(first.status, 200);
+    const etag = first.headers.get("etag");
+    assert.ok(etag, "precondition: express should emit an ETag");
+
+    const second = await fetch(`http://localhost:${PORT}/api/health`, {
+      headers: { "If-None-Match": etag },
+    });
+    assert.strictEqual(second.status, 200);
+    assert.match(second.headers.get("cache-control") || "", /no-store/);
+    const body = await second.json();
+    assert.strictEqual(body.ok, true);
+  });
+
+  it("POST /api/history/backfill-thumbnails supports dry-run", async () => {
+    const r = await fetch(`http://localhost:${PORT}/api/history/backfill-thumbnails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: true, limit: 1 }),
+    });
+    assert.strictEqual(r.status, 200);
+    assert.match(r.headers.get("cache-control") || "", /no-store/);
+    const body = await r.json();
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.dryRun, true);
+    assert.ok(body.total >= 0);
+    assert.ok(body.total <= 1);
+    assert.strictEqual(body.processed, 0);
+    assert.strictEqual(body.created, 0);
   });
 
   it("writes ~/.ima2/server.json with pid + port", () => {

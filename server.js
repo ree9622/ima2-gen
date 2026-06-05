@@ -793,6 +793,57 @@ function isUsageLimitError(e) {
   return USAGE_LIMIT_RE.test(msg);
 }
 
+// ── Transient per-minute rate limit (2026-06-05) ───────────────────────────
+// A *per-minute* bucket (e.g. "input-images per min: Limit 4000") refills
+// every window, so it is NOT a hard cap — backing off and retrying the SAME
+// variant succeeds once the minute clears. This is distinct from a true usage
+// cap / quota / billing limit, which no amount of waiting can fix. We must
+// retry the former and fail-fast the latter, so classify carefully.
+//
+// Root cause this guards (CLASUP n/a — asrock ima2-gen): the org has a single
+// codex account, and high-reference requests (refs=5, high-res inputs counted
+// as many input-image patches) burst past 4000 input-images/min. Without this,
+// the 429 surfaced to the user as an outright generation failure.
+const PERMANENT_USAGE_RE =
+  /usage limit|monthly|billing|insufficient_quota|hard limit|usage cap|spending|credit/i;
+const TRANSIENT_RATELIMIT_RE =
+  /rate limit reached|(?:requests|tokens|images|input-images) per min|try again in/i;
+function isTransientRateLimit(e) {
+  if (!e) return false;
+  const msg = e.message || "";
+  if (PERMANENT_USAGE_RE.test(msg)) return false; // hard cap — never retry
+  if (e.status === 429 && TRANSIENT_RATELIMIT_RE.test(msg)) return true;
+  return TRANSIENT_RATELIMIT_RE.test(msg) && /per min|try again in/i.test(msg);
+}
+// OpenAI hints a retry delay ("Please try again in 15ms" / "1.2s"). It is
+// frequently an unrealistically small value for a per-minute bucket, so the
+// caller floors it to a real backoff.
+function parseRetryAfterMs(e) {
+  const m = (e?.message || "").match(/try again in ([\d.]+)\s*(ms|s)\b/i);
+  if (!m) return null;
+  const v = Number.parseFloat(m[1]);
+  if (!Number.isFinite(v)) return null;
+  return m[2].toLowerCase() === "s" ? v * 1000 : v;
+}
+// Backoff knobs (env-overridable). The base/max are sized for a per-minute
+// bucket: enough to let the window clear, capped so a stuck job still fails.
+const TRANSIENT_RATE_MAX_RETRIES = Math.max(
+  0,
+  Number.parseInt(process.env.IMA2_RATE_RETRY_MAX || "5", 10) || 5,
+);
+const TRANSIENT_RATE_BASE_WAIT_MS = Math.max(
+  1000,
+  Number.parseInt(process.env.IMA2_RATE_RETRY_BASE_MS || "8000", 10) || 8000,
+);
+const TRANSIENT_RATE_MAX_WAIT_MS = Math.max(
+  TRANSIENT_RATE_BASE_WAIT_MS,
+  Number.parseInt(process.env.IMA2_RATE_RETRY_MAX_MS || "45000", 10) || 45000,
+);
+// Global throttle signal: when a per-minute rate limit is hit, the queue
+// drain loop stops claiming NEW jobs until this timestamp so in-flight work
+// can drain the bucket instead of every worker piling onto the same window.
+let imageRateCooldownUntil = 0;
+
 // OAuth token revoked / expired upstream → openai-oauth proxy returns the
 // raw upstream message ("Your authentication token has been invalidated.
 // Please try signing in again." / "Encountered invalidated oauth token for
@@ -882,6 +933,10 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   // Tracks back-to-back network failures so the loop bails fast when the
   // OAuth proxy is fully dead (vs. just briefly restarting).
   let consecutiveNetErrors = 0;
+  // Tracks per-minute rate-limit backoffs separately from the safety-variant
+  // budget, so a transient 429 retry never consumes (or is consumed by) the
+  // prompt-cycling attempts.
+  let transientRateRetries = 0;
 
   const tag = ctx.requestId ? `[${label}][${ctx.requestId}]` : `[${label}]`;
   console.log(
@@ -1061,6 +1116,33 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       // Reset network counter on non-network errors so an old proxy hiccup
       // doesn't leak into a later cycle's bail-out budget.
       consecutiveNetErrors = 0;
+      // Transient per-minute rate limit (e.g. input-images per min): the
+      // bucket refills, so back off and retry the SAME variant instead of
+      // failing the user's generation. Also raise a global queue cooldown so
+      // sibling workers stop pulling new jobs and let the window drain. This
+      // is checked BEFORE the hard usage-cap bail-out below, and
+      // isTransientRateLimit() already excludes permanent caps/quotas.
+      if (isTransientRateLimit(e) && transientRateRetries < TRANSIENT_RATE_MAX_RETRIES) {
+        transientRateRetries += 1;
+        const hinted = parseRetryAfterMs(e);
+        // OpenAI's hint is often unrealistically small for a per-minute
+        // bucket ("try again in 15ms"); floor to a real, growing backoff.
+        const wait = Math.min(
+          TRANSIENT_RATE_MAX_WAIT_MS,
+          Math.max(
+            hinted && hinted > 1000 ? hinted : 0,
+            TRANSIENT_RATE_BASE_WAIT_MS * transientRateRetries,
+          ),
+        );
+        imageRateCooldownUntil = Date.now() + wait;
+        console.warn(
+          `${tag} transient RATE_LIMIT (${transientRateRetries}/${TRANSIENT_RATE_MAX_RETRIES}) — ` +
+            `queue cooldown ${wait}ms then retry SAME variant: ${(e?.message || "").slice(0, 140)}`,
+        );
+        await waitWithGenerationCancel(wait, ctx.abortSignal, ctx.requestId);
+        i -= 1; // re-attempt the same variant (decremented before for-loop ++)
+        continue;
+      }
       // Non-retryable: usage limit / quota / 429. Stop the loop and throw
       // a typed error so the route handler can forward it to the client.
       if (isUsageLimitError(e)) {
@@ -2613,6 +2695,21 @@ async function drainGenerationQueue() {
     do {
       generationQueueWakeRequested = false;
       while (!SHUTTING_DOWN && generationQueueActive < GENERATION_QUEUE_CONCURRENCY) {
+        // Per-minute image rate limit in effect: stop claiming NEW jobs until
+        // the window clears so in-flight work drains the bucket instead of
+        // every worker stacking onto the same exhausted minute. Re-kick once
+        // the cooldown lapses. In-flight jobs are unaffected (they back off
+        // and retry inside runPromptAttempts).
+        const cooldownLeft = imageRateCooldownUntil - Date.now();
+        if (cooldownLeft > 0) {
+          // Clear the wake flag so neither the outer do-while nor the finally
+          // re-kick spins while we wait; the timer is the sole resume path.
+          generationQueueWakeRequested = false;
+          setTimeout(() => {
+            if (!SHUTTING_DOWN) kickGenerationQueue();
+          }, Math.min(cooldownLeft, 30000) + 50);
+          break;
+        }
         const job = await claimNextGenerationJob(GENERATION_QUEUE_KIND);
         if (!job) break;
         if (SHUTTING_DOWN) {

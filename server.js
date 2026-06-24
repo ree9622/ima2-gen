@@ -96,6 +96,7 @@ import {
 import { boostRefPrompt } from "./lib/refPrompt.js";
 import { resolveRefLineage } from "./lib/refLineage.js";
 import { getStorageStats, pruneStorage } from "./lib/prune.js";
+import { s3Enabled, s3GetStream, s3MirrorAsync, contentTypeFor } from "./lib/s3Store.js";
 import { withDefaultPrompt, buildDeveloperPrompt, resolveSystemPrompt } from "./lib/defaultPrompt.js";
 import {
   PROMPT_MAX,
@@ -417,6 +418,43 @@ app.use("/generated", async (req, res, next) => {
   }
   if (!canAccess(meta, req.authUser)) return res.status(404).end();
   return generatedStatic(req, res, next);
+});
+
+// S3 proxy fallback: when the local file is missing (offloaded to S3 to save
+// disk), stream it back from S3. ACL was already enforced by the middleware
+// above (it reads the local sidecar), so any request reaching here is allowed.
+// Sidecar/.trash/.failed are 404'd above and never reach this handler, but we
+// re-guard defensively.
+app.use("/generated", async (req, res, next) => {
+  if (!s3Enabled()) return next();
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(req.path);
+    } catch {
+      return req.path;
+    }
+  })();
+  if (decoded.endsWith(".json") || decoded.includes("/.trash/") || decoded.includes("/.failed/")) {
+    return res.status(404).end();
+  }
+  const key = decoded.replace(/^\/+/, "");
+  if (!key) return next();
+  try {
+    const obj = await s3GetStream(key);
+    if (!obj) return next();
+    res.setHeader("Content-Type", obj.contentType || contentTypeFor(key));
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    if (obj.size != null) res.setHeader("Content-Length", String(obj.size));
+    obj.body.on("error", (err) => {
+      console.warn("[s3-proxy] stream error:", key, err?.message || err);
+      if (!res.headersSent) res.status(502).end();
+      else res.destroy();
+    });
+    obj.body.pipe(res);
+  } catch (err) {
+    console.warn("[s3-proxy] get failed:", key, err?.message || err);
+    next();
+  }
 });
 
 // Emits a 400 with both string + {code,message} shapes so old clients that
@@ -3058,6 +3096,7 @@ app.post("/api/generate", async (req, res) => {
           maxAttempts,
         });
         await writeFile(join(__dirname, "generated", filename), imageBuf);
+        s3MirrorAsync(filename, imageBuf, "image/png");
         // Sidecar metadata for /api/history reconstruction
         const meta = {
           prompt,
@@ -3091,6 +3130,7 @@ app.post("/api/generate", async (req, res) => {
           ...(batchId ? { batchId, batchIndex } : {}),
         };
         await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
+        s3MirrorAsync(filename + ".json", Buffer.from(JSON.stringify(meta)), "application/json");
         images.push({
           image: `data:${mime};base64,${r.value.b64}`,
           filename,
@@ -3416,6 +3456,7 @@ app.post("/api/edit", async (req, res) => {
       moderation: typeof moderation === "string" ? moderation : undefined,
     });
     await writeFile(join(__dirname, "generated", filename), editImageBuf);
+    s3MirrorAsync(filename, editImageBuf, "image/png");
     const meta = {
       prompt,
       promptUsed: promptUsed || prompt,
@@ -3441,6 +3482,7 @@ app.post("/api/edit", async (req, res) => {
       requestId,
     };
     await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
+    s3MirrorAsync(filename + ".json", Buffer.from(JSON.stringify(meta)), "application/json");
 
     res.json({
       image: `data:image/png;base64,${resultB64}`,

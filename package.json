@@ -47,6 +47,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.726.0",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",

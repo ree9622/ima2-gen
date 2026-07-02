@@ -764,7 +764,7 @@ type AppState = {
   // mean we have no hint and the server should treat the ref as uploaded.
   referenceMetaHints: (import("../types").ReferenceMetaHint | null)[];
   addReferences: (files: File[]) => Promise<void>;
-  addReferenceDataUrl: (dataUrl: string) => Promise<void>;
+  addReferenceDataUrl: (dataUrl: string) => Promise<boolean>;
   removeReference: (index: number) => void;
   clearReferences: () => void;
   useCurrentAsReference: () => Promise<void>;
@@ -1405,22 +1405,51 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       get().showToast("참조 이미지는 최대 5장까지 추가할 수 있습니다. 초과한 이미지는 제외되었습니다.", true);
     }
   },
+  // Accepts either a data: URL (fresh generation result, already in memory)
+  // or a plain /generated/... URL (history/lightbox reuse). The latter is
+  // fetched and inlined to base64 first — the server only accepts base64
+  // refs (lib/refs.js MAX_REF_B64_BYTES), so a bare URL string would fail
+  // validation at generate time.
   addReferenceDataUrl: async (dataUrl) => {
-    if (get().referenceImages.length >= 5) return;
+    if (get().referenceImages.length >= 5) {
+      get().showToast("참조 이미지는 최대 5장까지 추가할 수 있습니다.", true);
+      return false;
+    }
     let url = dataUrl;
+    if (!url.startsWith("data:")) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        url = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === "string") resolve(reader.result);
+            else reject(new Error("read failed"));
+          };
+          reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        get().showToast("이미지를 참조로 가져오지 못했습니다", true);
+        return false;
+      }
+    }
     try {
-      url = await resizeDataUrlForRef(dataUrl);
+      url = await resizeDataUrlForRef(url);
     } catch {
       // fall through with the original — server may still reject if huge
     }
-    set((s) =>
-      s.referenceImages.length >= 5
-        ? s
-        : {
-            referenceImages: [...s.referenceImages, url],
-            referenceMetaHints: [...s.referenceMetaHints, { kind: "uploaded" }],
-          },
-    );
+    let added = false;
+    set((s) => {
+      if (s.referenceImages.length >= 5) return s;
+      added = true;
+      return {
+        referenceImages: [...s.referenceImages, url],
+        referenceMetaHints: [...s.referenceMetaHints, { kind: "uploaded" }],
+      };
+    });
+    return added;
   },
   removeReference: (index) => {
     set((s) => ({

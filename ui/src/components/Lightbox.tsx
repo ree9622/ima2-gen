@@ -23,6 +23,7 @@ export function Lightbox() {
   const jumpToImageSession = useAppStore((s) => s.jumpToImageSession);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const importHistoryAsRootNode = useAppStore((s) => s.importHistoryAsRootNode);
+  const addReferenceDataUrl = useAppStore((s) => s.addReferenceDataUrl);
   const deleteNodesByFilename = useAppStore((s) => s.deleteNodesByFilename);
   const flushGraphSave = useAppStore((s) => s.flushGraphSave);
 
@@ -240,6 +241,44 @@ export function Lightbox() {
     if (result) close();
   }, [currentImage, importHistoryAsRootNode, close]);
 
+  const reuseAsReference = useCallback(async () => {
+    if (!currentImage) return;
+    const src = currentImage.url || currentImage.image;
+    if (!src) return;
+    const ok = await addReferenceDataUrl(src);
+    if (ok) showToast("이 이미지를 참조로 첨부했어요");
+  }, [currentImage, addReferenceDataUrl, showToast]);
+
+  // Attach every reference photo of the current image in one click instead
+  // of forcing the user to click each thumb individually (4+ refs was a
+  // reported annoyance). Caps at the 5-ref slot limit up front so the
+  // per-call cap toast inside addReferenceDataUrl never fires mid-loop.
+  const reuseAllReferences = useCallback(async () => {
+    const refs = currentImage?.references ?? [];
+    if (!refs.length) return;
+    const room = 5 - useAppStore.getState().referenceImages.length;
+    if (room <= 0) {
+      showToast("참조 이미지는 최대 5장까지 추가할 수 있습니다.", true);
+      return;
+    }
+    const targets = refs.slice(0, room);
+    let added = 0;
+    for (const ref of targets) {
+      const ok = await addReferenceDataUrl(ref.sourceUrl);
+      if (ok) added++;
+    }
+    const skipped = refs.length - added;
+    if (added > 0) {
+      showToast(
+        skipped > 0
+          ? `${added}장을 참조로 첨부했어요 (${skipped}장 제외)`
+          : `${added}장을 참조로 첨부했어요`,
+      );
+    } else {
+      showToast("첨부할 수 있는 참조 이미지가 없어요", true);
+    }
+  }, [currentImage, addReferenceDataUrl, showToast]);
+
   const download = useCallback(async () => {
     if (!currentImage) return;
     const src = currentImage.url || currentImage.image;
@@ -390,6 +429,21 @@ export function Lightbox() {
               </svg>
             </button>
           ) : null}
+          <button
+            type="button"
+            className="lightbox__btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              void reuseAsReference();
+            }}
+            aria-label="참조 이미지로 첨부"
+            title="이 이미지를 참조로 첨부해서 새로 생성"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="12" height="12" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
           <button
             type="button"
             className="lightbox__btn"
@@ -577,7 +631,19 @@ export function Lightbox() {
 
       {currentImage.references && currentImage.references.length > 0 && showCaption ? (
         <div className="lightbox__refs" onClick={(e) => e.stopPropagation()}>
-          <span className="lightbox__refs-label">참조 사진</span>
+          <div className="lightbox__refs-head">
+            <span className="lightbox__refs-label">참조 사진</span>
+            {currentImage.references.length > 1 ? (
+              <button
+                type="button"
+                className="lightbox__refs-addall"
+                onClick={() => void reuseAllReferences()}
+                title="이 참조 사진들을 전부 새 참조로 첨부"
+              >
+                전체 첨부
+              </button>
+            ) : null}
+          </div>
           <div className="lightbox__refs-row">
             {currentImage.references.map((ref) => {
               const clickable = ref.kind === "history" && !!ref.filename;
@@ -585,26 +651,54 @@ export function Lightbox() {
                 ? `이 참조 이미지로 이동 (${ref.filename})`
                 : "외부 업로드 참조 이미지";
               return (
-                <button
+                <div
                   key={ref.hash}
-                  type="button"
                   className={`lightbox__ref-thumb${clickable ? " is-clickable" : ""}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={() => {
                     if (clickable && ref.filename) {
                       useAppStore.getState().openLightbox(ref.filename);
                     }
                   }}
-                  disabled={!clickable}
+                  onKeyDown={(e) => {
+                    if (!clickable || !ref.filename) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      useAppStore.getState().openLightbox(ref.filename);
+                    }
+                  }}
                   title={title}
                 >
-                  <img src={ref.sourceUrl} alt="참조 이미지" loading="lazy" />
+                  <img
+                    src={ref.sourceUrl}
+                    alt="참조 이미지"
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.closest(".lightbox__ref-thumb")?.classList.add("is-broken");
+                    }}
+                  />
                   {ref.kind === "uploaded" ? (
                     <span className="lightbox__ref-tag" aria-label="외부 업로드">📎</span>
                   ) : (
                     <span className="lightbox__ref-tag is-history" aria-label="히스토리에서 가져옴">↗</span>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    className="lightbox__ref-reuse"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void (async () => {
+                        const ok = await addReferenceDataUrl(ref.sourceUrl);
+                        if (ok) showToast("참조 이미지로 첨부했어요");
+                      })();
+                    }}
+                    aria-label="이 참조 이미지 다시 첨부"
+                    title="이 참조 이미지를 다시 첨부"
+                  >
+                    +
+                  </button>
+                </div>
               );
             })}
           </div>

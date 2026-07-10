@@ -185,6 +185,33 @@
     "canceled": "Canceled",
     "cancel": "Cancel"
   },
+  "comparison": {
+    "label": "Compare",
+    "tooltip": "Generate a setting matrix from one locked prompt and the same references",
+    "shortHint": "up to 9 cells",
+    "title": "Compare settings",
+    "subtitle": "Lock the prompt and references, then compare only the settings you select.",
+    "close": "Close comparison",
+    "model": "Model",
+    "reasoning": "Reasoning",
+    "quality": "Quality",
+    "size": "Size",
+    "cellCount": "{count} of {max} cells",
+    "generate": "Generate comparison",
+    "cancel": "Cancel run",
+    "empty": "Select at least two combinations. Results will appear here as they finish.",
+    "progress": "{completed} of {total} complete",
+    "use": "Use",
+    "download": "Download",
+    "retry": "Retry",
+    "status": {
+      "queued": "Queued",
+      "running": "Generating...",
+      "done": "Done",
+      "error": "Failed",
+      "canceled": "Canceled"
+    }
+  },
   "metadata": {
     "restoreTitle": "Restore image settings",
     "restoreBody": "This image contains ima2 generation metadata. Apply its prompt and settings, or attach it as a reference only.",

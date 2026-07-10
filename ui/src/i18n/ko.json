@@ -185,6 +185,33 @@
     "canceled": "취소됨",
     "cancel": "취소"
   },
+  "comparison": {
+    "label": "설정 비교",
+    "tooltip": "같은 프롬프트와 참조 이미지로 설정 조합을 비교합니다",
+    "shortHint": "최대 9칸",
+    "title": "설정 비교",
+    "subtitle": "프롬프트와 참조 이미지는 그대로 두고 선택한 설정만 바꿔 비교합니다.",
+    "close": "설정 비교 닫기",
+    "model": "모델",
+    "reasoning": "추론",
+    "quality": "품질",
+    "size": "크기",
+    "cellCount": "{max}칸 중 {count}칸",
+    "generate": "비교 생성",
+    "cancel": "생성 취소",
+    "empty": "조합을 2개 이상 선택하세요. 완료되는 순서대로 여기에 표시됩니다.",
+    "progress": "{total}칸 중 {completed}칸 완료",
+    "use": "사용",
+    "download": "다운로드",
+    "retry": "다시 생성",
+    "status": {
+      "queued": "대기 중",
+      "running": "생성 중...",
+      "done": "완료",
+      "error": "실패",
+      "canceled": "취소됨"
+    }
+  },
   "metadata": {
     "restoreTitle": "이미지 설정 복원",
     "restoreBody": "이 이미지에 ima2 생성 정보가 있습니다. 프롬프트와 설정을 적용하거나 참조 이미지만 추가할 수 있습니다.",

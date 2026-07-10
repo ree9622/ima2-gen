@@ -9,6 +9,7 @@ import { ProviderSelect } from "./ProviderSelect";
 import { GrokSizePicker } from "./GrokSizePicker";
 import { GrokModelPicker } from "./GrokModelPicker";
 import { VideoControlsPanel } from "./VideoControlsPanel";
+import { ComparisonMatrixModal } from "./ComparisonMatrixModal";
 import type { Format, GeminiImageModel, Moderation, Quality } from "../types";
 
 const FORMAT_ITEMS = [
@@ -114,6 +115,7 @@ export function GenerationControlsPanel() {
   const geminiImageModel: GeminiImageModel = imageModel === "nano-banana-pro" ? "nano-banana-pro" : "nano-banana-2";
 
   const [geminiCustomOpen, setGeminiCustomOpen] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [geminiDraftW, setGeminiDraftW] = useState(String(customW));
   const [geminiDraftH, setGeminiDraftH] = useState(String(customH));
 
@@ -355,8 +357,22 @@ export function GenerationControlsPanel() {
           </button>
         </div>
       )}
+      {showMultimodeControls && (provider === "oauth" || provider === "api") && (
+        <div className="option-group multimode-toggle">
+          <button
+            type="button"
+            className="multimode-toggle__button"
+            title={t("comparison.tooltip")}
+            onClick={() => setComparisonOpen(true)}
+          >
+            <span>{t("comparison.label")}</span>
+            <span>{t("comparison.shortHint")}</span>
+          </button>
+        </div>
+      )}
       {isAnyGemini ? null : <CountPicker />}
       <CostEstimate />
+      {comparisonOpen ? <ComparisonMatrixModal onClose={() => setComparisonOpen(false)} /> : null}
       </>
       )}
     </div>

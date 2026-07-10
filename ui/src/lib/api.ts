@@ -404,13 +404,19 @@ export async function postNodeGenerateStream(
   } = {},
 ): Promise<NodeGenerateResponse> {
   const requestId = payload.requestId ?? `nreq_${crypto.randomUUID()}`;
-  ensureEventChannel();
+  const EVENT_CHANNEL_READY_GRACE_MS = 3_000;
+  const RESULT_RECONCILE_MS = 2_000;
 
   return new Promise<NodeGenerateResponse>((resolve, reject) => {
     let settled = false;
+    let reconcileHandle: ReturnType<typeof setInterval> | null = null;
+    const readinessController = new AbortController();
     const finish = (callback: () => void) => {
       if (settled) return;
       settled = true;
+      readinessController.abort();
+      if (reconcileHandle) clearInterval(reconcileHandle);
+      reconcileHandle = null;
       clearTimeoutHandle();
       unsubscribe();
       callback();
@@ -453,11 +459,26 @@ export async function postNodeGenerateStream(
       });
     });
 
-    void fetch("/api/node/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, requestId, async: true }),
+    const waitForEventChannelGrace = () => new Promise<void>((resolveReady, rejectReady) => {
+      const graceTimer = setTimeout(resolveReady, EVENT_CHANNEL_READY_GRACE_MS);
+      void ensureEventChannel(readinessController.signal).then(() => {
+        clearTimeout(graceTimer);
+        resolveReady();
+      }).catch((error) => {
+        clearTimeout(graceTimer);
+        rejectReady(error);
+      });
+    });
+
+    void waitForEventChannelGrace().then(() => {
+      if (settled) return null;
+      return fetch("/api/node/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, requestId, async: true }),
+      });
     }).then(async (res) => {
+      if (!res) return;
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const response = data as NodeErrorResponse;
@@ -470,8 +491,12 @@ export async function postNodeGenerateStream(
       // returns the completed node payload with HTTP 200.
       if (res.status === 200 && typeof (data as NodeGenerateResponse).image === "string") {
         finish(() => resolve(data as NodeGenerateResponse));
+      } else if (res.status === 202 && !settled) {
+        void recoverTerminalResult();
+        reconcileHandle = setInterval(() => void recoverTerminalResult(), RESULT_RECONCILE_MS);
       }
     }).catch((error) => {
+      if (settled && (error as Error).name === "AbortError") return;
       finish(() => reject(error instanceof Error ? error : new Error(String(error))));
     });
   });

@@ -3648,8 +3648,23 @@ app.post("/api/node/generate", async (req, res) => {
     if (!requestId) return;
     publishJobEvent(eventOwner, requestId, event, { requestId, ...data });
   };
-  const failNode = (status, code, message) => {
+  const failNode = async (status, code, message) => {
     if (asyncAccepted) {
+      if (requestId) {
+        try {
+          const stored = await writeNodeResult(__dirname, requestId, {
+            status: "error",
+            clientNodeId,
+            sessionId,
+            error: { code, message, status },
+          });
+          if (!stored) {
+            console.warn("[node/generate] async error result was not persisted:", requestId);
+          }
+        } catch (resultError) {
+          console.error("[node/generate] failed to persist async error result:", resultError.message);
+        }
+      }
       emitNodeEvent("error", { error: { code, message }, parentNodeId, status });
       return;
     }
@@ -3819,7 +3834,7 @@ app.post("/api/node/generate", async (req, res) => {
         requestId,
         ...systemPromptMeta,
       });
-      return failNode(err.status || 422, err.code || (err?.cause?.code === "EMPTY_RESPONSE" ? "EMPTY_RESPONSE" : "SAFETY_REFUSAL"), err.message);
+      return await failNode(err.status || 422, err.code || (err?.cause?.code === "EMPTY_RESPONSE" ? "EMPTY_RESPONSE" : "SAFETY_REFUSAL"), err.message);
     }
 
     const b64 = nodeResult.b64;
@@ -3905,15 +3920,7 @@ app.post("/api/node/generate", async (req, res) => {
     }
   } catch (err) {
     console.error("[node/generate] error:", err.message);
-    if (requestId) {
-      void writeNodeResult(__dirname, requestId, {
-        status: "error",
-        clientNodeId,
-        sessionId,
-        error: { code: err.code || "NODE_GEN_FAILED", message: err.message, status: err.status || 500 },
-      });
-    }
-    failNode(err.status || 500, err.code || "NODE_GEN_FAILED", err.message);
+    await failNode(err.status || 500, err.code || "NODE_GEN_FAILED", err.message);
   } finally {
     generationAbort.cleanup();
     finishJob(requestId);

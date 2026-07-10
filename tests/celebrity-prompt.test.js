@@ -4,7 +4,7 @@ import assert from "node:assert";
 import {
   buildCelebrityPrompt,
   getCelebrityPromptDefaults,
-} from "../ui/src/lib/celebrityPrompt.ts";
+} from "../ui/src/lib/celebrityPromptRuntime.js";
 
 describe("celebrity prompt builder", () => {
   it("builds a natural resort prompt from celebrity name and outfit", () => {

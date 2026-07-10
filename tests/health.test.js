@@ -180,6 +180,9 @@ describe("Server: /api/health + advertisement", () => {
     assert.ok(lastOAuthPayload, "proxy request should be captured");
     assert.strictEqual(lastOAuthPayload.tools[1].type, "image_generation");
     assert.strictEqual(lastOAuthPayload.tools[1].moderation, "auto");
+    const userInput = lastOAuthPayload.input.find((item) => item.role === "user")?.content;
+    assert.match(userInput, /^You MUST generate this image at exactly 1024x1024 resolution as a SQUARE 1:1 canvas\./);
+    assert.match(userInput, /test moderation forwarding$/);
   });
 
   it("GET /api/storage/stats returns bucket counts", async () => {

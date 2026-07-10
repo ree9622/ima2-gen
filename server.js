@@ -111,6 +111,15 @@ import { createRequestLogger } from "./lib/requestLogger.js";
 import { detectImageMimeFromB64, validateAndNormalizeRefs } from "./lib/refs.js";
 import { writeTextChunks, IMA2_METADATA_VERSION } from "./lib/imageMetadata.js";
 import { logEvent, logError } from "./lib/logger.js";
+import { applyOrientationDirective } from "./lib/orientationPrompt.js";
+import {
+  MAX_EVENT_STREAMS,
+  hasJobEventReplayGap,
+  oldestJobEventId,
+  publishJobEvent,
+  replayJobEvents,
+  subscribeJobEvents,
+} from "./lib/eventBus.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -250,6 +259,85 @@ function canAccess(meta, authUser) {
 // Structured /api/* request logging (echoes/issues X-Request-Id, redacts body
 // and query). Mounted after the auth-user middleware so authUser is captured.
 app.use(createRequestLogger());
+
+let activeJobEventStreams = 0;
+
+function formatJobEvent(event) {
+  return `id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify({
+    ...event.data,
+    jobId: event.jobId,
+    requestId: event.jobId,
+  })}\n\n`;
+}
+
+function safeEventWrite(res, chunk) {
+  if (res.writableEnded || res.destroyed) return false;
+  try {
+    res.write(chunk);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+app.get("/api/events", (req, res) => {
+  if (activeJobEventStreams >= MAX_EVENT_STREAMS) {
+    return res.status(503).json({
+      error: { code: "SSE_CAPACITY", message: "Too many event stream connections" },
+    });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+  activeJobEventStreams += 1;
+
+  const owner = req.authUser || null;
+  const headerLastId = Number.parseInt(req.get("Last-Event-ID") || "", 10);
+  const queryLastId = Number.parseInt(String(req.query.lastEventId || ""), 10);
+  const lastEventId = Number.isFinite(headerLastId) ? headerLastId : queryLastId;
+
+  if (Number.isFinite(lastEventId)) {
+    if (hasJobEventReplayGap(lastEventId, owner)) {
+      safeEventWrite(
+        res,
+        `event: replay-gap\ndata: ${JSON.stringify({
+          lastEventId,
+          oldestAvailableId: oldestJobEventId(owner),
+        })}\n\n`,
+      );
+    }
+    for (const event of replayJobEvents(lastEventId, owner)) {
+      if (!safeEventWrite(res, formatJobEvent(event))) break;
+    }
+  }
+
+  let cleaned = false;
+  const unsubscribe = subscribeJobEvents((event) => {
+    if (owner && event.owner !== owner) return;
+    if (!safeEventWrite(res, formatJobEvent(event))) cleanup();
+  });
+  const heartbeat = setInterval(() => {
+    if (!safeEventWrite(res, ": ping\n\n")) cleanup();
+  }, 15_000);
+
+  function cleanup() {
+    if (cleaned) return;
+    cleaned = true;
+    unsubscribe();
+    clearInterval(heartbeat);
+    activeJobEventStreams = Math.max(0, activeJobEventStreams - 1);
+    if (!res.writableEnded && !res.destroyed) {
+      try { res.end(); } catch {}
+    }
+  }
+
+  req.on("close", cleanup);
+  res.on("close", cleanup);
+  res.on("error", cleanup);
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // Graceful shutdown gate (2026-04-29).
@@ -636,7 +724,7 @@ async function renderDirectReferenceTransform(prompt, references, tag) {
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}, systemPromptOpts = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
-  const { partialImages, onPartialImage, abortSignal } = options;
+  const { partialImages, onPartialImage, abortSignal, onPhase: onPhaseEvent } = options;
   const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
   console.log(
     `${tag} call: quality=${quality} size=${size} moderation=${moderation} ` +
@@ -679,7 +767,8 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   // user role carries only the user's prompt. Reference face-lock boosting is
   // a prompt mutation, so it is skipped when the UI default prompt toggle is
   // off; in that mode the user's text should be passed through verbatim.
-  const textPrompt = hasRefs && !promptMutationDisabled ? boostRefPrompt(prompt) : prompt;
+  const baseTextPrompt = hasRefs && !promptMutationDisabled ? boostRefPrompt(prompt) : prompt;
+  const textPrompt = applyOrientationDirective(baseTextPrompt, size);
 
   const userContent = hasRefs
     ? [
@@ -691,7 +780,12 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       ]
     : textPrompt;
 
-  const onPhase = requestId ? (phase) => setJobPhase(requestId, phase) : undefined;
+  const onPhase = requestId || onPhaseEvent
+    ? (phase) => {
+        if (requestId) setJobPhase(requestId, phase);
+        onPhaseEvent?.(phase);
+      }
+    : undefined;
   const developerPrompt = buildDeveloperPrompt(
     hasRefs ? REFERENCE_DEVELOPER_WRAPPER : GENERATE_DEVELOPER_WRAPPER,
     systemPromptOpts,
@@ -773,7 +867,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       reasoning: { effort: "medium" },
       input: [
         { role: "developer", content: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts) },
-        { role: "user", content: prompt },
+        { role: "user", content: applyOrientationDirective(prompt, size) },
       ],
       tools: [{ type: "image_generation", quality, size, moderation }],
       stream: false,
@@ -791,7 +885,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       codexAccount: retry.codexAccount || stream.codexAccount,
       promptRuntime: buildPromptRuntimeMetadata({
         prompt,
-        userPrompt: prompt,
+        userPrompt: applyOrientationDirective(prompt, size),
         developerPrompt: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts),
         tools: [{ type: "image_generation" }],
         systemPromptOpts,
@@ -3293,7 +3387,8 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
   const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
   // user role carries only the user's prompt. Reference face-lock boosting is
   // skipped when the UI default prompt toggle is off.
-  const userPrompt = promptMutationDisabled ? prompt : boostRefPrompt(prompt);
+  const baseUserPrompt = promptMutationDisabled ? prompt : boostRefPrompt(prompt);
+  const userPrompt = applyOrientationDirective(baseUserPrompt, size);
   const developerPrompt = buildDeveloperPrompt(EDIT_DEVELOPER_WRAPPER, systemPromptOpts);
   const tools = [{ type: "image_generation", quality, size, moderation }];
   const promptRuntime = buildPromptRuntimeMetadata({
@@ -3538,27 +3633,43 @@ function dataUrlFromB64(format, b64) {
 
 app.post("/api/node/generate", async (req, res) => {
   const body = req.body || {};
-  const streamResponse = wantsSse(req);
+  const asyncResponse = body.async === true;
+  const streamResponse = wantsSse(req) && !asyncResponse;
   const parentNodeId = body.parentNodeId ?? null;
   const requestId = typeof body.requestId === "string" ? body.requestId : null;
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : null;
   const clientNodeId =
     typeof body.clientNodeId === "string" ? body.clientNodeId : null;
   const __nodeMaxAttempts = clampMaxAttempts(body.maxAttempts, 2);
-  startJob({
-    requestId,
-    kind: "node",
-    prompt: body.prompt,
-    maxAttempts: __nodeMaxAttempts,
-    owner: req.authUser || LEGACY_OWNER,
-    meta: {
-      kind: "node",
-      sessionId,
-      parentNodeId,
-      clientNodeId,
-    },
-  });
-  const generationAbort = registerActiveGeneration(requestId);
+  const eventOwner = req.authUser || LEGACY_OWNER;
+  let asyncAccepted = false;
+  let generationAbort = { signal: null, cleanup: () => {} };
+  const emitNodeEvent = (event, data) => {
+    if (!requestId) return;
+    publishJobEvent(eventOwner, requestId, event, { requestId, ...data });
+  };
+  const failNode = async (status, code, message) => {
+    if (asyncAccepted) {
+      if (requestId) {
+        try {
+          const stored = await writeNodeResult(__dirname, requestId, {
+            status: "error",
+            clientNodeId,
+            sessionId,
+            error: { code, message, status },
+          });
+          if (!stored) {
+            console.warn("[node/generate] async error result was not persisted:", requestId);
+          }
+        } catch (resultError) {
+          console.error("[node/generate] failed to persist async error result:", resultError.message);
+        }
+      }
+      emitNodeEvent("error", { error: { code, message }, parentNodeId, status });
+      return;
+    }
+    return writeNodeError(res, status, code, message, parentNodeId);
+  };
   try {
     const {
       prompt: rawPrompt,
@@ -3579,12 +3690,16 @@ app.post("/api/node/generate", async (req, res) => {
         : null;
     const { provider = "oauth" } = body;
 
+    if (asyncResponse && !requestId) {
+      return failNode(400, "REQUEST_ID_REQUIRED", "requestId required for async generation");
+    }
+
     if (provider === "api") {
-      return writeNodeError(res, 403, "APIKEY_DISABLED", "API key provider is disabled. Use OAuth.", parentNodeId);
+      return failNode(403, "APIKEY_DISABLED", "API key provider is disabled. Use OAuth.");
     }
 
     const nodeBadRequest = (check) =>
-      writeNodeError(res, 400, check.code, check.message, parentNodeId);
+      failNode(400, check.code, check.message);
 
     const pCheck = validatePrompt(rawPrompt);
     if (!pCheck.ok) return nodeBadRequest(pCheck);
@@ -3605,13 +3720,32 @@ app.post("/api/node/generate", async (req, res) => {
 
     const refCheck = validateAndNormalizeRefs(references);
     if (refCheck.error) {
-      return writeNodeError(res, 400, refCheck.code, refCheck.error, parentNodeId);
+      return failNode(400, refCheck.code, refCheck.error);
     }
     const refB64s = refCheck.refs;
 
+    startJob({
+      requestId,
+      kind: "node",
+      prompt,
+      maxAttempts,
+      owner: eventOwner,
+      meta: {
+        kind: "node",
+        sessionId,
+        parentNodeId,
+        clientNodeId,
+      },
+    });
+    generationAbort = registerActiveGeneration(requestId);
+
     // Open the SSE stream now — once we commit, future errors must be
     // serialized as `event: error` instead of res.status().json().
-    if (streamResponse) {
+    if (asyncResponse) {
+      asyncAccepted = true;
+      res.status(202).json({ requestId, status: "queued" });
+      emitNodeEvent("phase", { phase: "queued" });
+    } else if (streamResponse) {
       res.writeHead(200, {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
@@ -3658,14 +3792,20 @@ app.post("/api/node/generate", async (req, res) => {
                 requestId,
                 {
                   abortSignal: generationAbort.signal,
-                  partialImages: streamResponse ? 2 : 0,
-                  onPartialImage: streamResponse
-                    ? (partial) =>
-                        writeSse(res, "partial", {
+                  partialImages: streamResponse || asyncResponse ? 2 : 0,
+                  onPhase: asyncResponse
+                    ? (phase) => emitNodeEvent("phase", { phase })
+                    : null,
+                  onPartialImage: streamResponse || asyncResponse
+                    ? (partial) => {
+                        const data = {
                           requestId,
                           image: dataUrlFromB64(format, partial.b64),
                           index: partial.index,
-                        })
+                        };
+                        if (streamResponse) writeSse(res, "partial", data);
+                        else emitNodeEvent("partial", data);
+                      }
                     : null,
                 },
                 systemPromptOpts,
@@ -3694,7 +3834,7 @@ app.post("/api/node/generate", async (req, res) => {
         requestId,
         ...systemPromptMeta,
       });
-      return writeNodeError(res, err.status || 422, err.code || (err?.cause?.code === "EMPTY_RESPONSE" ? "EMPTY_RESPONSE" : "SAFETY_REFUSAL"), err.message, parentNodeId);
+      return await failNode(err.status || 422, err.code || (err?.cause?.code === "EMPTY_RESPONSE" ? "EMPTY_RESPONSE" : "SAFETY_REFUSAL"), err.message);
     }
 
     const b64 = nodeResult.b64;
@@ -3760,32 +3900,27 @@ app.post("/api/node/generate", async (req, res) => {
       safetyRetryAvailable: hasCompliantRetry(prompt),
       promptRewrittenForSafety: nodeResult.promptRewrittenForSafety === true,
     };
-    if (streamResponse) {
-      writeSse(res, "done", payload);
-      res.end();
-    } else {
-      res.json(payload);
-    }
-    // Step 4-B: persist result so a client that lost the stream can recover.
+    // Persist before publishing terminal success so a replayed done event
+    // whose base64 was intentionally omitted can recover via /api/node/result.
     if (requestId) {
-      void writeNodeResult(__dirname, requestId, {
+      await writeNodeResult(__dirname, requestId, {
         status: "done",
         clientNodeId,
         sessionId,
         payload,
       });
     }
+    if (asyncAccepted) {
+      emitNodeEvent("done", payload);
+    } else if (streamResponse) {
+      writeSse(res, "done", payload);
+      res.end();
+    } else {
+      res.json(payload);
+    }
   } catch (err) {
     console.error("[node/generate] error:", err.message);
-    if (requestId) {
-      void writeNodeResult(__dirname, requestId, {
-        status: "error",
-        clientNodeId,
-        sessionId,
-        error: { code: err.code || "NODE_GEN_FAILED", message: err.message, status: err.status || 500 },
-      });
-    }
-    writeNodeError(res, err.status || 500, err.code || "NODE_GEN_FAILED", err.message, parentNodeId);
+    await failNode(err.status || 500, err.code || "NODE_GEN_FAILED", err.message);
   } finally {
     generationAbort.cleanup();
     finishJob(requestId);

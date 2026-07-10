@@ -66,6 +66,7 @@ ima2 serve
 - **페이지 단위 히스토리 로딩** — 첫 화면은 빠르게 열고, 오래된 기록은 cursor 기반으로 추가 로드
 - **토스트 스택** — 여러 오류/알림이 우측 하단에 쌓이고 개별 닫기/자동 만료 처리
 - **실제 생성 취소** — 진행 중인 생성 취소 시 대기열, rewrite, upstream 이미지 요청까지 abort
+- **단일 이벤트 채널** — 노드 여러 개를 동시에 생성해도 브라우저 SSE 연결 하나로 진행 상태를 받고 재연결 시 누락 이벤트를 복구
 - **세션 영속성** — 생성 중 새로고침해도 pending 작업이 자동 복구
 - **프롬프트 의도 정책** — 옷차림/체형/카메라 앵글만으로 위험 의도를 추정하지 않고 명시적 요청과 컨텍스트를 기준으로 판단
 
@@ -176,7 +177,9 @@ ima2 serve
   │   ├── POST /api/edit           — 레퍼런스 중심 편집 경로
   │   ├── GET  /api/history        — 페이지네이션 사이드카 리스트
   │   ├── GET  /api/inflight       — 진행 중 작업 (kind/session 필터)
-  │   ├── GET  /api/sessions/*     — 노드 그래프 세션 (개발 전용)
+  │   ├── GET  /api/events         — 사용자별 생성 이벤트 + 재연결 replay
+  │   ├── GET  /api/sessions/*     — 노드 그래프 세션
+  │   ├── POST /api/node/generate  — 비동기 노드 생성 (`202` + `/api/events`), 기존 JSON/SSE 호환
   │   ├── GET  /api/billing        — API 크레딧 / 비용
   │   └── 정적 파일 (public/)      — 웹 UI
   │
@@ -184,7 +187,7 @@ ima2 serve
   └── ~/.ima2/server.json          — CLI 자동 발견용 포트 광고
 ```
 
-**노드 모드**는 개발 전용 (`npm run dev`)이며, 세션 DB + 멀티 유저 설계가 완료될 때까지 npm 배포에서 차단됩니다.
+**노드 모드**는 기본 활성화됩니다. 웹 UI는 비동기 요청을 보내기 전에 단일 이벤트 채널을 구독하고 `phase` / `partial` / `done` / `error` 이벤트를 받습니다.
 
 ---
 

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { disconnectEventChannel } from "../lib/eventChannel";
 import { DEFAULT_SYSTEM_PROMPT, SYSTEM_PROMPT_MAX_LEN } from "../lib/defaultSystemPrompt";
 import type {
   Count,
@@ -1661,6 +1662,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     }
   },
   logout: async () => {
+    disconnectEventChannel();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",

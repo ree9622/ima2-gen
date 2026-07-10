@@ -1,6 +1,6 @@
 # Upstream idea reimplementation log
 
-Last updated: 2026-05-11
+Last updated: 2026-07-10
 
 This fork does not copy or cherry-pick code from `lidge-jun/ima2-gen` for the
 2026-05 feature catch-up. The upstream repository is used only as a behavior and
@@ -23,6 +23,8 @@ store, and CLI structure.
 | Cancellation | `d7fe5b2 feat(generate): abort canceled inflight jobs` | In-flight cancel contract | `DELETE /api/inflight/:requestId` now aborts active generation controllers. Cancel propagates through queued throttle waits, prompt rewrite calls, retry sleeps, generate/edit/node OAuth requests, and returns `GENERATION_CANCELED`/HTTP 499 for canceled API work. |
 | CLI parity | `eb1322e feat(cli): align generation options` | Classic generation parity options | `ima2 gen` supports `--format`, `--moderation`, and `--max-attempts`; `ima2 edit` supports `--moderation` and `--max-attempts`. Both send a stable `requestId`. Default output extension follows requested format. |
 | CLI recovery | `0ffef43 feat(cli): recover outputs after timeout` | Output recovery after client timeout | When `ima2 gen` or `ima2 edit` hits a client-side timeout, the CLI polls `/api/generation-log` for the same `requestId`, downloads completed image URLs, and saves them locally. Timeout exit code is used only if recovery also fails. |
+| OAuth orientation | this change | Explicit LANDSCAPE / PORTRAIT / SQUARE size directive | Non-auto OAuth requests reinforce both exact dimensions and orientation without changing stored user prompts. Generate, edit, and fallback paths share the same helper. |
+| SSE multiplexing | this change | Shared replayable event channel | Node fan-out submits async jobs after subscribing to one owner-scoped `/api/events` connection. The replay ring omits base64 and recovers terminal payloads from the existing node-result cache. Legacy JSON and per-request SSE callers remain supported. |
 
 ## User-visible behavior
 

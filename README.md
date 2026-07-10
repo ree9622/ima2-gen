@@ -69,6 +69,7 @@ All preset sizes follow the current GPT Image sizing constraints: every side is 
 - **Stacked toasts** — multiple errors or notices stay visible in the bottom-right stack until dismissed or timed out
 - **Real cancel** — canceling an in-flight generation aborts queued waits, rewrite calls, and upstream image requests instead of only hiding the UI row
 - **Session persistence** — refresh mid-generation and your pending jobs reconcile automatically
+- **Single event channel** — Node fan-out shares one replayable SSE connection instead of opening one browser stream per generation
 - **Prompt intent policy** — safety retries judge explicit user intent/context rather than treating clothing, body type, or camera angle as intent by itself
 
 ### CLI (headless automation)
@@ -178,8 +179,9 @@ ima2 serve
   │   ├── POST /api/edit           — ref-heavy edit path
   │   ├── GET  /api/history        — paginated sidecar listing
   │   ├── GET  /api/inflight       — in-progress jobs (kind/session filters)
+  │   ├── GET  /api/events         — owner-scoped job events with reconnect replay
   │   ├── GET  /api/sessions/*     — node-graph sessions
-  │   ├── POST /api/node/generate  — node-mode generation (SSE partial images on `Accept: text/event-stream`)
+  │   ├── POST /api/node/generate  — async Node generation (`202` + `/api/events`), with legacy JSON/SSE compatibility
   │   ├── GET  /api/billing        — API credit / cost info
   │   └── Static files (public/)   — web UI
   │
@@ -187,7 +189,7 @@ ima2 serve
   └── ~/.ima2/server.json          — port advertisement for CLI auto-discovery
 ```
 
-**Node mode** is enabled by default in packaged builds. To hide the mode tab in a release, build with `VITE_IMA2_NODE_MODE=0`.
+**Node mode** is enabled by default in packaged builds. The web UI subscribes before submitting each async Node request, then receives `phase` / `partial` / `done` / `error` through one owner-scoped event channel. To hide the mode tab in a release, build with `VITE_IMA2_NODE_MODE=0`.
 
 ---
 

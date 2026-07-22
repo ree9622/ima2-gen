@@ -54,3 +54,36 @@ test("runResponses aborts promptly when the caller cancels", async () => {
   assert.equal(outcome.error.code, "GENERATION_CANCELED");
   assert.equal(outcome.error.status, 499);
 });
+
+test("runResponses honors stream:true when a proxy forwards a JSON content type", async () => {
+  const image = Buffer.from("image-bytes").toString("base64");
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    res.end(
+      `event: response.output_item.done\n` +
+      `data: ${JSON.stringify({
+        type: "response.output_item.done",
+        item: { type: "image_generation_call", result: image },
+      })}\n\n` +
+      `event: response.completed\n` +
+      `data: ${JSON.stringify({
+        type: "response.completed",
+        response: { usage: { total_tokens: 12 } },
+      })}\n\n`,
+    );
+  });
+  const port = await listen(server);
+
+  try {
+    const result = await runResponses({
+      url: `http://127.0.0.1:${port}`,
+      body: { stream: true },
+    });
+    assert.equal(result.b64, image);
+    assert.equal(result.eventCount, 2);
+    assert.equal(result.usage.total_tokens, 12);
+  } finally {
+    server.closeAllConnections?.();
+    server.close();
+  }
+});

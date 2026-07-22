@@ -9,6 +9,15 @@ type ZoomMode = "fit" | "actual";
 const SWIPE_THRESHOLD_PX = 50;
 const UNDO_WINDOW_MS = 8000;
 
+function isDeleteShortcut(e: KeyboardEvent) {
+  return (
+    e.key === "Delete" ||
+    e.key === "Del" ||
+    e.key === "Backspace" ||
+    e.code === "Delete"
+  );
+}
+
 export function Lightbox() {
   const open = useAppStore((s) => s.lightboxOpen);
   const close = useAppStore((s) => s.closeLightbox);
@@ -58,57 +67,6 @@ export function Lightbox() {
   useEffect(() => {
     setZoom("fit");
   }, [currentImage?.filename, currentImage?.url]);
-
-  // Keyboard: ESC closes, arrows navigate, Space toggles zoom, H hides caption,
-  // Delete/Backspace removes the current image.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-        return;
-      }
-      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown") {
-        e.preventDefault();
-        next();
-        return;
-      }
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") {
-        e.preventDefault();
-        prev();
-        return;
-      }
-      if (e.key === " " || e.key === "Enter") {
-        e.preventDefault();
-        setZoom((z) => (z === "fit" ? "actual" : "fit"));
-        return;
-      }
-      if (e.key === "h" || e.key === "H" || e.key === "ㅗ") {
-        e.preventDefault();
-        toggleCaption();
-        return;
-      }
-      if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          void handleDeleteWithNodes();
-        } else {
-          void handleDelete();
-        }
-        return;
-      }
-      if (e.key === "f" || e.key === "F" || e.key === "ㄹ") {
-        e.preventDefault();
-        void toggleFavorite();
-        return;
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // handleDelete / handleDeleteWithNodes / toggleCaption / toggleFavorite are stable via useCallback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, close, next, prev, toggleCaption, toggleFavorite]);
 
   // Lock background scroll while open. Body already has overflow:hidden, but
   // some mobile browsers still bounce — set inert + aria-hidden on the app
@@ -207,6 +165,62 @@ export function Lightbox() {
     }
     await handleDelete();
   }, [deleteNodesByFilename, flushGraphSave, handleDelete]);
+
+  // Keyboard: ESC closes, arrows navigate, Space toggles zoom, H hides caption,
+  // Delete/Backspace removes the current image.
+  useEffect(() => {
+    if (!open) return;
+    // Deletion gets its own capture listener so it still works when a focused
+    // child stops bubbling. Other shortcuts stay in bubble phase so child
+    // controls can continue to own Enter/Space/arrow keys.
+    const onDeleteKey = (e: KeyboardEvent) => {
+      if (!isDeleteShortcut(e)) return;
+      e.preventDefault();
+      if (e.repeat) return;
+      if (e.shiftKey) {
+        void handleDeleteWithNodes();
+      } else {
+        void handleDelete();
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown") {
+        e.preventDefault();
+        next();
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") {
+        e.preventDefault();
+        prev();
+        return;
+      }
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        setZoom((z) => (z === "fit" ? "actual" : "fit"));
+        return;
+      }
+      if (e.key === "h" || e.key === "H" || e.key === "ㅗ") {
+        e.preventDefault();
+        toggleCaption();
+        return;
+      }
+      if (e.key === "f" || e.key === "F" || e.key === "ㄹ") {
+        e.preventDefault();
+        void toggleFavorite();
+      }
+    };
+    window.addEventListener("keydown", onDeleteKey, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onDeleteKey, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, close, next, prev, toggleCaption, toggleFavorite, handleDelete, handleDeleteWithNodes]);
 
   const handleUndo = useCallback(async () => {
     const p = pendingUndo;

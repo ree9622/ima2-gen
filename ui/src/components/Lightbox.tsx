@@ -322,6 +322,8 @@ export function Lightbox() {
   const hasPromptInfo =
     !!prompt ||
     (!!originalPrompt && originalPrompt !== prompt);
+  const hasCaptionDetails =
+    showCaption && (hasPromptInfo || !!systemPrompt || hasRuntimePrompt);
   const displaySize =
     currentImage.resolution?.trim() ||
     (currentImage.width && currentImage.height
@@ -344,7 +346,7 @@ export function Lightbox() {
 
   return (
     <div
-      className={`lightbox lightbox--${zoom}`}
+      className={`lightbox lightbox--${zoom}${hasCaptionDetails ? " lightbox--with-caption" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label="이미지 전체 보기"
@@ -588,7 +590,7 @@ export function Lightbox() {
                      background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,letterSpacing:0,
                      pointerEvents:"none"}}>acc: {currentImage.codexAccount}</div>
       ) : null}
-      {(hasPromptInfo || systemPrompt || hasRuntimePrompt) && showCaption ? (
+      {hasCaptionDetails ? (
         <div className="lightbox__caption" onClick={(e) => e.stopPropagation()}>
           {prompt ? (
             <div className="lightbox__caption-group">

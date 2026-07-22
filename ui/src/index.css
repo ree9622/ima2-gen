@@ -3745,6 +3745,43 @@ body {
   overflow: hidden;
   word-break: break-word;
 }
+
+/* On desktop, metadata belongs beside the artwork instead of covering it.
+   The image keeps the flexible primary column while the prompt details use
+   the otherwise empty right-hand margin. Narrow layouts retain the compact
+   bottom overlay below. */
+@media (min-width: 1200px) {
+  .lightbox--with-caption {
+    --lightbox-caption-width: clamp(320px, 22vw, 420px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--lightbox-caption-width);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .lightbox--with-caption .lightbox__stage {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .lightbox--with-caption .lightbox__caption {
+    position: relative;
+    inset: auto;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    width: 100%;
+    max-width: none;
+    max-height: min(70vh, 640px);
+    transform: none;
+  }
+
+  .lightbox--with-caption .lightbox__nav--next {
+    right: calc(var(--lightbox-caption-width) + 54px);
+  }
+}
 .lightbox__refs {
   position: absolute;
   left: 20px;

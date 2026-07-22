@@ -39,6 +39,7 @@ import {
 } from "../lib/api";
 import { compressImage } from "../lib/image";
 import { resizeDataUrlForRef } from "../lib/refResize";
+import { loadRetryReferences } from "../lib/retryReferences";
 import { snap16 } from "../lib/size";
 import { syncImageToUrl } from "../lib/urlSync";
 import { newClientNodeId, type ClientNodeId } from "../lib/graph";
@@ -979,6 +980,7 @@ type AppState = {
     overrideCount?: Count;
     outfitModule?: import("../types").OutfitModuleMeta;
     overrideReferences?: string[];
+    overrideReferenceMeta?: import("../types").ReferenceMetaHint[];
     overrideSize?: string;
     overrideQuality?: Quality;
     // When set, every /api/generate call this action emits will carry the
@@ -1180,18 +1182,44 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       return;
     }
     const s = get();
+    let retryReferences: Awaited<ReturnType<typeof loadRetryReferences>> | null = null;
+    if (item.referenceCount > 0) {
+      if (!item.references || item.references.length !== item.referenceCount) {
+        get().showToast("첨부 이미지 원본을 찾지 못해 재시도하지 않았습니다.", true);
+        return;
+      }
+      try {
+        retryReferences = await loadRetryReferences(item.references);
+      } catch (error) {
+        console.error("[generation-log] failed to restore references", error);
+        get().showToast("첨부 이미지를 다시 불러오지 못해 재시도하지 않았습니다.", true);
+        return;
+      }
+    }
     set({
       prompt: item.prompt,
+      originalPrompt: item.originalPrompt ?? null,
+      systemPrompt: item.systemPrompt ?? s.systemPrompt,
+      systemPromptEnabled: item.systemPromptEnabled === true,
       quality: (item.quality as Quality) || s.quality,
       sizePreset: (item.size as SizePreset) || s.sizePreset,
       format: (item.format as Format) || s.format,
       moderation: (item.moderation as Moderation) || s.moderation,
+      maxAttempts: item.maxAttempts ?? s.maxAttempts,
+      referenceImages: retryReferences?.dataUrls ?? [],
+      referenceMetaHints: retryReferences?.hints ?? [],
       logModalOpen: false,
     });
-    if (item.referenceCount > 0) {
-      get().showToast("참조 이미지는 재시도에 포함되지 않습니다. 필요하면 다시 첨부하세요.", true);
-    }
-    await get().generate({ overridePrompt: item.prompt, overrideCount: 1 });
+    await get().generate({
+      overridePrompt: item.prompt,
+      overrideCount: 1,
+      ...(retryReferences
+        ? {
+            overrideReferences: retryReferences.base64,
+            overrideReferenceMeta: retryReferences.hints,
+          }
+        : {}),
+    });
   },
   runSexyTuneBatch: async (opts) => {
     const s = get();
@@ -3875,7 +3903,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         : null;
     // Index-aligned lineage hints; trimmed to whatever references we send.
     const referenceMeta = overrides?.overrideReferences
-      ? overrides.overrideReferences.map(() => ({ kind: "uploaded" as const }))
+      ? overrides.overrideReferenceMeta ?? overrides.overrideReferences.map(() => ({ kind: "uploaded" as const }))
       : s.referenceImages.length
         ? s.referenceMetaHints
             .slice(0, s.referenceImages.length)

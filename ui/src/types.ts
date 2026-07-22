@@ -219,6 +219,7 @@ export type GenerationLogItem = {
   maxAttempts: number | null;
   attempts: AttemptLog[];
   referenceCount: number;
+  references?: ReferenceImageRef[];
   filename: string | null;
   url: string | null;
   sessionId: string | null;

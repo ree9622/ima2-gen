@@ -1520,10 +1520,10 @@ function clampMaxAttempts(v, fallback = 2) {
   return n;
 }
 
-// Persist a failed generation attempt for the log UI + retry button.
-// Refs are NOT saved (see retry flow): refs live in the browser and are
-// re-attached when the user invokes retry from a history item that had them.
-async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, owner = null, requestId = null, outfitModule = null, batchId = null, batchIndex = null, systemPrompt = null, systemPromptEnabled = false }) {
+// Persist a failed generation attempt for the log UI + retry button. Reference
+// lineage points at server-persisted blobs under generated/.refs, so retries
+// continue to work after refresh and from another browser.
+async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, quality, size, format, moderation, attempts, error, sessionId = null, parentNodeId = null, clientNodeId = null, referenceCount = 0, references = [], owner = null, requestId = null, outfitModule = null, batchId = null, batchIndex = null, systemPrompt = null, systemPromptEnabled = false }) {
   try {
     const promptRuntime = error?.promptRuntime || (Array.isArray(attempts) ? attempts.findLast?.((a) => a?.promptRuntime)?.promptRuntime : null) || null;
     const dir = join(__dirname, "generated", ".failed");
@@ -1555,6 +1555,7 @@ async function writeFailureSidecar({ endpoint, prompt, originalPrompt = null, qu
       attempts: attempts || [],
       promptRuntime,
       attemptsTotalUsage: sumAttemptsUsage(attempts),
+      references: Array.isArray(references) ? references : [],
       errorCode: error?.code || "UNKNOWN",
       errorMessage: error?.message || String(error || ""),
       ...(error?.diagnosticReason ? { diagnosticReason: error.diagnosticReason } : {}),
@@ -2464,6 +2465,7 @@ app.get("/api/generation-log", async (req, res) => {
           imageModel: m.imageModel || m.promptRuntime?.imageModel || null,
           responsesModel: m.responsesModel || m.promptRuntime?.model || null,
           referenceCount: typeof m.referenceCount === "number" ? m.referenceCount : 0,
+          references: Array.isArray(m.references) ? m.references : [],
           filename: null,
           url: null,
           sessionId: m.sessionId || null,
@@ -3255,6 +3257,7 @@ app.post("/api/generate", async (req, res) => {
         sessionId,
         clientNodeId,
         referenceCount: refB64s.length,
+        references: refLineage,
         owner: req.authUser,
         requestId,
         outfitModule,

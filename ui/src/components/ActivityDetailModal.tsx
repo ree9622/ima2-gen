@@ -23,8 +23,8 @@ function endpointLabel(ep: GenerationLogItem["endpoint"] | undefined): string {
   return "생성";
 }
 
-const RED = "var(--red, #e04c4c)";
-const MUTED = "var(--muted, #888)";
+const RED = "var(--red)";
+const MUTED = "var(--text-dim)";
 
 // 최근 생성 목록에서 실패 항목을 눌렀을 때 뜨는 상세 팝업.
 // 어떤 프롬프트로, 어떤 사진을 첨부해서, 왜 실패했는지를 한 화면에서 보여주고
@@ -142,9 +142,9 @@ export function ActivityDetailModal() {
         style={{
           width: "min(760px, 100%)",
           maxHeight: "90vh",
-          background: "var(--bg, #0b0b0b)",
+          background: "var(--bg)",
           color: "inherit",
-          border: "1px solid var(--line, #2a2a2a)",
+          border: "1px solid var(--border)",
           borderRadius: 12,
           display: "flex",
           flexDirection: "column",
@@ -154,7 +154,7 @@ export function ActivityDetailModal() {
         <header
           style={{
             padding: "12px 16px",
-            borderBottom: "1px solid var(--line, #2a2a2a)",
+            borderBottom: "1px solid var(--border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -244,8 +244,8 @@ export function ActivityDetailModal() {
                 whiteSpace: "pre-wrap",
                 font: "inherit",
                 fontSize: 13,
-                background: "var(--surface, #111)",
-                border: "1px solid var(--line, #2a2a2a)",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
                 borderRadius: 8,
                 padding: "8px 10px",
               }}
@@ -289,12 +289,21 @@ export function ActivityDetailModal() {
                       <img
                         src={ref.sourceUrl}
                         alt={`첨부 이미지 ${i + 1}`}
+                        // 원본이 사라졌으면 빈 칸이 아니라 깨진 상태가 보이게 한다.
+                        // (빈 칸은 "첨부가 없었다"와 구분되지 않는다)
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          el.style.background = "var(--surface-2)";
+                          el.style.objectFit = "contain";
+                          el.dataset.broken = "true";
+                        }}
                         style={{
                           width: 96,
                           height: 96,
                           objectFit: "cover",
                           borderRadius: 8,
-                          border: "1px solid var(--line, #2a2a2a)",
+                          border: "1px solid var(--border)",
+                          background: "var(--surface-2)",
                           cursor: "zoom-in",
                         }}
                       />
@@ -325,7 +334,7 @@ export function ActivityDetailModal() {
                   margin: 0,
                   paddingLeft: 20,
                   fontSize: 12,
-                  color: "var(--muted, #aaa)",
+                  color: "var(--text-dim)",
                   display: "flex",
                   flexDirection: "column",
                   gap: 6,
@@ -333,7 +342,7 @@ export function ActivityDetailModal() {
               >
                 {attempts.map((a) => (
                   <li key={a.attempt}>
-                    <span style={{ color: a.ok ? "var(--green, #3ba55d)" : RED }}>
+                    <span style={{ color: a.ok ? "var(--green)" : RED }}>
                       {a.ok ? "✓" : "✗"}
                     </span>{" "}
                     #{a.attempt} · {a.durationMs}ms

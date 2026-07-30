@@ -186,8 +186,8 @@ export function RightPanel() {
                   width: 72,
                   padding: "6px 10px",
                   borderRadius: 8,
-                  border: "1px solid var(--line, #2a2a2a)",
-                  background: "var(--surface, #111)",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
                   color: "inherit",
                   fontSize: 14,
                 }}

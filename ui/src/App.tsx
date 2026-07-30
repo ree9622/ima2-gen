@@ -31,6 +31,11 @@ const PromptLibraryModal = lazy(() =>
     default: m.PromptLibraryModal,
   })),
 );
+const ActivityDetailModal = lazy(() =>
+  import("./components/ActivityDetailModal").then((m) => ({
+    default: m.ActivityDetailModal,
+  })),
+);
 const LoginPage = lazy(() =>
   import("./components/LoginPage").then((m) => ({ default: m.LoginPage })),
 );
@@ -55,6 +60,7 @@ export default function App() {
   const lightboxOpen = useAppStore((s) => s.lightboxOpen);
   const logModalOpen = useAppStore((s) => s.logModalOpen);
   const promptLibraryOpen = useAppStore((s) => s.promptLibraryOpen);
+  const activityDetailId = useAppStore((s) => s.activityDetailId);
 
   useEffect(() => {
     void checkAuth();
@@ -190,6 +196,11 @@ export default function App() {
       {promptLibraryOpen && (
         <Suspense fallback={null}>
           <PromptLibraryModal />
+        </Suspense>
+      )}
+      {activityDetailId && (
+        <Suspense fallback={null}>
+          <ActivityDetailModal />
         </Suspense>
       )}
       {lightboxOpen && (

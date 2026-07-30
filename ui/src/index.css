@@ -4698,6 +4698,11 @@ body {
   line-height: 1.45;
   margin: 0 0 2px;
 }
+.sys-prompt__hint--warn {
+  color: var(--amber, #f5a524);
+  border-left: 2px solid var(--amber, #f5a524);
+  padding-left: 6px;
+}
 .sys-prompt__textarea {
   width: 100%;
   resize: vertical;

@@ -99,6 +99,11 @@ import { getStorageStats, pruneStorage } from "./lib/prune.js";
 import { s3Enabled, s3GetStream, s3MirrorAsync, contentTypeFor } from "./lib/s3Store.js";
 import { withDefaultPrompt, buildDeveloperPrompt, resolveSystemPrompt } from "./lib/defaultPrompt.js";
 import {
+  GENERATE_DEVELOPER_WRAPPER,
+  EDIT_DEVELOPER_WRAPPER,
+  REFERENCE_DEVELOPER_WRAPPER,
+} from "./lib/developerPrompts.js";
+import {
   PROMPT_MAX,
   validatePrompt,
   validateQuality,
@@ -560,23 +565,11 @@ function send400(res, result) {
 // per-prompt whether to invoke it. No prompt-side suffix — that pollutes the
 // user's prompt and reduces model autonomy.
 
-// developer-prompt 본문(wrapper)만 모듈 상수로. 시스템 프롬프트(기본 주입
-// 텍스트 또는 사용자가 좌측 패널에서 편집/비활성화한 값)는 매 요청마다
-// buildDeveloperPrompt(wrapper, { systemPrompt, includeSystemPrompt }) 로
-// 합성한다.
-const GENERATE_DEVELOPER_WRAPPER =
-  "Generate the image the user describes. If the input is abstract, vague, or non-visual, interpret it creatively and still produce an image. Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts, cropped, duplicate).";
-
-const EDIT_DEVELOPER_WRAPPER =
-  "Apply the user's edit to the original image. Preserve the person's FACE and IDENTITY exactly — the result must be unambiguously the SAME individual. Preserve the original's style and composition unless the edit specifies otherwise. Vary only what the user explicitly requests. Avoid technical defects (deformed anatomy, watermark, jpeg artifacts).";
-
-const REFERENCE_DEVELOPER_WRAPPER =
-  "Reference mode. The user has attached one or more reference images. Treat them as visual reference material for the user's explicit request.\n" +
-  "Do not assume the reference is a person, woman, portrait, AI character, or identity anchor unless the user explicitly asks for a person/character variation or the prompt clearly requires preserving a human subject.\n" +
-  "For resize, resolution, wallpaper, crop, extend, format, or simple transformation requests, preserve the attached image's original subject and composition as much as possible while adapting to the requested output. Do not invent a new person, face, body, gender presentation, outfit, or character.\n" +
-  "For explicit human variation requests, preserve the same person and face from the reference unless the user asks to change them. Only vary pose, angle, expression, framing, outfit, background, location, time of day, or lighting when requested.\n" +
-  "When multiple reference images are attached, use them as supporting visual references. Treat them as the same person's multi-angle identity references only when the user's prompt makes that intent clear.\n" +
-  "Avoid technical defects (deformed anatomy, watermark, signature, jpeg artifacts). Do not perform a web search; the reference image(s) are already the source of truth.";
+// developer-prompt 본문(wrapper)은 lib/developerPrompts.js 로 분리했다
+// (테스트 가드 + "끌 수 없는 층"이라는 역할을 파일 경계로 드러내기 위해).
+// 시스템 프롬프트(기본 주입 텍스트 또는 사용자가 좌측 패널에서 편집/
+// 비활성화한 값)는 매 요청마다 buildDeveloperPrompt(wrapper, { systemPrompt,
+// includeSystemPrompt }) 로 합성한다.
 
 // 클라이언트가 매 요청마다 보낸 systemPrompt/includeSystemPrompt 를 정규화.
 // req.body 에서 추출 후 generate/edit 함수로 plumb 한다.

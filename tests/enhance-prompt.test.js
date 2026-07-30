@@ -49,8 +49,11 @@ describe("buildEnhancePayload", () => {
     // Camera defaults to "iPhone snap" only.
     assert.match(sys, /아이폰 스냅 사진/);
     assert.match(sys, /얕은 피사체 심도/); // listed as forbidden
-    // Quality defaults to "1:1 비율, 8k" only — 극사실적 must be listed as forbidden.
+    // Quality defaults to the ratio only — 극사실적 / 8k must be listed as forbidden.
     assert.match(sys, /극사실적/);
+    // '8k' 는 OpenAI 공식 프롬프팅 가이드가 "모델이 읽지 않는 키워드 스팸"으로
+    // 지목해 2026-07-30 기본값에서 뺐다. 금지 목록에 남아 있어야 한다.
+    assert.match(sys, /FORBIDDEN by default: '8k'/);
   });
 
   it("EN system prompt drops legacy per-category Hair/Pose/Setting headers", () => {
@@ -84,7 +87,7 @@ describe("buildEnhancePayload", () => {
     assert.match(text, /\[인물\]\n {2}-\s*한국 20대 초반 미시,\s*예쁘고 귀여움\n\n/);
     // Example must end with the minimal [카메라] + [퀄리티] block.
     assert.match(text, /\[카메라\]\n {2}-\s*아이폰 스냅 사진/);
-    assert.match(text, /\[퀄리티\]\n {2}-\s*1:1 비율,\s*8k/);
+    assert.match(text, /\[퀄리티\]\n {2}-\s*1:1 비율\s*$/m);
   });
 });
 

@@ -24,7 +24,14 @@ export function SystemPromptSection() {
         >
           <span className={`sys-prompt__chev ${open ? "is-open" : ""}`}>▸</span>
           <span className="sys-prompt__title">기본 프롬프트(시스템)</span>
-          {!enabled && <span className="sys-prompt__badge sys-prompt__badge--off">비활성</span>}
+          {!enabled && (
+            <span
+              className="sys-prompt__badge sys-prompt__badge--off"
+              title="꺼진 동안에는 수위·의도 해석 지시가 빠져 거절로 인한 실패가 늘어납니다."
+            >
+              비활성
+            </span>
+          )}
           {enabled && isModified && (
             <span className="sys-prompt__badge sys-prompt__badge--mod">수정됨</span>
           )}
@@ -41,9 +48,17 @@ export function SystemPromptSection() {
       {open && (
         <div className="sys-prompt__body">
           <p className="sys-prompt__hint">
-            모든 이미지 생성/편집 직전에 모델에 전달되는 기본 지시문입니다. 끄면 사용자 프롬프트만
-            전송됩니다.
+            모든 이미지 생성/편집 직전에 모델에 전달되는 기본 지시문입니다. 브리프를 얼마나 그대로
+            그릴지, 의도를 무엇으로 판단할지를 정합니다. 끄더라도 "이미지 도구로만 답한다"는 출력
+            계약과 카테고리 시트 읽는 규칙은 Developer 프롬프트에 남습니다.
           </p>
+          {!enabled && (
+            <p className="sys-prompt__hint sys-prompt__hint--warn">
+              지금은 꺼져 있습니다. 최근 14일 실측에서 켠 상태의 실패율은 25%, 끈 상태는 63%였습니다
+              (대부분 모델이 이미지 대신 거절 문장을 돌려준 경우). 실패가 잦으면 먼저 이 토글을
+              확인해 주세요.
+            </p>
+          )}
           <textarea
             className="sys-prompt__textarea"
             value={systemPrompt}

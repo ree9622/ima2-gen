@@ -51,6 +51,13 @@ image_gen/
 - `retryActivity`는 그 조회가 성공하면 `retryFromLog`에 위임한다 → `generated/.refs`의 원본 첨부·품질·사이즈·시스템 프롬프트 복원. store 상태를 다시 읽는 방식으로 "고치지" 말 것(첨부를 잃어버린 주체가 store다).
 - Responses 스트림이 이미지 없이 끝나면 `attachStreamDiagnostics()`가 `refusalText` / 모델이 도구 대신 낸 `text` / `reasoningSummary` / `eventTypeCounts` / 부분 `usage`를 에러에 붙인다. 이게 attempt 로그 → 실패 sidecar → UI `AttemptDiagnostics`로 흐른다. 새 empty/throw 경로를 추가하면 같이 붙여야 한다. 안 붙이면 정책 거절과 업스트림 장애를 구분할 수 없다.
 
+## 프롬프트 스택 (2층, 층 = 파일)
+- **끌 수 없는 층** `lib/developerPrompts.js` — `OUTPUT_CONTRACT`(image_generation 도구가 유일한 출력 채널, 산문 거절 금지), `SHEET_CONTRACT`(대괄호 카테고리 시트 읽는 법, `[자유]`는 매 렌더마다 다르게, 충돌 시 per-shot 지정 우선), 모드별 wrapper 3종.
+- **끌 수 있는 층** `lib/defaultPrompt.js` `DEFAULT_PROMPT_INJECTION` — 콘텐츠 재량(브리프 그대로 렌더, 의도 판단, 장면 allowlist, 한국 기본 로케일). 좌측 패널에서 편집·OFF 가능. 클라이언트 사본 `ui/src/lib/defaultSystemPrompt.ts`와 **1:1 동기 의무**(테스트로 강제).
+- **경계 규칙(BLOCKING)**: 출력 형식·브리프 해석 = wrapper, 콘텐츠 재량 = 시스템 프롬프트. npm 공개 배포 패키지이므로 끌 수 없는 층에 정책 재량을 넣지 않는다.
+- **근거(2026-07-30 실측)**: 기본 프롬프트 ON 실패율 25.3%, OFF 63.3%. `EMPTY_RESPONSE` 55건 중 39건이 OFF이며 실체는 모델의 산문 거절이었다. 계약이 끌 수 있는 층에만 있던 것이 원인. 가드는 `tests/developer-prompts.test.js`.
+- **default 변경 시**: 이전 텍스트를 `LEGACY_…`로 남기고 `useAppStore` migrate에서 정확히 일치할 때만 승격(persist version 증가). 없으면 기존 탭이 옛 default를 영구히 붙든다.
+
 ## Conventions
 - ES Module only (import/export)
 - File length < 500 lines (split if exceeded)

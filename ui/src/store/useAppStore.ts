@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { disconnectEventChannel } from "../lib/eventChannel";
-import { DEFAULT_SYSTEM_PROMPT, SYSTEM_PROMPT_MAX_LEN } from "../lib/defaultSystemPrompt";
+import {
+  DEFAULT_SYSTEM_PROMPT,
+  LEGACY_DEFAULT_SYSTEM_PROMPT_V2,
+  SYSTEM_PROMPT_MAX_LEN,
+} from "../lib/defaultSystemPrompt";
 import type {
   Count,
   Format,
@@ -120,11 +124,12 @@ const LEGACY_FICTIONAL_PERSONA_PROMPT_RE =
   /fictional AI-generated virtual personas|not depictions of real, identifiable individuals/i;
 
 function migrateUserPrefsState(persistedState: unknown, version: number): unknown {
-  if (version < 2 && persistedState && typeof persistedState === "object") {
-    const state = persistedState as {
-      systemPrompt?: unknown;
-      systemPromptEnabled?: unknown;
-    };
+  if (!persistedState || typeof persistedState !== "object") return persistedState;
+  const state = persistedState as {
+    systemPrompt?: unknown;
+    systemPromptEnabled?: unknown;
+  };
+  if (version < 2) {
     if (
       typeof state.systemPrompt === "string" &&
       LEGACY_FICTIONAL_PERSONA_PROMPT_RE.test(state.systemPrompt)
@@ -132,6 +137,14 @@ function migrateUserPrefsState(persistedState: unknown, version: number): unknow
       state.systemPrompt = DEFAULT_SYSTEM_PROMPT;
       state.systemPromptEnabled = true;
     }
+  }
+  // v3: 옛 기본값을 그대로 보관하던 브라우저를 새 기본값으로 올린다. 이
+  // 비교가 없으면 default 를 개선해도 기존 탭은 옛 텍스트를 "사용자 수정본"
+  // 으로 취급해 영구히 붙들고, 개선이 실제 사용자에게 도달하지 않는다.
+  // 직접 편집한 텍스트는 일치하지 않으므로 그대로 보존된다. ON/OFF 토글은
+  // 사용자의 명시적 선택이므로 건드리지 않는다.
+  if (version < 3 && state.systemPrompt === LEGACY_DEFAULT_SYSTEM_PROMPT_V2) {
+    state.systemPrompt = DEFAULT_SYSTEM_PROMPT;
   }
   return persistedState;
 }
@@ -4308,7 +4321,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 }), {
   name: "ima2.userPrefs",
   storage: createJSONStorage(() => localStorage),
-  version: 2,
+  version: 3,
   migrate: migrateUserPrefsState,
   // Whitelist exactly the right-panel inputs. Anything else (refs / history
   // / inflight / sessions / draft / sexy-tune state) is left to its existing

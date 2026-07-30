@@ -81,6 +81,41 @@ describe("Developer wrappers — category sheet reading", () => {
 });
 
 describe("Developer wrappers — reference mode identity rules", () => {
+  // 2026-07-30 실측으로 뒤집은 기본값이라 회귀 가드가 필요하다. 이전 문구
+  // ("사용자가 명시적으로 인물 변형을 요청하지 않으면 identity anchor 로
+  // 보지 말라")는 이 앱의 실제 입력인 카테고리 시트를 "명시적 요청"으로
+  // 인정하지 않아, 모델이 레퍼런스를 mood reference 로 격하하고 전혀 다른
+  // 사람을 그렸다(얼굴 임베딩 유사도 -0.004).
+  it("treats a person reference as the identity anchor by default", () => {
+    assert.match(REFERENCE_DEVELOPER_WRAPPER, /the reference IS the identity anchor/);
+    assert.match(
+      REFERENCE_DEVELOPER_WRAPPER,
+      /the absence of the word 'face' is not permission to invent a new one/,
+    );
+    assert.equal(
+      /Do not assume the reference is a person[\s\S]*unless the user explicitly asks/.test(
+        REFERENCE_DEVELOPER_WRAPPER,
+      ),
+      false,
+      "the opt-in identity default is the regression that rendered strangers",
+    );
+  });
+
+  it("keeps the transform-only and non-human escape hatch narrow", () => {
+    // 기본값을 뒤집었어도 리사이즈·월페이퍼 요청에서 새 인물을 만들어내는
+    // 원래 문제는 계속 막아야 한다.
+    assert.match(
+      REFERENCE_DEVELOPER_WRAPPER,
+      /only when the reference contains no person, or the brief is a pure transformation/i,
+    );
+    assert.match(REFERENCE_DEVELOPER_WRAPPER, /do not invent a new person, face, body/i);
+  });
+
+  it("forbids handing the tool a generic subject while a face is attached", () => {
+    assert.match(REFERENCE_DEVELOPER_WRAPPER, /Never hand the tool a generic subject/);
+    assert.match(REFERENCE_DEVELOPER_WRAPPER, /never demote the reference to a mood or style reference/);
+  });
+
   it("reads several images of one subject as one identity", () => {
     assert.match(
       REFERENCE_DEVELOPER_WRAPPER,

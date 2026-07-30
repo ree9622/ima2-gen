@@ -48,6 +48,6 @@ test("prompt runtime block is shared, not duplicated", async () => {
   const shared = await readFile("ui/src/components/PromptRuntimeBlock.tsx", "utf8");
   assert.match(shared, /export function PromptRuntimeBlock/);
   const log = await readFile("ui/src/components/GenerationLogModal.tsx", "utf8");
-  assert.match(log, /import \{ PromptRuntimeBlock \} from "\.\/PromptRuntimeBlock"/);
+  assert.match(log, /import \{[^}]*\bPromptRuntimeBlock\b[^}]*\} from "\.\/PromptRuntimeBlock"/);
   assert.doesNotMatch(log, /function PromptRuntimeBlock\(/);
 });

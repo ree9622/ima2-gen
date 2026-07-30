@@ -197,6 +197,13 @@ export type AttemptLog = {
   durationMs: number;
   startedAt: number;
   promptRuntime?: PromptRuntime | null;
+  // "왜 실패했나"의 근거. 서버 attempt 로그가 이미 기록하던 값들로,
+  // 실패 상세 팝업과 생성 로그가 그대로 보여준다.
+  refusalText?: string | null;
+  outputText?: string | null;
+  reasoningSummary?: string | null;
+  violationCategories?: string[] | null;
+  eventTypeCounts?: Record<string, number> | null;
 };
 
 export type GenerationLogItem = {

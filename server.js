@@ -664,6 +664,29 @@ function diagnoseRefMismatch(references) {
   return null;
 }
 
+// Copy whatever the (image-less) upstream result told us onto the error so the
+// attempt log — and therefore the failure record and its popup — can explain
+// the failure. `usage` matters even on failure: a "failed" attempt still bills
+// reasoning + image tool tokens. Later sources win only where earlier ones are
+// empty, so a non-stream retry can fill gaps without erasing the stream's data.
+function attachStreamDiagnostics(err, ...results) {
+  for (const r of results) {
+    if (!r || typeof r !== "object") continue;
+    if (!err.usage && r.usage) err.usage = r.usage;
+    if (!err.eventTypeCounts && r.eventTypeCounts && Object.keys(r.eventTypeCounts).length) {
+      err.eventTypeCounts = r.eventTypeCounts;
+    }
+    if (!err.reasoningSummary && r.reasoningSummary) err.reasoningSummary = r.reasoningSummary;
+    if (!err.refusalText && r.refusalText) err.refusalText = r.refusalText;
+    // The model answered in prose instead of calling the image tool. This is
+    // usually the only human-readable clue for an "empty" reference-mode call.
+    if (!err.outputText && typeof r.text === "string" && r.text.trim().length > 0) {
+      err.outputText = r.text.trim();
+    }
+  }
+  return err;
+}
+
 function parseTargetResolution(prompt) {
   if (typeof prompt !== "string") return null;
   const match = prompt.match(/(\d{3,5})\s*[x×]\s*(\d{3,5})/i);
@@ -851,6 +874,12 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
     if (reason) e.diagnosticReason = reason;
     e.refsCount = references.length;
     e.promptRuntime = promptRuntime;
+    // The stream completed cleanly — it just never carried an image. Everything
+    // we know about *why* lives on that result (the model's own text instead of
+    // a tool call, a refusal, the event histogram, partial token spend). It used
+    // to be dropped here, so the failure record showed a bare "빈 응답" with no
+    // way to tell a refusal apart from an upstream hiccup.
+    attachStreamDiagnostics(e, stream);
     throw e;
   }
 
@@ -909,6 +938,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   e.code = "UPSTREAM_EMPTY";
   if (finalReason) e.diagnosticReason = finalReason;
   e.promptRuntime = promptRuntime;
+  attachStreamDiagnostics(e, stream, retry);
   throw e;
 }
 
@@ -1137,6 +1167,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         reasoningSummary: r?.reasoningSummary || null,
         refusalText: r?.refusalText || null,
         eventTypeCounts: r?.eventTypeCounts || null,
+        outputText: typeof r?.text === "string" && r.text.trim() ? r.text.trim() : null,
         usage: r?.usage || null,
         promptRuntime: r?.promptRuntime || null,
       });
@@ -1178,6 +1209,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         eventTypeCounts: e?.eventTypeCounts || null,
         reasoningSummary: e?.reasoningSummary || null,
         refusalText: e?.refusalText || null,
+        outputText: e?.outputText || null,
         promptRuntime: e?.promptRuntime || null,
       });
       console.warn(
@@ -1423,6 +1455,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           reasoningSummary: r?.reasoningSummary || null,
           refusalText: r?.refusalText || null,
           eventTypeCounts: r?.eventTypeCounts || null,
+          outputText: typeof r?.text === "string" && r.text.trim() ? r.text.trim() : null,
           usage: r?.usage || null,
           promptRuntime: r?.promptRuntime || null,
         });
@@ -1448,6 +1481,7 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           eventTypeCounts: e?.eventTypeCounts || null,
           reasoningSummary: e?.reasoningSummary || null,
           refusalText: e?.refusalText || null,
+          outputText: e?.outputText || null,
           promptRuntime: e?.promptRuntime || null,
         });
         console.warn(

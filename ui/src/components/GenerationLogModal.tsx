@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { deleteFailedLogItem, getGenerationLog } from "../lib/api";
-import { PromptRuntimeBlock } from "./PromptRuntimeBlock";
+import { AttemptDiagnostics, PromptRuntimeBlock } from "./PromptRuntimeBlock";
 import type { GenerationLogItem } from "../types";
 
 function formatTs(ts: number): string {
@@ -274,6 +274,7 @@ export function GenerationLogModal() {
                                 {a.errorMessage}
                               </div>
                             ) : null}
+                            <AttemptDiagnostics attempt={a} />
                             <PromptRuntimeBlock runtime={a.promptRuntime ?? item.promptRuntime ?? null} />
                           </li>
                         ))}

@@ -46,6 +46,11 @@ image_gen/
 - **Phase 2**: 입력 검증, 로깅 시스템, 재시도/회복 메커니즘
 - **Phase 3**: 캐싱, 레이트 리미팅, 모니터링 (/health), 배치 처리
 
+## 실패 기록 (활동 로그 ≠ 실패 레코드)
+- `localStorage["ima2.inFlight"]`의 활동 로그 행에는 프롬프트와 에러 문구만 있다. 첨부 이미지로 그대로 재시도하거나 실패 원인을 보여주려면 **서버 sidecar**(`generated/.failed/*.json`)를 `GET /api/generation-log/failed/by-request/:requestId`로 조회해야 한다(`mapFailedLogItem`).
+- `retryActivity`는 그 조회가 성공하면 `retryFromLog`에 위임한다 → `generated/.refs`의 원본 첨부·품질·사이즈·시스템 프롬프트 복원. store 상태를 다시 읽는 방식으로 "고치지" 말 것(첨부를 잃어버린 주체가 store다).
+- Responses 스트림이 이미지 없이 끝나면 `attachStreamDiagnostics()`가 `refusalText` / 모델이 도구 대신 낸 `text` / `reasoningSummary` / `eventTypeCounts` / 부분 `usage`를 에러에 붙인다. 이게 attempt 로그 → 실패 sidecar → UI `AttemptDiagnostics`로 흐른다. 새 empty/throw 경로를 추가하면 같이 붙여야 한다. 안 붙이면 정책 거절과 업스트림 장애를 구분할 수 없다.
+
 ## Conventions
 - ES Module only (import/export)
 - File length < 500 lines (split if exceeded)

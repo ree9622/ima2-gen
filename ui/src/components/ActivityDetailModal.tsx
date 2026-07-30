@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { getFailedLogByRequestId } from "../lib/api";
-import { PromptRuntimeBlock } from "./PromptRuntimeBlock";
+import { AttemptDiagnostics, PromptRuntimeBlock } from "./PromptRuntimeBlock";
 import type { GenerationLogItem } from "../types";
 
 function formatTs(ts: number | undefined): string {
@@ -85,6 +85,19 @@ export function ActivityDetailModal() {
   const references = record?.references ?? [];
   const referenceCount = record?.referenceCount ?? 0;
   const attempts = record?.attempts ?? [];
+  // "빈 응답" 같은 문구만으로는 원인을 알 수 없으므로, 근거가 남은 마지막 시도를
+  // 골라 실패 사유 바로 아래에 올려준다 (시도 목록을 훑지 않아도 되게).
+  const diagAttempt =
+    [...attempts]
+      .reverse()
+      .find(
+        (a) =>
+          a.refusalText ||
+          a.outputText ||
+          a.reasoningSummary ||
+          a.violationCategories?.length ||
+          a.eventTypeCounts,
+      ) ?? null;
   const settingsText = [
     endpointLabel(record?.endpoint),
     record?.quality ? `품질 ${record.quality}` : null,
@@ -217,6 +230,7 @@ export function ActivityDetailModal() {
                 {loading ? "불러오는 중..." : "기록된 실패 사유가 없습니다."}
               </div>
             )}
+            {diagAttempt ? <AttemptDiagnostics attempt={diagAttempt} /> : null}
             {loadError ? (
               <div style={{ marginTop: 6, fontSize: 12, color: MUTED }}>{loadError}</div>
             ) : null}
@@ -330,6 +344,7 @@ export function ActivityDetailModal() {
                         {a.errorMessage}
                       </div>
                     ) : null}
+                    <AttemptDiagnostics attempt={a} />
                     <PromptRuntimeBlock runtime={a.promptRuntime ?? record?.promptRuntime ?? null} />
                   </li>
                 ))}

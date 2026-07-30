@@ -2383,6 +2383,40 @@ async function listFailedSidecars(dir) {
   return out;
 }
 
+// Shared shape for a failed generation, used by both the log list and the
+// per-request lookup that powers the activity-log failure popup / retry.
+function mapFailedLogItem(m) {
+  return {
+    id: `failed/${m.id || (m._file || "").replace(/\.json$/, "")}`,
+    status: "failed",
+    createdAt: m.createdAt || 0,
+    endpoint: m.endpoint || "generate",
+    prompt: m.prompt || null,
+    originalPrompt: typeof m.originalPrompt === "string" ? m.originalPrompt : null,
+    systemPrompt: typeof m.systemPrompt === "string" && m.systemPrompt.length > 0 ? m.systemPrompt : null,
+    systemPromptEnabled: m.systemPromptEnabled === true,
+    quality: m.quality || null,
+    size: m.size || null,
+    format: m.format || null,
+    moderation: m.moderation || null,
+    maxAttempts: Array.isArray(m.attempts) ? m.attempts.length : null,
+    attempts: Array.isArray(m.attempts) ? m.attempts : [],
+    promptRuntime: m.promptRuntime || null,
+    imageRoute: m.imageRoute || m.promptRuntime?.route || null,
+    imageModel: m.imageModel || m.promptRuntime?.imageModel || null,
+    responsesModel: m.responsesModel || m.promptRuntime?.model || null,
+    referenceCount: typeof m.referenceCount === "number" ? m.referenceCount : 0,
+    references: Array.isArray(m.references) ? m.references : [],
+    filename: null,
+    url: null,
+    sessionId: m.sessionId || null,
+    requestId: typeof m.requestId === "string" ? m.requestId : null,
+    errorCode: m.errorCode || null,
+    errorMessage: m.errorMessage || null,
+    outfitModule: m.outfitModule || null,
+  };
+}
+
 app.get("/api/generation-log", async (req, res) => {
   try {
     const limitRaw = parseInt(req.query.limit);
@@ -2445,35 +2479,7 @@ app.get("/api/generation-log", async (req, res) => {
       const failed = await listFailedSidecars(failedDir);
       for (const m of failed) {
         if (!canAccess(m, req.authUser)) continue;
-        items.push({
-          id: `failed/${m.id || (m._file || "").replace(/\.json$/, "")}`,
-          status: "failed",
-          createdAt: m.createdAt || 0,
-          endpoint: m.endpoint || "generate",
-          prompt: m.prompt || null,
-          originalPrompt: typeof m.originalPrompt === "string" ? m.originalPrompt : null,
-          systemPrompt: typeof m.systemPrompt === "string" && m.systemPrompt.length > 0 ? m.systemPrompt : null,
-          systemPromptEnabled: m.systemPromptEnabled === true,
-          quality: m.quality || null,
-          size: m.size || null,
-          format: m.format || null,
-          moderation: m.moderation || null,
-          maxAttempts: Array.isArray(m.attempts) ? m.attempts.length : null,
-          attempts: Array.isArray(m.attempts) ? m.attempts : [],
-          promptRuntime: m.promptRuntime || null,
-          imageRoute: m.imageRoute || m.promptRuntime?.route || null,
-          imageModel: m.imageModel || m.promptRuntime?.imageModel || null,
-          responsesModel: m.responsesModel || m.promptRuntime?.model || null,
-          referenceCount: typeof m.referenceCount === "number" ? m.referenceCount : 0,
-          references: Array.isArray(m.references) ? m.references : [],
-          filename: null,
-          url: null,
-          sessionId: m.sessionId || null,
-          requestId: typeof m.requestId === "string" ? m.requestId : null,
-          errorCode: m.errorCode || null,
-          errorMessage: m.errorMessage || null,
-          outfitModule: m.outfitModule || null,
-        });
+        items.push(mapFailedLogItem(m));
       }
     }
 
@@ -2481,6 +2487,27 @@ app.get("/api/generation-log", async (req, res) => {
     res.json({ items: items.slice(0, limit), total: items.length });
   } catch (err) {
     console.error("[generation-log] error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Look up the failure record for one client-side request (activity-log) id.
+// The activity log only keeps a thin localStorage entry, so the popup and the
+// retry button resolve the full record — prompt, settings, reference lineage,
+// per-attempt errors — from the server sidecar instead.
+app.get("/api/generation-log/failed/by-request/:requestId", async (req, res) => {
+  try {
+    const requestId = String(req.params.requestId || "").replace(/[^\w-]/g, "");
+    if (!requestId) return res.status(400).json({ error: "invalid requestId" });
+    const failedDir = join(__dirname, "generated", ".failed");
+    const failed = await listFailedSidecars(failedDir);
+    const matches = failed
+      .filter((m) => m.requestId === requestId && canAccess(m, req.authUser))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (matches.length === 0) return res.status(404).json({ error: "not found" });
+    res.json({ item: mapFailedLogItem(matches[0]) });
+  } catch (err) {
+    console.error("[generation-log] by-request error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

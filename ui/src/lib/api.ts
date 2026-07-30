@@ -638,6 +638,23 @@ export function getGenerationLog(
   return jsonFetch(`/api/generation-log?${qs.toString()}`);
 }
 
+// Resolve the server-side failure record for an activity-log entry (the client
+// keeps only a thin localStorage row). Returns null when there is no sidecar —
+// e.g. the failure never reached the server, or it was already deleted.
+export async function getFailedLogByRequestId(
+  requestId: string,
+): Promise<GenerationLogItem | null> {
+  try {
+    const res = await jsonFetch<{ item: GenerationLogItem }>(
+      `/api/generation-log/failed/by-request/${encodeURIComponent(requestId)}`,
+    );
+    return res.item ?? null;
+  } catch (err) {
+    if ((err as { status?: number })?.status === 404) return null;
+    throw err;
+  }
+}
+
 export function deleteFailedLogItem(id: string): Promise<{ ok: boolean; id: string }> {
   const clean = id.replace(/^failed\//, "");
   return jsonFetch(`/api/generation-log/failed/${encodeURIComponent(clean)}`, {

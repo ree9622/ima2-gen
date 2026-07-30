@@ -954,6 +954,12 @@ type AppState = {
   logModalOpen: boolean;
   openLogModal: () => void;
   closeLogModal: () => void;
+  // 최근 생성(활동 로그)에서 실패 항목을 눌렀을 때 띄우는 상세 팝업.
+  // 활동 로그 자체는 localStorage의 얇은 레코드라 프롬프트 전문·첨부 이미지·
+  // attempt별 실패 사유는 서버 실패 sidecar에서 가져온다.
+  activityDetailId: string | null;
+  openActivityDetail: (id: string) => void;
+  closeActivityDetail: () => void;
   // Prompt library (Phase 6.3) — 자주 쓰는 프롬프트 SQLite 저장 + 검색.
   promptLibraryOpen: boolean;
   promptLibraryItems: import("../lib/api").PromptItem[];
@@ -1069,6 +1075,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   logModalOpen: false,
   openLogModal: () => set({ logModalOpen: true }),
   closeLogModal: () => set({ logModalOpen: false }),
+  activityDetailId: null,
+  openActivityDetail: (id) => set({ activityDetailId: id }),
+  closeActivityDetail: () => set({ activityDetailId: null }),
 
   // Prompt library actions (Phase 6.3)
   promptLibraryOpen: false,
@@ -1209,6 +1218,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       referenceImages: retryReferences?.dataUrls ?? [],
       referenceMetaHints: retryReferences?.hints ?? [],
       logModalOpen: false,
+      activityDetailId: null,
     });
     await get().generate({
       overridePrompt: item.prompt,
@@ -1925,6 +1935,24 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     if (!item || !item.retry) {
       get().showToast("재시도 정보가 없습니다", true);
       return;
+    }
+    // The activity row only carries prompt + count, so a naive retry silently
+    // dropped the attached reference images (and quality/size/system prompt)
+    // whenever the sidebar had been cleared or the tab reloaded. Resolve the
+    // server failure sidecar for this request id first and reuse the log-retry
+    // path, which restores the reference blobs from generated/.refs.
+    if (item.retry.kind !== "node") {
+      try {
+        const { getFailedLogByRequestId } = await import("../lib/api");
+        const record = await getFailedLogByRequestId(id);
+        if (record?.prompt) {
+          get().dismissActivity(id);
+          await get().retryFromLog(record);
+          return;
+        }
+      } catch (err) {
+        console.warn("[activity] failure record lookup failed", err);
+      }
     }
     // Drop the failed entry first so a new one (with fresh id) replaces it.
     get().dismissActivity(id);

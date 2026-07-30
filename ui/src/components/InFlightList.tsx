@@ -39,6 +39,7 @@ export function InFlightList() {
   const retryActivity = useAppStore((s) => s.retryActivity);
   const cancelActivity = useAppStore((s) => s.cancelActivity);
   const selectActivity = useAppStore((s) => s.selectActivity);
+  const openActivityDetail = useAppStore((s) => s.openActivityDetail);
 
   if (inFlight.length === 0) return null;
 
@@ -86,22 +87,31 @@ export function InFlightList() {
             status === "running" && maxNum > 1 && attemptNum > 1;
           const elapsed = status === "success" ? formatElapsed(f.elapsedMs) : "";
 
-          const clickable = status === "success" && !!f.filename;
+          // 성공 항목은 본문 캔버스로 이동, 실패 항목은 어떤 프롬프트/첨부로
+          // 왜 실패했는지 보여주는 상세 팝업을 띄운다.
+          const activate =
+            status === "success" && f.filename
+              ? () => selectActivity(f.id)
+              : status === "error"
+                ? () => openActivityDetail(f.id)
+                : null;
+          const clickable = activate !== null;
           return (
             <li
               key={f.id}
               className={`in-flight-item${clickable ? " in-flight-item--clickable" : ""}`}
               data-status={status}
               data-phase={f.phase ?? "queued"}
-              onClick={clickable ? () => selectActivity(f.id) : undefined}
+              title={status === "error" ? "클릭하면 프롬프트·첨부 이미지·실패 사유를 볼 수 있습니다" : undefined}
+              onClick={activate ?? undefined}
               role={clickable ? "button" : undefined}
               tabIndex={clickable ? 0 : undefined}
               onKeyDown={
-                clickable
+                activate
                   ? (e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        selectActivity(f.id);
+                        activate();
                       }
                     }
                   : undefined

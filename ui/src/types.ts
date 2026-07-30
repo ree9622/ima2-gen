@@ -223,6 +223,7 @@ export type GenerationLogItem = {
   filename: string | null;
   url: string | null;
   sessionId: string | null;
+  requestId?: string | null;
   errorCode: string | null;
   errorMessage: string | null;
 };

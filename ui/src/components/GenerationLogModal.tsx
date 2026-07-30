@@ -99,9 +99,9 @@ export function GenerationLogModal() {
         style={{
           width: "min(900px, 100%)",
           maxHeight: "90vh",
-          background: "var(--bg, #0b0b0b)",
+          background: "var(--bg)",
           color: "inherit",
-          border: "1px solid var(--line, #2a2a2a)",
+          border: "1px solid var(--border)",
           borderRadius: 12,
           display: "flex",
           flexDirection: "column",
@@ -111,7 +111,7 @@ export function GenerationLogModal() {
         <header
           style={{
             padding: "12px 16px",
-            borderBottom: "1px solid var(--line, #2a2a2a)",
+            borderBottom: "1px solid var(--border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -161,7 +161,7 @@ export function GenerationLogModal() {
         </header>
         <div style={{ overflowY: "auto", padding: 12 }}>
           {items.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--muted, #888)" }}>
+            <div style={{ padding: 32, textAlign: "center", color: "var(--text-dim)" }}>
               {loading ? "불러오는 중..." : "로그가 비어있습니다."}
             </div>
           ) : (
@@ -169,15 +169,15 @@ export function GenerationLogModal() {
               {items.map((item) => {
                 const isOpen = expanded[item.id] === true;
                 const badgeColor =
-                  item.status === "success" ? "var(--green, #3ba55d)" : "var(--red, #e04c4c)";
+                  item.status === "success" ? "var(--green)" : "var(--red)";
                 return (
                   <li
                     key={item.id}
                     style={{
-                      border: "1px solid var(--line, #2a2a2a)",
+                      border: "1px solid var(--border)",
                       borderRadius: 8,
                       padding: 12,
-                      background: "var(--surface, #111)",
+                      background: "var(--surface)",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -193,7 +193,7 @@ export function GenerationLogModal() {
                       >
                         {item.status === "success" ? "성공" : "실패"}
                       </span>
-                      <span style={{ fontSize: 12, color: "var(--muted, #888)" }}>
+                      <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
                         {formatTs(item.createdAt)} · {endpointLabel(item.endpoint)} ·{" "}
                         {item.attempts.length}회 시도
                         {item.quality ? ` · ${item.quality}` : ""}
@@ -221,7 +221,7 @@ export function GenerationLogModal() {
                           <button
                             type="button"
                             className="option-btn"
-                            style={{ padding: "4px 10px", fontSize: 13, color: "var(--red, #e04c4c)" }}
+                            style={{ padding: "4px 10px", fontSize: 13, color: "var(--red)" }}
                             onClick={() => void handleDelete(item)}
                           >
                             삭제
@@ -241,10 +241,10 @@ export function GenerationLogModal() {
                         WebkitBoxOrient: "vertical",
                       }}
                     >
-                      {item.prompt ?? <em style={{ color: "var(--muted, #888)" }}>프롬프트 없음</em>}
+                      {item.prompt ?? <em style={{ color: "var(--text-dim)" }}>프롬프트 없음</em>}
                     </div>
                     {item.errorMessage ? (
-                      <div style={{ marginTop: 6, fontSize: 12, color: "var(--red, #e04c4c)" }}>
+                      <div style={{ marginTop: 6, fontSize: 12, color: "var(--red)" }}>
                         {item.errorCode ? `[${item.errorCode}] ` : ""}
                         {item.errorMessage}
                       </div>
@@ -255,7 +255,7 @@ export function GenerationLogModal() {
                           marginTop: 10,
                           paddingLeft: 20,
                           fontSize: 12,
-                          color: "var(--muted, #aaa)",
+                          color: "var(--text-dim)",
                           display: "flex",
                           flexDirection: "column",
                           gap: 6,
@@ -263,7 +263,7 @@ export function GenerationLogModal() {
                       >
                         {item.attempts.map((a) => (
                           <li key={a.attempt}>
-                            <span style={{ color: a.ok ? "var(--green, #3ba55d)" : "var(--red, #e04c4c)" }}>
+                            <span style={{ color: a.ok ? "var(--green)" : "var(--red)" }}>
                               {a.ok ? "✓" : "✗"}
                             </span>{" "}
                             #{a.attempt} · {a.durationMs}ms

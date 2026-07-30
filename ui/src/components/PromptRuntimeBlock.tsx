@@ -22,8 +22,8 @@ export function PromptRuntimeBlock({ runtime }: { runtime: GenerationLogItem["pr
     <div style={{ marginTop: 8, paddingLeft: 14, display: "grid", gap: 6 }}>
       {rows.map(([label, value]) => (
         <div key={label}>
-          <div style={{ fontSize: 11, color: "var(--muted, #888)" }}>{label}</div>
-          <pre style={{ margin: 0, whiteSpace: "pre-wrap", font: "inherit", color: "var(--fg, #ddd)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}</div>
+          <pre style={{ margin: 0, whiteSpace: "pre-wrap", font: "inherit", color: "var(--text)" }}>
             {value}
           </pre>
         </div>
@@ -57,14 +57,14 @@ export function AttemptDiagnostics({ attempt }: { attempt: AttemptLog }) {
     <div style={{ marginTop: 6, paddingLeft: 14, display: "grid", gap: 6 }}>
       {rows.map(([label, value]) => (
         <div key={label}>
-          <div style={{ fontSize: 11, color: "var(--muted, #888)" }}>{label}</div>
+          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}</div>
           <pre
             style={{
               margin: 0,
               whiteSpace: "pre-wrap",
               font: "inherit",
               fontSize: 12,
-              color: "var(--fg, #ddd)",
+              color: "var(--text)",
             }}
           >
             {value}

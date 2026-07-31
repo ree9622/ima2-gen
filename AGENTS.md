@@ -9,6 +9,7 @@ GPT Image 2 (gpt-image-2) 이미지 생성기 CLI + 웹 UI
 ## Git Source Of Truth
 
 - 운영 서비스는 asrock `/home/ko/apps/ima2-gen`에서 실행되지만, source of truth는 GitHub `ree9622/ima2-gen`의 `main`이다.
+- **자동 운영 반영 (2026-07-31 ko 확정)**: ima2-gen에서 요청받은 작업은 검증 후 커밋·push·PR에 멈추지 않고, origin `main` 병합 → asrock 운영 checkout 동기화 → 서비스 재시작 → health와 실제 사용자 화면 검증까지 자동으로 완료한다. 사용자가 이번 작업은 배포하지 말라고 명시했거나 검증 실패·안전 차단이 있을 때만 운영 반영 전에 멈춘다.
 - 운영 서버에서 직접 수정했거나 dirty checkout을 발견하면 완료 보고하지 않는다. clean branch로 source 변경분을 회수하고 commit/push/PR/merge 후 운영 checkout을 merge commit에 맞춘다.
 - 완료 기준: 운영 서버에서 `git status --short`가 source 기준 clean이고 `git log -1 --oneline`이 원격 main commit을 가리켜야 한다.
 - `generated/`, `logs/`, `backups/`, `node_modules/`, `ui/dist/`, `*.bak*`, `.env*`, runtime DB/data는 source가 아니므로 커밋하지 않는다.

@@ -76,6 +76,10 @@ ima2 serve
 
 이 레포의 source of truth는 **GitHub `ree9622/ima2-gen` main**이다. 운영은 asrock 한 곳에서 실행하지만, 운영 서버 파일만 바뀐 상태는 완료가 아니다.
 
+### 자동 main 병합·운영 배포 (2026-07-31 ko 확정)
+
+ima2-gen에서 사용자가 요청한 작업은 코드와 문서 변경을 검증한 뒤 PR 생성에서 멈추지 않는다. 별도 재확인 없이 origin `main`에 병합하고, asrock `/home/ko/apps/ima2-gen` 운영 checkout을 해당 merge SHA로 동기화한 다음 서비스를 재시작한다. 마지막으로 health와 실제 사용자 화면에서 요청한 동작을 검증해야 완료다. 사용자가 이번 작업은 배포하지 말라고 명시했거나 테스트 실패·dirty source·롤백 불가 같은 안전 차단이 있을 때만 운영 반영 전에 멈춘다.
+
 | Location | Role |
 | -------- | ---- |
 | **GitHub** `ree9622/ima2-gen` (origin) | canonical source of truth |

@@ -661,14 +661,14 @@ export function Lightbox() {
             ) : null}
           </div>
           <div className="lightbox__refs-row">
-            {currentImage.references.map((ref) => {
+            {currentImage.references.map((ref, index) => {
               const clickable = ref.kind === "history" && !!ref.filename;
               const title = clickable
                 ? `이 참조 이미지로 이동 (${ref.filename})`
                 : "외부 업로드 참조 이미지";
               return (
                 <div
-                  key={ref.hash}
+                  key={`${ref.hash}:${index}`}
                   className={`lightbox__ref-thumb${clickable ? " is-clickable" : ""}`}
                   role={clickable ? "button" : undefined}
                   tabIndex={clickable ? 0 : undefined}

@@ -50,7 +50,7 @@ import {
 import { importFromGitHubUrl, PromptImportError } from "./lib/promptImport.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
-import { IMAGE_MODEL } from "./lib/models.js";
+import { IMAGE_MODEL, TEXT_MODEL } from "./lib/models.js";
 import {
   isValidBatchId,
   ensureBatchMeta,
@@ -2040,6 +2040,9 @@ app.get("/api/providers", (_req, res) => {
     directImageModel: null,
     responsesModel: RESPONSES_MODEL,
     responsesImageModel: RESPONSES_IMAGE_MODEL_LABEL,
+    // Model behind 다듬기 / safety-retry rewrite. Surfaced so a running
+    // instance can be checked without reading env or code.
+    textModel: TEXT_MODEL,
   });
 });
 
@@ -2063,6 +2066,9 @@ app.get("/api/health", async (req, res) => {
     directImageModel: null,
     responsesModel: RESPONSES_MODEL,
     responsesImageModel: RESPONSES_IMAGE_MODEL_LABEL,
+    // Model behind 다듬기 / safety-retry rewrite. Surfaced so a running
+    // instance can be checked without reading env or code.
+    textModel: TEXT_MODEL,
     uptimeSec: Math.round(process.uptime()),
     activeJobs: listJobs().length,
     pid: process.pid,

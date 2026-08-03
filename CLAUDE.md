@@ -119,6 +119,18 @@ ssh asrock "cd /home/ko/apps/ima2-gen && git fetch origin && git status && git l
 
 차이를 발견하면 **그 정리가 모든 다른 작업보다 우선**. dirty source가 있으면 `git pull`, `git reset --hard`, `git checkout -- <file>`로 덮지 말고 clean branch로 회수한다.
 
+### 운영 checkout 에서 npm test 를 돌릴 때
+
+`tests/health.test.js` 는 실제 `server.js` 를 spawn 하는데, `HOME` 만
+`FAKE_HOME` 으로 격리하고 `generated/` 는 격리하지 않는다 (`GENERATED_DIR` 은
+`__dirname` 고정, env override 없음). asrock 운영 checkout 에서 `npm test` 를
+돌리면 실행마다 5바이트 더미 PNG + sidecar 한 쌍이 운영 히스토리에 남는다
+(프롬프트 `test moderation forwarding`). 돌렸으면 그 쌍을 지운다:
+
+```bash
+ssh asrock "cd /home/ko/apps/ima2-gen/generated && grep -l test moderation forwarding *.json"
+```
+
 ### Hand-edit 백업 정리
 
 `*.bak.YYYYMMDD-HHMMSS` 는 `.gitignore` 처리되어 있다. 7일 지난 것은 정리:

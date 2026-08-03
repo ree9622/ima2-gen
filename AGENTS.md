@@ -60,6 +60,8 @@ image_gen/
 - **default 변경 시**: 이전 텍스트를 `LEGACY_…`로 남기고 `useAppStore` migrate에서 정확히 일치할 때만 승격(persist version 증가). 없으면 기존 탭이 옛 default를 영구히 붙든다.
 
 ## 외부 근거 (OpenAI 공식, 2026-07-30 확인 — 재조사 불필요)
+- 모델 ID는 `lib/models.js` 한 곳에서 관리한다. `IMAGE_MODEL`(기본 `gpt-5.5`, env `IMA2_RESPONSES_MODEL`)은 `image_generation` 도구를 부르는 오케스트레이터, `TEXT_MODEL`(기본 `gpt-5.6-sol`, env `IMA2_TEXT_MODEL`)은 도구를 안 쓰는 텍스트 보조(다듬기 `lib/enhance.js`, safety-retry rewrite `lib/llmRewrite.js`)다.
+- **`IMAGE_MODEL`을 5.6으로 올리지 말 것.** OAuth 백엔드가 `gpt-5.6-sol/-terra/-luna`를 `/v1/models`에 노출하고 텍스트 응답도 정상이지만, 셋 다 `image_generation` 도구를 조용히 떨어뜨려 `Tool choice 'required' must be specified with 'tools' parameter`로 실패한다(2026-08-03 라이브 프록시 실측, ima2-router는 `tools`를 건드리지 않으므로 upstream 제약). 증상은 전건 `UPSTREAM_EMPTY`라 모델을 가리키지 않는다. `tests/models.test.js`가 이 핀을 강제한다.
 - `input_fidelity`는 gpt-image-1.5/1/1-mini 전용. gpt-image-2가 안 받는 이유는 미지원이 아니라 **입력 이미지를 이미 자동으로 high fidelity로 처리하기 때문**이다. 우리 OAuth 경로(`gpt-image-2-codex`)의 400은 정상이며, 얼굴 유사도를 이 파라미터로 올리려는 시도는 근거가 없다.
 - 프롬프트 순서 권장: 배경/장면 → 주체 → 핵심 디테일 → 제약. 정체성 보존은 `"Change only X, keep everything else the same"` + preserve 목록을 **편집마다 재기재**.
 - 레퍼런스 여러 장은 인덱스·역할로 지목(`"Image 1: … Image 2: style reference"`). 우리 UI엔 ref별 역할 지정이 없다.

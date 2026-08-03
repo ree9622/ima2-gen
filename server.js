@@ -50,6 +50,7 @@ import {
 import { importFromGitHubUrl, PromptImportError } from "./lib/promptImport.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
+import { IMAGE_MODEL } from "./lib/models.js";
 import {
   isValidBatchId,
   ensureBatchMeta,
@@ -156,7 +157,9 @@ let OAUTH_URL = `http://127.0.0.1:${OAUTH_PORT}`;
 let OAUTH_READY = false;
 let OAUTH_LAST_ERROR = null;
 const HAS_API_KEY = !!apiKey;
-const RESPONSES_MODEL = process.env.IMA2_RESPONSES_MODEL || "gpt-5.5";
+// Image orchestrator model. Pinned to the 5.5 line — see lib/models.js
+// for the measured reason 5.6 ids cannot carry the image_generation tool.
+const RESPONSES_MODEL = IMAGE_MODEL;
 const RESPONSES_IMAGE_MODEL_LABEL = "gpt-image-2:auto";
 
 let openai = null;

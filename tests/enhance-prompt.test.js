@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { TEXT_MODEL } from "../lib/models.js";
 import {
   buildEnhancePayload,
   extractEnhancedText,
@@ -9,7 +10,7 @@ import {
 describe("buildEnhancePayload", () => {
   it("emits a responses-api body with no image tool", () => {
     const body = buildEnhancePayload("셀카 한 장", "ko");
-    assert.equal(body.model, "gpt-5.5");
+    assert.equal(body.model, TEXT_MODEL);
     assert.equal(body.stream, true);
     assert.equal(body.reasoning?.effort, "low");
     assert.ok(Array.isArray(body.input));

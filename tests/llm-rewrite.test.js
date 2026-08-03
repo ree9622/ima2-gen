@@ -13,6 +13,7 @@
 //   - sanitization removing self-censoring tokens
 
 import { describe, it } from "node:test";
+import { TEXT_MODEL } from "../lib/models.js";
 import assert from "node:assert/strict";
 import {
   buildRewritePayload,
@@ -56,7 +57,7 @@ function responsesApiJson(text) {
 describe("buildRewritePayload", () => {
   it("includes the user prompt in the input", () => {
     const body = buildRewritePayload("비키니 셀카", { categories: ["sexual"] });
-    assert.equal(body.model, "gpt-5.5");
+    assert.equal(body.model, TEXT_MODEL);
     assert.equal(body.stream, false);
     assert.equal(body.tools.length, 0);
     assert.deepEqual(

@@ -43,6 +43,8 @@ test("official image output fields and reference roles reach the tool", () => {
   assert.match(server, /output_format:\s*outputFormat/);
   assert.match(server, /output_compression:\s*compression/);
   assert.match(server, /background,/);
+  assert.match(server, /transparent background unsupported/);
+  assert.match(server, /backgroundFallback:\s*true/);
   assert.match(server, /Reference image roles:/);
   assert.match(composer, /포즈·구도/);
   assert.match(composer, /제품·로고/);

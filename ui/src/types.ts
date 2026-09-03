@@ -125,6 +125,8 @@ export type GenerateSingleResponse = {
   responseId?: string | null;
   imageCallId?: string | null;
   background?: Background | string;
+  backgroundRequested?: Background | string;
+  backgroundFallback?: boolean;
   compression?: number;
 };
 
@@ -149,6 +151,8 @@ export type GenerateMultiResponse = {
   responseId?: string | null;
   imageCallId?: string | null;
   background?: Background | string;
+  backgroundRequested?: Background | string;
+  backgroundFallback?: boolean;
   compression?: number;
 };
 

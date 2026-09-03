@@ -861,6 +861,25 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       signal: abortSignal,
     });
   } catch (err) {
+    if (background === "transparent" && /transparent background is not supported/i.test(err?.message || "")) {
+      console.warn(`${tag} transparent background unsupported — retrying once with background=auto`);
+      const fallback = await generateViaOAuth(
+        prompt,
+        quality,
+        size,
+        moderation,
+        references,
+        requestId,
+        { ...options, background: "auto" },
+        systemPromptOpts,
+      );
+      return {
+        ...fallback,
+        background: "auto",
+        backgroundRequested: "transparent",
+        backgroundFallback: true,
+      };
+    }
     err.promptRuntime = promptRuntime;
     throw err;
   }
@@ -3335,13 +3354,14 @@ app.post("/api/generate", async (req, res) => {
         if (r.value.promptRewrittenForSafety === true) promptRewrittenForSafety = true;
         const rand = randomBytes(4).toString("hex");
         const filename = `${Date.now()}_${rand}_${images.length}.${format}`;
+        const effectiveBackground = r.value.background || background;
         const imageBuf = stampImageMetaIfPng(Buffer.from(r.value.b64, "base64"), format, {
           prompt,
           revisedPrompt: r.value.revisedPrompt,
           size,
           quality,
           moderation,
-          background,
+          background: effectiveBackground,
           compression,
           originalPrompt,
           outfitModule,
@@ -3363,6 +3383,9 @@ app.post("/api/generate", async (req, res) => {
           size,
           format,
           moderation,
+          background: effectiveBackground,
+          compression,
+          ...(r.value.backgroundFallback ? { backgroundRequested: background, backgroundFallback: true } : {}),
           provider: "oauth",
           imageRoute: r.value.route || r.value.promptRuntime?.route || null,
           imageModel: r.value.imageModel || r.value.promptRuntime?.imageModel || null,
@@ -3488,6 +3511,7 @@ app.post("/api/generate", async (req, res) => {
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const successfulResult = results.find((r) => r.status === "fulfilled" && r.value?.b64)?.value;
     const extra = {
       usage: totalUsage,
       provider: "oauth",
@@ -3498,7 +3522,9 @@ app.post("/api/generate", async (req, res) => {
       quality,
       size,
       moderation,
-      background,
+      background: successfulResult?.background || background,
+      backgroundRequested: background,
+      backgroundFallback: successfulResult?.backgroundFallback === true,
       compression,
       responseId: results.find((r) => r.status === "fulfilled" && r.value?.responseId)?.value?.responseId || null,
       imageCallId: results.find((r) => r.status === "fulfilled" && r.value?.imageCallId)?.value?.imageCallId || null,
@@ -3626,6 +3652,24 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
       signal: abortSignal,
     });
   } catch (err) {
+    if (background === "transparent" && /transparent background is not supported/i.test(err?.message || "")) {
+      console.warn("[oauth-edit] transparent background unsupported — retrying once with background=auto");
+      const fallback = await editViaOAuth(
+        prompt,
+        imageB64,
+        quality,
+        size,
+        moderation,
+        systemPromptOpts,
+        { ...options, background: "auto" },
+      );
+      return {
+        ...fallback,
+        background: "auto",
+        backgroundRequested: "transparent",
+        backgroundFallback: true,
+      };
+    }
     err.promptRuntime = promptRuntime;
     throw err;
   }
@@ -3802,7 +3846,8 @@ app.post("/api/edit", async (req, res) => {
       size,
       moderation,
       format,
-      background,
+      background: editResult.background || background,
+      ...(editResult.backgroundFallback ? { backgroundRequested: background, backgroundFallback: true } : {}),
       compression,
       provider: "oauth",
       imageRoute: editResult.promptRuntime?.route || null,
@@ -3839,7 +3884,9 @@ app.post("/api/edit", async (req, res) => {
       quality,
       size,
       format,
-      background,
+      background: editResult.background || background,
+      backgroundRequested: background,
+      backgroundFallback: editResult.backgroundFallback === true,
       compression,
       responseId: editResult.responseId || null,
       imageCallId: editResult.imageCallId || null,

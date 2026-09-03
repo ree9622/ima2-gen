@@ -4025,6 +4025,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
     let succeeded = 0;
     let failed = 0;
+    let backgroundFallbackCount = 0;
     let maxElapsed = 0;
     let firstErrMsg: string | null = null;
 
@@ -4178,6 +4179,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 references: (res as { references?: GenerateItem["references"] }).references,
               };
           if (!picked.image) throw new Error("빈 응답");
+          if (res.backgroundFallback === true) {
+            backgroundFallbackCount += 1;
+            set({ background: "auto" });
+          }
 
           const item: GenerateItem = {
             image: picked.image,
@@ -4283,7 +4288,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       const label = count === 1
         ? `${maxElapsed}초 만에 생성했습니다.`
         : `${succeeded}장을 ${maxElapsed}초 만에 생성했습니다.`;
-      get().showToast(label);
+      get().showToast(
+        backgroundFallbackCount > 0
+          ? `${label} 현재 모델은 투명 배경을 지원하지 않아 자동 배경으로 생성했습니다.`
+          : label,
+        backgroundFallbackCount > 0,
+      );
     } else if (succeeded > 0 && failed > 0) {
       get().showToast(`${succeeded}/${count}장 생성 성공 (${failed}장 실패)`, true);
     } else {
@@ -4349,6 +4359,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         onPhase: (phase) => set({ classicPhase: phase }),
       });
       if (isMultiResponse(res) || !res.image) throw new Error("편집 결과가 비어 있습니다.");
+      if (res.backgroundFallback === true) set({ background: "auto" });
       await addHistory({
         image: res.image,
         filename: res.filename,
@@ -4382,7 +4393,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           phase: undefined,
         } : f),
       }));
-      get().showToast("수정한 이미지를 새 결과로 저장했습니다.");
+      get().showToast(
+        res.backgroundFallback === true
+          ? "수정한 이미지를 저장했습니다. 현재 모델은 투명 배경을 지원하지 않아 자동 배경을 적용했습니다."
+          : "수정한 이미지를 새 결과로 저장했습니다.",
+        res.backgroundFallback === true,
+      );
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "이미지 수정에 실패했습니다.";

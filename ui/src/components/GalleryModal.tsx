@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useAppStore } from "../store/useAppStore";
 import type { GenerateItem } from "../types";
 import { deleteHistoryItem, restoreHistoryItem, getHistoryGrouped } from "../lib/api";
+import {
+  compareGalleryItemsNewestFirst,
+  galleryDateBucket,
+} from "../lib/galleryDate.js";
 
 type TrashPending = {
   filename: string;
@@ -15,22 +19,6 @@ type SessionGroup = {
   label: string;
   items: GenerateItem[];
 };
-
-function dateBucket(createdAt: number | undefined): string {
-  if (!createdAt) return "이전";
-  const d = new Date(createdAt);
-  if (Number.isNaN(d.getTime())) return "이전";
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
-  if (diffDays === 0) return "오늘";
-  if (diffDays === 1) return "어제";
-  if (diffDays < 7) return "이번 주";
-  return d.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 const PAGE_SIZE = 50;
 
@@ -193,8 +181,12 @@ export function GalleryModal() {
 
   const dateGroups = useMemo(() => {
     const map = new Map<string, GenerateItem[]>();
-    for (const item of filtered) {
-      const key = dateBucket(item.createdAt);
+    // Store updates can prepend restored or asynchronously completed items.
+    // Sort at the presentation boundary so one out-of-order row cannot move
+    // an entire date section below an older section.
+    const newestFirst = [...filtered].sort(compareGalleryItemsNewestFirst);
+    for (const item of newestFirst) {
+      const key = galleryDateBucket(item.createdAt);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
     }

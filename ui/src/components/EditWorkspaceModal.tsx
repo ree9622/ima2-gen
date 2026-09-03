@@ -26,7 +26,21 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+type EditableSource = {
+  image: string;
+  label?: string;
+  previousResponseId?: string | null;
+};
+
+export function EditWorkspaceModal({
+  open,
+  onClose,
+  sourceImage,
+}: {
+  open: boolean;
+  onClose: () => void;
+  sourceImage?: EditableSource;
+}) {
   const currentImage = useAppStore((state) => state.currentImage);
   const editImage = useAppStore((state) => state.editImage);
   const activeGenerations = useAppStore((state) => state.activeGenerations);
@@ -41,6 +55,8 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
   const [undo, setUndo] = useState<string[]>([]);
   const [redo, setRedo] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const editableSource = sourceImage?.image ?? currentImage?.url ?? currentImage?.image ?? "";
+  const sourceKey = sourceImage?.image ?? currentImage?.filename ?? editableSource;
 
   const restoreOverlay = async (dataUrl: string) => {
     const canvas = overlayRef.current;
@@ -54,10 +70,10 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
   };
 
   useEffect(() => {
-    if (!open || !currentImage) return;
+    if (!open || !editableSource) return;
     let canceled = false;
     setLoading(true);
-    void toDataUrl(currentImage.url ?? currentImage.image)
+    void toDataUrl(editableSource)
       .then(async (dataUrl) => {
         if (canceled) return;
         const image = await loadImage(dataUrl);
@@ -78,7 +94,7 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
       .catch((error) => showToast(error instanceof Error ? error.message : "이미지 불러오기 실패", true))
       .finally(() => !canceled && setLoading(false));
     return () => { canceled = true; };
-  }, [open, currentImage?.filename]);
+  }, [open, sourceKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -89,7 +105,7 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  if (!open || !currentImage) return null;
+  if (!open || !editableSource) return null;
 
   const snapshot = () => overlayRef.current?.toDataURL("image/png") ?? "";
   const pushUndo = () => {
@@ -194,7 +210,14 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
       image = expanded.image;
       mask = expanded.mask;
     }
-    const ok = await editImage({ prompt, image, mask });
+    const ok = await editImage({
+      prompt,
+      image,
+      mask,
+      previousResponseId: sourceImage
+        ? sourceImage.previousResponseId ?? null
+        : currentImage?.responseId ?? null,
+    });
     if (ok) onClose();
   };
 
@@ -204,7 +227,11 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
         <header>
           <div>
             <h2 id="edit-workspace-title">이미지 이어서 수정</h2>
-            <p>노드 화면으로 옮기지 않고 현재 결과에서 바로 작업합니다.</p>
+            <p>
+              {sourceImage?.label
+                ? `${sourceImage.label}에서 바로 작업합니다.`
+                : "노드 화면으로 옮기지 않고 현재 결과에서 바로 작업합니다."}
+            </p>
           </div>
           <button type="button" className="edit-workspace__close" onClick={onClose} aria-label="편집 닫기">×</button>
         </header>
@@ -216,15 +243,27 @@ export function EditWorkspaceModal({ open, onClose }: { open: boolean; onClose: 
         <div className="edit-workspace__body">
           <div className="edit-workspace__preview">
             {loading ? <div role="status">이미지 준비 중…</div> : <>
-              <img src={source} alt="수정할 원본" />
-              <canvas
-                ref={overlayRef}
-                className={mode === "area" ? "is-drawable" : ""}
-                onPointerDown={(event) => { if (mode !== "area") return; pushUndo(); drawing.current = true; event.currentTarget.setPointerCapture(event.pointerId); paint(event); }}
-                onPointerMove={paint}
-                onPointerUp={() => { drawing.current = false; }}
-                onPointerCancel={() => { drawing.current = false; }}
-              />
+              <div className="edit-workspace__image-stage">
+                <img
+                  src={source}
+                  alt="수정할 원본"
+                  onLoad={(event) => {
+                    const canvas = overlayRef.current;
+                    if (!canvas) return;
+                    canvas.width = event.currentTarget.naturalWidth;
+                    canvas.height = event.currentTarget.naturalHeight;
+                    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+                  }}
+                />
+                <canvas
+                  ref={overlayRef}
+                  className={mode === "area" ? "is-drawable" : ""}
+                  onPointerDown={(event) => { if (mode !== "area") return; pushUndo(); drawing.current = true; event.currentTarget.setPointerCapture(event.pointerId); paint(event); }}
+                  onPointerMove={paint}
+                  onPointerUp={() => { drawing.current = false; }}
+                  onPointerCancel={() => { drawing.current = false; }}
+                />
+              </div>
             </>}
           </div>
           <div className="edit-workspace__controls">

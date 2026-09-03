@@ -6,6 +6,7 @@ import { SexyTuneModal } from "./SexyTuneModal";
 import { RefBundlesModal } from "./RefBundlesModal";
 import { PromptBundlesModal } from "./PromptBundlesModal";
 import { MetadataRestoreCard } from "./MetadataRestoreCard";
+import { EditWorkspaceModal } from "./EditWorkspaceModal";
 import { enhancePrompt as apiEnhance, closeBatch as apiCloseBatch } from "../lib/api";
 import {
   buildCelebrityPrompt,
@@ -82,6 +83,7 @@ export function PromptComposer() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [celebrityPromptOpen, setCelebrityPromptOpen] = useState(false);
+  const [editReferenceIndex, setEditReferenceIndex] = useState<number | null>(null);
   const [celebrityDraft, setCelebrityDraft] = useState<CelebrityPromptInput>(
     getCelebrityPromptDefaults,
   );
@@ -502,6 +504,15 @@ export function PromptComposer() {
               <img src={src} alt={`참조 이미지 ${i + 1}`} />
               <button
                 type="button"
+                className="composer__chip-edit"
+                onClick={() => setEditReferenceIndex(i)}
+                aria-label={`참조 이미지 ${i + 1} 바로 수정`}
+                title="이 첨부 이미지 바로 수정"
+              >
+                수정
+              </button>
+              <button
+                type="button"
                 className="composer__chip-remove"
                 onClick={() => removeReference(i)}
                 aria-label={`참조 이미지 ${i + 1} 제거`}
@@ -798,6 +809,16 @@ export function PromptComposer() {
             .map((d) => d.replace(/^data:[^;]+;base64,/, ""))
             .filter(Boolean);
           return (await apiEnhance(p, "ko", refB64)).prompt;
+        }}
+      />
+
+      <EditWorkspaceModal
+        open={editReferenceIndex !== null && Boolean(refs[editReferenceIndex])}
+        onClose={() => setEditReferenceIndex(null)}
+        sourceImage={editReferenceIndex === null ? undefined : {
+          image: refs[editReferenceIndex],
+          label: `첨부 이미지 ${editReferenceIndex + 1}`,
+          previousResponseId: null,
         }}
       />
     </div>

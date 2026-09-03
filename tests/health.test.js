@@ -55,7 +55,7 @@ describe("Server: /api/health + advertisement", () => {
         res.end(JSON.stringify({ data: [{ id: "gpt-5.5" }] }));
         return;
       }
-      if (req.method === "GET" && req.url === "/health") {
+      if (req.method === "GET" && req.url === "/admin/") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
         return;
@@ -112,6 +112,7 @@ describe("Server: /api/health + advertisement", () => {
     assert.ok(Number.isFinite(body.activeJobs));
     assert.ok(Number.isFinite(body.pid));
     assert.ok(Number.isFinite(body.startedAt));
+    assert.strictEqual(body.oauth.ready, true, "falls back from /health to router /admin/");
   });
 
   it("does not return 304 for API conditional requests", async () => {

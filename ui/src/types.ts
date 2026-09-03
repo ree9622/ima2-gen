@@ -127,6 +127,7 @@ export type GenerateSingleResponse = {
   background?: Background | string;
   backgroundRequested?: Background | string;
   backgroundFallback?: boolean;
+  responseChainFallback?: boolean;
   compression?: number;
 };
 
@@ -153,6 +154,7 @@ export type GenerateMultiResponse = {
   background?: Background | string;
   backgroundRequested?: Background | string;
   backgroundFallback?: boolean;
+  responseChainFallback?: boolean;
   compression?: number;
 };
 

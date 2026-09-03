@@ -4396,8 +4396,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       get().showToast(
         res.backgroundFallback === true
           ? "수정한 이미지를 저장했습니다. 현재 모델은 투명 배경을 지원하지 않아 자동 배경을 적용했습니다."
+          : res.responseChainFallback === true
+            ? "수정한 이미지를 저장했습니다. 현재 연결은 응답 체인을 지원하지 않아 원본 이미지 참조 방식으로 처리했습니다."
           : "수정한 이미지를 새 결과로 저장했습니다.",
-        res.backgroundFallback === true,
+        res.backgroundFallback === true || res.responseChainFallback === true,
       );
       return true;
     } catch (error) {

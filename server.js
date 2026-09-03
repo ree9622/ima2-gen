@@ -3652,6 +3652,23 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
       signal: abortSignal,
     });
   } catch (err) {
+    if (previousResponseId && /does not support `previous_response_id`|previous_response_id.*not supported/i.test(err?.message || "")) {
+      console.warn("[oauth-edit] response chaining unsupported — retrying once with the full image input only");
+      const fallback = await editViaOAuth(
+        prompt,
+        imageB64,
+        quality,
+        size,
+        moderation,
+        systemPromptOpts,
+        { ...options, previousResponseId: null },
+      );
+      return {
+        ...fallback,
+        previousResponseIdRequested: previousResponseId,
+        responseChainFallback: true,
+      };
+    }
     if (background === "transparent" && /transparent background is not supported/i.test(err?.message || "")) {
       console.warn("[oauth-edit] transparent background unsupported — retrying once with background=auto");
       const fallback = await editViaOAuth(
@@ -3865,6 +3882,7 @@ app.post("/api/edit", async (req, res) => {
       responseId: editResult.responseId || null,
       imageCallId: editResult.imageCallId || null,
       previousResponseId,
+      ...(editResult.responseChainFallback ? { responseChainFallback: true } : {}),
       hasMask: Boolean(normalizedMaskB64),
     };
     await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
@@ -3890,6 +3908,7 @@ app.post("/api/edit", async (req, res) => {
       compression,
       responseId: editResult.responseId || null,
       imageCallId: editResult.imageCallId || null,
+      responseChainFallback: editResult.responseChainFallback === true,
       ...systemPromptMeta,
       promptRuntime: editResult.promptRuntime || null,
       safetyRetryAvailable: hasCompliantRetry(prompt),

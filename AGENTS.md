@@ -20,6 +20,7 @@ GPT Image 2 (gpt-image-2) 이미지 생성기 CLI + 웹 UI
 - Server: Express 5
 - API Client: OpenAI SDK v5
 - OAuth: openai-oauth (ChatGPT 세션 프록시)
+- OAuth liveness는 구현별로 다르다: 로컬 `openai-oauth` v2는 `/health`, 운영 `ima2-router`는 `/admin/`을 제공한다. 상태 확인은 이 순서로 폴백하고, 계정 busy 시 503일 수 있는 `/v1/models`를 오프라인 판정에 쓰지 않는다.
 - Frontend: Vanilla HTML/CSS/JS
 
 ## Project Structure

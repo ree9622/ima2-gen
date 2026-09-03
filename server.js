@@ -2096,15 +2096,22 @@ const __pkg = (() => {
 })();
 const __startedAt = Date.now();
 
+async function isOAuthProxyLive(timeoutMs) {
+  for (const path of ["/health", "/admin/"]) {
+    try {
+      const response = await fetch(`${OAUTH_URL}${path}`, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (response.ok) return true;
+      if (response.status === 401 || response.status === 403) return true;
+    } catch {}
+  }
+  return false;
+}
+
 app.get("/api/health", async (req, res) => {
   const deep = req.query.deep === "1" || req.query.deep === "true";
-  let oauthReady = OAUTH_READY;
-  try {
-    const live = await fetch(`${OAUTH_URL}/health`, { signal: AbortSignal.timeout(1000) });
-    oauthReady = live.ok;
-  } catch {
-    oauthReady = false;
-  }
+  const oauthReady = await isOAuthProxyLive(1000);
   const base = {
     ok: true,
     version: __pkg.version,
@@ -2685,21 +2692,9 @@ app.post("/api/storage/prune", async (req, res) => {
 
 // -- OAuth status --
 app.get("/api/oauth/status", async (_req, res) => {
-  try {
-    // 프록시 자체의 liveness 전용 경로를 사용한다. 모델 목록이나 실제
-    // 생성 엔드포인트는 계정 busy 상태에서 503일 수 있으므로 UI의
-    // "프록시 오프라인" 판정 근거로 사용할 수 없다.
-    const r = await fetch(`${OAUTH_URL}/health`, { signal: AbortSignal.timeout(5000) });
-    if (r.ok) {
-      res.json({ status: "ready" });
-    } else if (r.status === 401 || r.status === 403) {
-      res.json({ status: "auth_required" });
-    } else {
-      res.json({ status: "offline" });
-    }
-  } catch {
-    res.json({ status: "offline" });
-  }
+  // openai-oauth v2는 /health, ima2-router는 /admin/을 제공한다. 모델
+  // 목록은 계정 busy 상태에서 503일 수 있어 liveness 판정에 쓰지 않는다.
+  res.json({ status: await isOAuthProxyLive(2500) ? "ready" : "offline" });
 });
 
 // -- Inflight registry --

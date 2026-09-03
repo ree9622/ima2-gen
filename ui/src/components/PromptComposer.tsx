@@ -63,6 +63,8 @@ export function PromptComposer() {
   const refs = useAppStore((s) => s.referenceImages);
   const addReferences = useAppStore((s) => s.addReferences);
   const removeReference = useAppStore((s) => s.removeReference);
+  const referenceRoles = useAppStore((s) => s.referenceRoles);
+  const setReferenceRole = useAppStore((s) => s.setReferenceRole);
   const useCurrentAsReference = useAppStore((s) => s.useCurrentAsReference);
   const currentImage = useAppStore((s) => s.currentImage);
 
@@ -496,7 +498,7 @@ export function PromptComposer() {
       {refs.length > 0 && (
         <div className="composer__chips">
           {refs.map((src, i) => (
-            <div key={i} className="composer__chip" title={`참조 이미지 ${i + 1}`}>
+            <div key={i} className="composer__chip composer__chip--role" title={`참조 이미지 ${i + 1}`}>
               <img src={src} alt={`참조 이미지 ${i + 1}`} />
               <button
                 type="button"
@@ -506,6 +508,17 @@ export function PromptComposer() {
               >
                 ×
               </button>
+              <select
+                value={referenceRoles[i] ?? "identity"}
+                onChange={(event) => setReferenceRole(i, event.target.value as import("../types").ReferenceRole)}
+                aria-label={`참조 이미지 ${i + 1} 역할`}
+              >
+                <option value="identity">인물·정체성</option>
+                <option value="product">제품·로고</option>
+                <option value="composition">포즈·구도</option>
+                <option value="style">스타일·색감</option>
+                <option value="background">배경·공간</option>
+              </select>
             </div>
           ))}
         </div>

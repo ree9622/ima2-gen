@@ -7,6 +7,7 @@ import {
   SYSTEM_PROMPT_MAX_LEN,
 } from "../lib/defaultSystemPrompt";
 import type {
+  Background,
   Count,
   Format,
   GenerateItem,
@@ -14,12 +15,14 @@ import type {
   Moderation,
   Provider,
   Quality,
+  ReferenceRole,
   SizePreset,
   UIMode,
 } from "../types";
 import { isMultiResponse } from "../types";
 import {
-  postGenerate,
+  postGenerateWithProgress,
+  postEditWithProgress,
   postGenerateQueued,
   getHistory,
   getInflight,
@@ -534,6 +537,7 @@ function userScopedResetSlice() {
     refBundles: [] as RefBundle[],
     referenceImages: [] as string[],
     referenceMetaHints: [] as (import("../types").ReferenceMetaHint | null)[],
+    referenceRoles: [] as ReferenceRole[],
     inFlight: [] as PersistedInFlight[],
     historyNextCursor: null as HistoryCursor | null,
     historyTotal: 0,
@@ -548,9 +552,9 @@ function clearUserScopedLocalStorage(): void {
   } catch {}
 }
 
-const HISTORY_INITIAL_LIMIT = 500;
-const HISTORY_PAGE_LIMIT = 500;
-const HISTORY_POLL_LIMIT = 500;
+const HISTORY_INITIAL_LIMIT = 50;
+const HISTORY_PAGE_LIMIT = 100;
+const HISTORY_POLL_LIMIT = 100;
 const HISTORY_MAX_RETAIN = 10000;
 const MAX_NODE_REFS = 5;
 
@@ -568,6 +572,12 @@ function historyItemToGenerateItem(it: HistoryItem): GenerateItem {
     promptRuntime: it.promptRuntime ?? undefined,
     size: it.size ?? undefined,
     quality: it.quality ?? undefined,
+    format: it.format,
+    background: it.background ?? undefined,
+    compression: it.compression ?? undefined,
+    responseId: it.responseId ?? null,
+    imageCallId: it.imageCallId ?? null,
+    previousResponseId: it.previousResponseId ?? null,
     provider: it.provider,
     width: it.width ?? undefined,
     height: it.height ?? undefined,
@@ -763,6 +773,8 @@ type AppState = {
   customH: number;
   format: Format;
   moderation: Moderation;
+  background: Background;
+  compression: number;
   count: Count;
   prompt: string;
   // 좌측 패널 "기본 프롬프트(시스템)" 섹션 — 모든 generate/edit 요청 직전에
@@ -778,6 +790,8 @@ type AppState = {
   // keeps the two arrays in lock-step (length always equal). null entries
   // mean we have no hint and the server should treat the ref as uploaded.
   referenceMetaHints: (import("../types").ReferenceMetaHint | null)[];
+  referenceRoles: ReferenceRole[];
+  setReferenceRole: (index: number, role: ReferenceRole) => void;
   addReferences: (files: File[]) => Promise<void>;
   addReferenceDataUrl: (dataUrl: string) => Promise<boolean>;
   removeReference: (index: number) => void;
@@ -824,6 +838,8 @@ type AppState = {
   cancelActivity: (id: string) => void;
   selectActivity: (id: string) => void;
   currentImage: GenerateItem | null;
+  classicPartialImage: string | null;
+  classicPhase: string | null;
   history: GenerateItem[];
   historyNextCursor: HistoryCursor | null;
   historyTotal: number;
@@ -931,6 +947,8 @@ type AppState = {
   setCustomSize: (w: number, h: number) => void;
   setFormat: (f: Format) => void;
   setModeration: (m: Moderation) => void;
+  setBackground: (b: Background) => void;
+  setCompression: (n: number) => void;
   setCount: (c: Count) => void;
   setPrompt: (p: string) => void;
   // Restore prompt + size + quality + moderation + fork extras from a PNG's
@@ -1012,6 +1030,7 @@ type AppState = {
     batchTotal?: number;
     batchSource?: string;
   }) => Promise<void>;
+  editImage: (payload: { prompt: string; image: string; mask?: string }) => Promise<boolean>;
   runSexyTuneBatch: (opts: {
     count: number;
     maxRisk?: "low" | "medium" | "high";
@@ -1049,6 +1068,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   customH: 1088,
   format: "png",
   moderation: "low",
+  background: "auto",
+  compression: 90,
   count: 1,
   prompt: "",
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
@@ -1230,6 +1251,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       maxAttempts: item.maxAttempts ?? s.maxAttempts,
       referenceImages: retryReferences?.dataUrls ?? [],
       referenceMetaHints: retryReferences?.hints ?? [],
+      referenceRoles: (retryReferences?.dataUrls ?? []).map(() => "identity"),
       logModalOpen: false,
       activityDetailId: null,
     });
@@ -1423,6 +1445,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   },
   referenceImages: [],
   referenceMetaHints: [],
+  referenceRoles: [],
+  setReferenceRole: (index, role) => set((s) => ({
+    referenceRoles: Array.from(
+      { length: s.referenceImages.length },
+      (_, i) => i === index ? role : (s.referenceRoles[i] ?? "identity"),
+    ),
+  })),
   addReferences: async (files) => {
     const allowed = 5 - get().referenceImages.length;
     const toAdd = files.slice(0, Math.max(0, allowed));
@@ -1452,6 +1481,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set((s) => ({
       referenceImages: [...s.referenceImages, ...valid].slice(0, 5),
       referenceMetaHints: [...s.referenceMetaHints, ...newHints].slice(0, 5),
+      referenceRoles: [...s.referenceRoles, ...valid.map(() => "identity" as const)].slice(0, 5),
     }));
     if (files.length > allowed) {
       get().showToast("참조 이미지는 최대 5장까지 추가할 수 있습니다. 초과한 이미지는 제외되었습니다.", true);
@@ -1499,6 +1529,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       return {
         referenceImages: [...s.referenceImages, url],
         referenceMetaHints: [...s.referenceMetaHints, { kind: "uploaded" }],
+        referenceRoles: [...s.referenceRoles, "identity"],
       };
     });
     return added;
@@ -1507,9 +1538,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set((s) => ({
       referenceImages: s.referenceImages.filter((_, i) => i !== index),
       referenceMetaHints: s.referenceMetaHints.filter((_, i) => i !== index),
+      referenceRoles: s.referenceRoles.filter((_, i) => i !== index),
     }));
   },
-  clearReferences: () => set({ referenceImages: [], referenceMetaHints: [] }),
+  clearReferences: () => set({ referenceImages: [], referenceMetaHints: [], referenceRoles: [] }),
 
   refBundles: [],
   refBundlesLoading: false,
@@ -1607,6 +1639,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       referenceMetaHints: append
         ? [...s.referenceMetaHints, ...hints].slice(0, 5)
         : hints,
+      referenceRoles: append
+        ? [...s.referenceRoles, ...dataUrls.map(() => "identity" as const)].slice(0, 5)
+        : dataUrls.map(() => "identity" as const),
     }));
     get().showToast(`묶음 "${bundle.name}" 적용 (${dataUrls.length}장).`);
   },
@@ -1868,6 +1903,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set((s) => ({
       referenceImages: [...s.referenceImages, dataUrl],
       referenceMetaHints: [...s.referenceMetaHints, hint],
+      referenceRoles: [...s.referenceRoles, "identity"],
     }));
     get().showToast("현재 이미지를 참조에 추가했습니다.");
   },
@@ -2311,6 +2347,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     }
   },
   currentImage: null,
+  classicPartialImage: null,
+  classicPhase: null,
   history: [],
   historyNextCursor: null,
   historyTotal: 0,
@@ -3742,8 +3780,16 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   setQuality: (quality) => set({ quality }),
   setSizePreset: (sizePreset) => set({ sizePreset }),
   setCustomSize: (w, h) => set({ customW: snap16(w), customH: snap16(h) }),
-  setFormat: (format) => set({ format }),
+  setFormat: (format) => set((s) => ({
+    format,
+    background: format === "jpeg" && s.background === "transparent" ? "opaque" : s.background,
+  })),
   setModeration: (moderation) => set({ moderation }),
+  setBackground: (background) => set((s) => ({
+    background,
+    format: background === "transparent" && s.format === "jpeg" ? "png" : s.format,
+  })),
+  setCompression: (compression) => set({ compression: Math.max(0, Math.min(100, Math.round(compression))) }),
   setCount: (count) => set({ count }),
   setPrompt: (prompt) => {
     // Direct edits invalidate the saved enhance source, unless the user is
@@ -3971,6 +4017,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set((state) => ({
       activeGenerations: state.activeGenerations + count,
       inFlight: [...state.inFlight, ...newEntries],
+      classicPartialImage: count === 1 ? null : state.classicPartialImage,
+      classicPhase: count === 1 ? "queued" : state.classicPhase,
     }));
     saveInFlight(get().inFlight);
     get().startInFlightPolling();
@@ -4001,6 +4049,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               size,
               format: s.format,
               moderation: s.moderation,
+              background: s.background,
+              compression: s.compression,
               provider: s.provider,
               n: 1,
               requestId: flightId,
@@ -4012,6 +4062,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               includeSystemPrompt: s.systemPromptEnabled,
               ...(references ? { references } : {}),
               ...(referenceMeta ? { referenceMeta } : {}),
+              ...(references ? { referenceRoles: s.referenceRoles.slice(0, references.length) } : {}),
               ...(overrides?.outfitModule ? { outfitModule: overrides.outfitModule } : {}),
               ...(overrides?.batchId
                 ? {
@@ -4074,12 +4125,16 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         const slotStartedAt = Date.now();
         console.log(`[ima2][generate][${flightId}] posting /api/generate`);
         try {
-          const res: GenerateResponse = await postGenerate({
+          const res: GenerateResponse = await postGenerateWithProgress({
             prompt,
             quality,
             size,
             format: s.format,
             moderation: s.moderation,
+            background: s.background,
+            compression: s.compression,
+            partialImages: 2,
+            action: references ? "auto" : "generate",
             provider: s.provider,
             n: 1,
             requestId: flightId,
@@ -4091,6 +4146,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             includeSystemPrompt: s.systemPromptEnabled,
             ...(references ? { references } : {}),
             ...(referenceMeta ? { referenceMeta } : {}),
+            ...(references ? { referenceRoles: s.referenceRoles.slice(0, references.length) } : {}),
             ...(overrides?.outfitModule ? { outfitModule: overrides.outfitModule } : {}),
             ...(overrides?.batchId
               ? {
@@ -4100,6 +4156,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                   batchSource: overrides.batchSource,
                 }
               : {}),
+          }, {
+            onPartial: ({ image }) => set({ classicPartialImage: image, classicPhase: "partial" }),
+            onPhase: (phase) => set({ classicPhase: phase }),
           });
           console.log(
             `[ima2][generate][${flightId}] response ok in ` +
@@ -4138,6 +4197,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             usage: res.usage,
             quality: res.quality ?? s.quality,
             size: res.size ?? size,
+            format: s.format,
+            background: res.background ?? s.background,
+            compression: res.compression ?? s.compression,
+            responseId: res.responseId ?? null,
+            imageCallId: res.imageCallId ?? null,
             ...(picked.references && picked.references.length > 0
               ? { references: picked.references }
               : {}),
@@ -4207,6 +4271,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         } finally {
           set((state) => ({
             activeGenerations: Math.max(0, state.activeGenerations - 1),
+            classicPartialImage: null,
+            classicPhase: null,
           }));
           saveInFlight(get().inFlight);
         }
@@ -4230,6 +4296,115 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       } else {
         get().showToast(firstErrMsg ?? "생성에 실패했습니다.", true);
       }
+    }
+  },
+
+  async editImage({ prompt, image, mask }) {
+    const s = get();
+    const trimmed = prompt.trim();
+    if (!trimmed || !image) return false;
+    const requestId = `fe_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const startedAt = Date.now();
+    const flight: PersistedInFlight = {
+      id: requestId,
+      prompt: trimmed,
+      startedAt,
+      status: "running",
+      attempt: 1,
+      maxAttempts: s.maxAttempts,
+      retry: { kind: "classic", prompt: trimmed, count: 1 },
+      kind: "classic",
+      sessionId: s.activeSessionId,
+      parentNodeId: null,
+    };
+    set((state) => ({
+      activeGenerations: state.activeGenerations + 1,
+      inFlight: [...state.inFlight, flight],
+      classicPartialImage: null,
+      classicPhase: "queued",
+    }));
+    saveInFlight(get().inFlight);
+    try {
+      const res = await postEditWithProgress({
+        prompt: trimmed,
+        image: image.replace(/^data:[^;]+;base64,/, ""),
+        ...(mask ? { mask: mask.replace(/^data:[^;]+;base64,/, "") } : {}),
+        quality: s.quality,
+        size: s.getResolvedSize(),
+        format: s.format,
+        moderation: s.moderation,
+        background: s.background,
+        compression: s.compression,
+        partialImages: 2,
+        action: "edit",
+        ...(s.currentImage?.responseId ? { previousResponseId: s.currentImage.responseId } : {}),
+        provider: s.provider,
+        n: 1,
+        requestId,
+        maxAttempts: s.maxAttempts,
+        systemPrompt: s.systemPrompt,
+        includeSystemPrompt: s.systemPromptEnabled,
+      }, {
+        onPartial: ({ image: partial }) => set({ classicPartialImage: partial, classicPhase: "partial" }),
+        onPhase: (phase) => set({ classicPhase: phase }),
+      });
+      if (isMultiResponse(res) || !res.image) throw new Error("편집 결과가 비어 있습니다.");
+      await addHistory({
+        image: res.image,
+        filename: res.filename,
+        prompt: trimmed,
+        systemPrompt: res.systemPrompt ?? undefined,
+        systemPromptEnabled: res.systemPromptEnabled === true,
+        promptRuntime: res.promptRuntime ?? undefined,
+        elapsed: res.elapsed,
+        provider: res.provider,
+        imageRoute: res.imageRoute,
+        imageModel: res.imageModel,
+        responsesModel: res.responsesModel,
+        usage: res.usage,
+        quality: res.quality ?? s.quality,
+        size: res.size ?? s.getResolvedSize(),
+        format: s.format,
+        background: res.background ?? s.background,
+        compression: res.compression ?? s.compression,
+        responseId: res.responseId ?? null,
+        imageCallId: res.imageCallId ?? null,
+        previousResponseId: s.currentImage?.responseId ?? null,
+        kind: "edit",
+      }, set, get);
+      set((state) => ({
+        inFlight: state.inFlight.map((f) => f.id === requestId ? {
+          ...f,
+          status: "success",
+          endedAt: Date.now(),
+          elapsedMs: Date.now() - startedAt,
+          filename: res.filename,
+          phase: undefined,
+        } : f),
+      }));
+      get().showToast("수정한 이미지를 새 결과로 저장했습니다.");
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "이미지 수정에 실패했습니다.";
+      set((state) => ({
+        inFlight: state.inFlight.map((f) => f.id === requestId ? {
+          ...f,
+          status: "error",
+          endedAt: Date.now(),
+          elapsedMs: Date.now() - startedAt,
+          errorMessage: message,
+          phase: undefined,
+        } : f),
+      }));
+      get().showToast(message, true);
+      return false;
+    } finally {
+      set((state) => ({
+        activeGenerations: Math.max(0, state.activeGenerations - 1),
+        classicPartialImage: null,
+        classicPhase: null,
+      }));
+      saveInFlight(get().inFlight);
     }
   },
 
@@ -4333,6 +4508,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     customH: state.customH,
     format: state.format,
     moderation: state.moderation,
+    background: state.background,
+    compression: state.compression,
     count: state.count,
     systemPrompt: state.systemPrompt,
     systemPromptEnabled: state.systemPromptEnabled,

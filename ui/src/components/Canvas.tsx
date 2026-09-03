@@ -3,10 +3,13 @@ import { useAppStore } from "../store/useAppStore";
 import { ResultActions } from "./ResultActions";
 import { HistoryStrip } from "./HistoryStrip";
 import { webVariant, fallbackTo } from "../lib/imageVariants";
+import { EditWorkspaceModal } from "./EditWorkspaceModal";
 
 export function Canvas() {
   const currentImage = useAppStore((s) => s.currentImage);
   const activeGenerations = useAppStore((s) => s.activeGenerations);
+  const partialImage = useAppStore((s) => s.classicPartialImage);
+  const classicPhase = useAppStore((s) => s.classicPhase);
   const quality = useAppStore((s) => s.quality);
   const getResolvedSize = useAppStore((s) => s.getResolvedSize);
   const showToast = useAppStore((s) => s.showToast);
@@ -14,6 +17,7 @@ export function Canvas() {
   const openLightbox = useAppStore((s) => s.openLightbox);
 
   const [promptView, setPromptView] = useState<"enhanced" | "original">("enhanced");
+  const [editOpen, setEditOpen] = useState(false);
 
   const hasOriginal = Boolean(
     currentImage?.originalPrompt &&
@@ -102,6 +106,11 @@ export function Canvas() {
             <kbd>?</kbd> 로 단축키 전체 보기
           </div>
         </div>
+      ) : showSkeleton && partialImage ? (
+        <div className="canvas-partial" role="status" aria-live="polite">
+          <img src={partialImage} alt="생성 중 미리보기" />
+          <div className="canvas-partial__badge">미리보기 · 마무리 중</div>
+        </div>
       ) : showSkeleton ? (
         <div className="canvas-skeleton" role="status" aria-live="polite">
           <div className="canvas-skeleton__frame">
@@ -121,6 +130,12 @@ export function Canvas() {
           {isGenerating ? (
             <div className="result-pending-badge" aria-live="polite">
               추가 생성 중 {activeGenerations}개…
+            </div>
+          ) : null}
+          {isGenerating && partialImage ? (
+            <div className="result-partial-overlay" role="status" aria-live="polite">
+              <img src={partialImage} alt="추가 생성 중 미리보기" />
+              <span>{classicPhase === "partial" ? "미리보기 · 마무리 중" : "생성 준비 중"}</span>
             </div>
           ) : null}
           <img
@@ -203,10 +218,11 @@ export function Canvas() {
               .filter((v): v is string => Boolean(v))
               .join(" · ")}
           </div>
-          <ResultActions />
+          <ResultActions onEdit={() => setEditOpen(true)} />
         </div>
       ) : null}
       <HistoryStrip className="history-strip--canvas" />
+      <EditWorkspaceModal open={editOpen} onClose={() => setEditOpen(false)} />
     </main>
   );
 }

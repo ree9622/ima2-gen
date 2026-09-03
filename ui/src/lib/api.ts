@@ -110,6 +110,34 @@ export function postGenerate(payload: GenerateRequest): Promise<GenerateResponse
   });
 }
 
+export async function postGenerateWithProgress(
+  payload: GenerateRequest,
+  handlers: {
+    onPartial?: (partial: { image: string; index?: number | null }) => void;
+    onPhase?: (phase: string) => void;
+  } = {},
+): Promise<GenerateResponse> {
+  if (!payload.requestId || !payload.partialImages) return postGenerate(payload);
+  const readinessController = new AbortController();
+  await ensureEventChannel(readinessController.signal);
+  const unsubscribe = subscribeToJob(payload.requestId, (event, data) => {
+    if (event === "partial" && typeof data.image === "string") {
+      handlers.onPartial?.({
+        image: data.image,
+        index: typeof data.index === "number" ? data.index : null,
+      });
+    } else if (event === "phase" && typeof data.phase === "string") {
+      handlers.onPhase?.(data.phase);
+    }
+  });
+  try {
+    return await postGenerate(payload);
+  } finally {
+    readinessController.abort();
+    unsubscribe();
+  }
+}
+
 export type GenerateQueueResponse = {
   queued: true;
   requestId: string;
@@ -175,6 +203,31 @@ export function postEdit(payload: GenerateRequest): Promise<GenerateResponse> {
   });
 }
 
+export async function postEditWithProgress(
+  payload: GenerateRequest,
+  handlers: {
+    onPartial?: (partial: { image: string; index?: number | null }) => void;
+    onPhase?: (phase: string) => void;
+  } = {},
+): Promise<GenerateResponse> {
+  if (!payload.requestId || !payload.partialImages) return postEdit(payload);
+  const readinessController = new AbortController();
+  await ensureEventChannel(readinessController.signal);
+  const unsubscribe = subscribeToJob(payload.requestId, (event, data) => {
+    if (event === "partial" && typeof data.image === "string") {
+      handlers.onPartial?.({ image: data.image, index: typeof data.index === "number" ? data.index : null });
+    } else if (event === "phase" && typeof data.phase === "string") {
+      handlers.onPhase?.(data.phase);
+    }
+  });
+  try {
+    return await postEdit(payload);
+  } finally {
+    readinessController.abort();
+    unsubscribe();
+  }
+}
+
 export type HistoryItem = {
   filename: string;
   url: string;
@@ -193,6 +246,11 @@ export type HistoryItem = {
   resolution?: string | null;
   moderation?: string | null;
   format: string;
+  background?: string | null;
+  compression?: number | null;
+  responseId?: string | null;
+  imageCallId?: string | null;
+  previousResponseId?: string | null;
   provider: string;
   imageRoute?: string | null;
   imageModel?: string | null;

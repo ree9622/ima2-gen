@@ -3,6 +3,8 @@ export type Provider = "oauth" | "api";
 export type Quality = "low" | "medium" | "high";
 export type Format = "png" | "jpeg" | "webp";
 export type Moderation = "low" | "auto";
+export type Background = "auto" | "opaque" | "transparent";
+export type ReferenceRole = "identity" | "product" | "composition" | "style" | "background";
 export type Count = 1 | 2 | 4;
 
 export type SizePreset =
@@ -56,6 +58,12 @@ export type GenerateItem = {
   height?: number | null;
   resolution?: string | null;
   moderation?: string;
+  format?: Format | string;
+  background?: Background | string;
+  compression?: number;
+  responseId?: string | null;
+  imageCallId?: string | null;
+  previousResponseId?: string | null;
   usage?: { total_tokens?: number } & Record<string, unknown>;
   thumb?: string;
   web?: string;
@@ -114,6 +122,10 @@ export type GenerateSingleResponse = {
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
   promptRuntime?: PromptRuntime | null;
+  responseId?: string | null;
+  imageCallId?: string | null;
+  background?: Background | string;
+  compression?: number;
 };
 
 export type GenerateMultiResponse = {
@@ -134,6 +146,10 @@ export type GenerateMultiResponse = {
   systemPrompt?: string | null;
   systemPromptEnabled?: boolean;
   promptRuntime?: PromptRuntime | null;
+  responseId?: string | null;
+  imageCallId?: string | null;
+  background?: Background | string;
+  compression?: number;
 };
 
 export type GenerateResponse = GenerateSingleResponse | GenerateMultiResponse;
@@ -148,9 +164,16 @@ export type GenerateRequest = {
   size: string;
   format: Format;
   moderation: Moderation;
+  background?: Background;
+  compression?: number;
+  partialImages?: 0 | 1 | 2 | 3;
+  action?: "auto" | "generate" | "edit";
+  previousResponseId?: string;
+  referenceRoles?: ReferenceRole[];
   provider: Provider;
   n: number;
   image?: string;
+  mask?: string;
   references?: string[];
   // Lineage hint per reference. Index-aligned with `references`. Server
   // re-hashes to verify, so a wrong hint is harmless.

@@ -155,6 +155,7 @@ export function RightPanel() {
                   min={0}
                   max={100}
                   value={compression}
+                  onInput={(event) => setCompression(Number(event.currentTarget.value))}
                   onChange={(event) => setCompression(Number(event.target.value))}
                 />
                 <output>{compression}</output>

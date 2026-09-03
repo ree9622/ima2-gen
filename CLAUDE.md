@@ -30,6 +30,10 @@ ima2 serve | setup | status | doctor | gen <prompt> | edit <file> | ls | show | 
 npm run release:patch    # :minor, :major
 ```
 
+On Windows worktrees, a junctioned canonical `node_modules` may contain `better-sqlite3` built for Node 22 (ABI 127). If the current Node 24 runtime reports `NODE_MODULE_VERSION 127 ... requires 137`, do not rebuild the shared junction. Put the installed `%LOCALAPPDATA%\nvm\v22.*` directory first in that PowerShell process's `PATH`, verify `node -p "process.versions.modules"` prints `127`, and rerun `tests/health.test.js`. If Node 24 is required, replace the junction with a worktree-local `npm ci`. Success means the real server boots and `/api/health` passes.
+
+Windows GitHub Actions may read checked-out text fixtures with CRLF. Normalize `\r\n` to `\n` before whole-file assertions (for example `robots.txt`), then compare the exact normalized content; an LF-only local pass is not cross-platform proof.
+
 `npm run build` runs `tsc -b && vite build` inside `ui/`. The server statically serves `ui/dist/`, and `bin/ima2.js serve` auto-runs the UI build if `ui/dist/index.html` is missing and `ui/package.json` exists (dev checkout). On a packaged install with `ui/dist/` missing, it errors out.
 
 ## Architecture

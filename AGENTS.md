@@ -77,6 +77,7 @@ image_gen/
 - try/catch mandatory for all async operations
 - Config values in config.js or .env, never hardcode
 - macOS/zsh에서 원격 배포 명령을 `ssh asrock "...$(command)..."`처럼 큰따옴표로 감싸지 않는다. `$()`가 로컬에서 먼저 실행돼 원격 preflight가 깨진다. 여러 줄 배포는 `ssh asrock 'bash -se' <<'REMOTE'` 형태의 quoted heredoc을 쓰고, 성공 판정은 원격 `systemctl`·SHA·health 출력으로 확인한다.
+- 운영 ima2-gen 내부 health는 현재 기본 포트 `3333`의 `http://127.0.0.1:3333/api/health`로 확인한다. 임의 포트를 추측하지 말고 포트가 바뀐 경우 README의 `PORT` 기본값과 실제 리슨 소켓을 먼저 대조하며, 성공 판정은 HTTP 200과 응답 PID가 `systemctl show -p MainPID --value ima2-gen.service`와 같은지 확인한다.
 
 ## Test Command
 ```bash

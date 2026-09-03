@@ -47,6 +47,7 @@ test("uploaded and pasted reference images can open the classic editor", () => {
   assert.match(composer, /참조 이미지 \$\{i \+ 1\} 바로 수정/);
   assert.match(composer, /previousResponseId:\s*null/);
   assert.match(composer, /<EditWorkspaceModal/);
+  assert.match(styles, /\.composer__chip\.composer__chip--role\s*\{\s*width:\s*112px/);
   assert.match(styles, /\.edit-workspace__image-stage canvas\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%/s);
 });
 

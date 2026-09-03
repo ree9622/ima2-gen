@@ -76,6 +76,7 @@ image_gen/
 - Function length < 50 lines
 - try/catch mandatory for all async operations
 - Config values in config.js or .env, never hardcode
+- macOS/zsh에서 원격 배포 명령을 `ssh asrock "...$(command)..."`처럼 큰따옴표로 감싸지 않는다. `$()`가 로컬에서 먼저 실행돼 원격 preflight가 깨진다. 여러 줄 배포는 `ssh asrock 'bash -se' <<'REMOTE'` 형태의 quoted heredoc을 쓰고, 성공 판정은 원격 `systemctl`·SHA·health 출력으로 확인한다.
 
 ## Test Command
 ```bash

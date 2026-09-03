@@ -115,6 +115,34 @@ describe("Server: /api/health + advertisement", () => {
     assert.strictEqual(body.oauth.ready, true, "falls back from /health to router /admin/");
   });
 
+  it("applies browser security and no-index headers without blocking app resources", async () => {
+    const r = await fetch(`http://localhost:${PORT}/api/health`);
+    assert.strictEqual(r.status, 200);
+
+    const csp = r.headers.get("content-security-policy") || "";
+    assert.match(csp, /default-src 'self'/);
+    assert.match(csp, /base-uri 'self'/);
+    assert.match(csp, /object-src 'none'/);
+    assert.match(csp, /frame-ancestors 'none'/);
+    assert.match(csp, /form-action 'self'/);
+    assert.match(csp, /style-src[^;]*https:\/\/fonts\.googleapis\.com[^;]*https:\/\/cdn\.jsdelivr\.net/);
+    assert.match(csp, /font-src[^;]*https:\/\/fonts\.gstatic\.com[^;]*https:\/\/cdn\.jsdelivr\.net/);
+    assert.match(csp, /img-src[^;]*data:[^;]*blob:[^;]*https:/);
+    assert.match(csp, /connect-src 'self'/);
+    assert.match(csp, /worker-src 'self' blob:/);
+    assert.match(csp, /manifest-src 'self'/);
+    assert.doesNotMatch(csp, /unsafe-eval/);
+
+    assert.strictEqual(r.headers.get("x-content-type-options"), "nosniff");
+    assert.strictEqual(r.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+    assert.strictEqual(r.headers.get("x-frame-options"), "DENY");
+    assert.strictEqual(
+      r.headers.get("permissions-policy"),
+      "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    );
+    assert.strictEqual(r.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
+  });
+
   it("does not return 304 for API conditional requests", async () => {
     const first = await fetch(`http://localhost:${PORT}/api/health`);
     assert.strictEqual(first.status, 200);

@@ -82,6 +82,20 @@ image_gen/
 npm test   # node --test tests/**/*.test.js
 ```
 
+### Windows worktree Node ABI preflight
+
+Canonical checkout의 `node_modules`를 junction으로 재사용할 때 `better-sqlite3`는 설치 당시 Node ABI와 실행 Node ABI가 같아야 한다. `NODE_MODULE_VERSION 127 ... requires 137`로 서버 테스트가 기동하지 않으면 공유 junction에서 `npm rebuild`하지 말고, 해당 셸만 설치된 Node 22로 전환한 뒤 `node -p "process.versions.modules"`가 `127`인지 확인한다.
+
+```powershell
+$node22 = Get-ChildItem -LiteralPath "$env:LOCALAPPDATA\nvm" -Directory | Where-Object Name -Like 'v22.*' | Sort-Object Name -Descending | Select-Object -First 1
+$env:Path = "$($node22.FullName);$env:Path"
+node -p "process.versions.modules" # 127
+```
+
+성공 판정은 `tests/health.test.js`가 실제 `server.js`를 띄워 `/api/health`까지 통과하는 것이다. Node 24를 써야 하면 junction 대신 작업트리 자체 `npm ci`로 네이티브 모듈을 별도 설치한다.
+
+GitHub Actions의 Windows checkout은 텍스트 fixture를 CRLF로 읽을 수 있다. `robots.txt` 같은 파일 전체를 테스트할 때는 `replace(/\r\n/g, "\n")` 후 내용을 비교하고, 로컬 LF 통과만으로 Windows CI 통과를 추정하지 않는다.
+
 ## Heartbeat
 - 20분마다 devlog/_plan 점검 및 다음 작업 제안
 - 완료된 phase는 _fin/으로 이동 (YYMMDD_ prefix)

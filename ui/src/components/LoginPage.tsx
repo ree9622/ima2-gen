@@ -46,10 +46,37 @@ export function LoginPage() {
         }}
       >
         <div style={{ marginBottom: 6 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>ima2-gen 로그인</h2>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
-            관리자가 발급한 계정으로 접속하세요.
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              color: "var(--accent)",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              marginBottom: 8,
+            }}
+          >
+            SAMLAB INTERNAL
           </div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>
+            SamLab 내부 이미지 생성기
+          </h1>
+          <div
+            aria-label="접속 주소"
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+              color: "var(--text-dim)",
+              marginTop: 5,
+            }}
+          >
+            images.samlab.click
+          </div>
+          <p style={{ fontSize: 12, lineHeight: 1.55, color: "var(--text-dim)", margin: "10px 0 0" }}>
+            SamLab에서 발급한 이 서비스 전용 계정으로 로그인하세요.
+          </p>
         </div>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -127,8 +154,25 @@ export function LoginPage() {
           {loginPending ? "확인 중…" : "로그인"}
         </button>
 
+        <div
+          role="note"
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            padding: "9px 10px",
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: "var(--text-dim)",
+          }}
+        >
+          <strong style={{ color: "var(--text)" }}>보안 안내</strong>
+          <br />
+          다른 서비스에서 사용하는 비밀번호를 재사용하지 마세요.
+        </div>
+
         <div style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "center" }}>
-          계정이 필요하면 관리자에게 요청하세요. (CLI: <code>ima2-user add</code>)
+          계정이 필요하면 SamLab 관리자에게 요청하세요.
         </div>
       </form>
     </div>

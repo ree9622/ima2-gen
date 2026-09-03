@@ -35,6 +35,19 @@ test("classic editor sends masks and keeps response-chain context", () => {
   assert.match(editor, /"whole" \| "area" \| "outpaint"/);
   assert.match(editor, /되돌리기/);
   assert.match(editor, /다시 실행/);
+  assert.match(editor, /edit-workspace__image-stage/);
+  assert.match(editor, /sourceImage\.previousResponseId \?\? null/);
+  assert.match(editor, /canvas\.width = event\.currentTarget\.naturalWidth/);
+  assert.match(editor, /canvas\.height = event\.currentTarget\.naturalHeight/);
+});
+
+test("uploaded and pasted reference images can open the classic editor", () => {
+  const composer = readFileSync("ui/src/components/PromptComposer.tsx", "utf8");
+  const styles = readFileSync("ui/src/index.css", "utf8");
+  assert.match(composer, /참조 이미지 \$\{i \+ 1\} 바로 수정/);
+  assert.match(composer, /previousResponseId:\s*null/);
+  assert.match(composer, /<EditWorkspaceModal/);
+  assert.match(styles, /\.edit-workspace__image-stage canvas\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%/s);
 });
 
 test("official image output fields and reference roles reach the tool", () => {

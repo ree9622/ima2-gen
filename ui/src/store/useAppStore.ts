@@ -1030,7 +1030,7 @@ type AppState = {
     batchTotal?: number;
     batchSource?: string;
   }) => Promise<void>;
-  editImage: (payload: { prompt: string; image: string; mask?: string }) => Promise<boolean>;
+  editImage: (payload: { prompt: string; image: string; mask?: string; previousResponseId?: string | null }) => Promise<boolean>;
   runSexyTuneBatch: (opts: {
     count: number;
     maxRisk?: "low" | "medium" | "high";
@@ -4309,10 +4309,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     }
   },
 
-  async editImage({ prompt, image, mask }) {
+  async editImage({ prompt, image, mask, previousResponseId: requestedPreviousResponseId }) {
     const s = get();
     const trimmed = prompt.trim();
     if (!trimmed || !image) return false;
+    const previousResponseId = requestedPreviousResponseId === undefined
+      ? s.currentImage?.responseId ?? null
+      : requestedPreviousResponseId;
     const requestId = `fe_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const startedAt = Date.now();
     const flight: PersistedInFlight = {
@@ -4347,7 +4350,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         compression: s.compression,
         partialImages: 2,
         action: "edit",
-        ...(s.currentImage?.responseId ? { previousResponseId: s.currentImage.responseId } : {}),
+        ...(previousResponseId ? { previousResponseId } : {}),
         provider: s.provider,
         n: 1,
         requestId,
@@ -4380,7 +4383,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         compression: res.compression ?? s.compression,
         responseId: res.responseId ?? null,
         imageCallId: res.imageCallId ?? null,
-        previousResponseId: s.currentImage?.responseId ?? null,
+        previousResponseId,
         kind: "edit",
       }, set, get);
       set((state) => ({

@@ -35,8 +35,9 @@
 .edit-workspace__body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .55fr); gap: 20px; padding: 20px 22px; overflow: auto; }
 .edit-workspace__preview { position: relative; min-height: 440px; display: grid; place-items: center; overflow: hidden; border-radius: 14px; background: repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 50% / 22px 22px; }
 [data-theme="dark"] .edit-workspace__preview { background: repeating-conic-gradient(#272727 0 25%, #343434 0 50%) 50% / 22px 22px; }
-.edit-workspace__preview img, .edit-workspace__preview canvas { grid-area: 1 / 1; max-width: 100%; max-height: 65vh; object-fit: contain; }
-.edit-workspace__preview canvas { width: auto; height: auto; pointer-events: none; }
+.edit-workspace__image-stage { position: relative; display: inline-block; max-width: 100%; max-height: 65vh; line-height: 0; }
+.edit-workspace__image-stage img { display: block; max-width: 100%; max-height: 65vh; object-fit: contain; }
+.edit-workspace__image-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .edit-workspace__preview canvas.is-drawable { pointer-events: auto; cursor: crosshair; touch-action: none; }
 .edit-workspace__controls { display: flex; flex-direction: column; gap: 18px; }
 .edit-workspace__controls label { display: flex; flex-direction: column; gap: 8px; font-weight: 650; }
@@ -1123,6 +1124,8 @@ body {
   background: var(--red);
   opacity: 1;
 }
+.composer__chip-edit { position: absolute; left: 5px; top: 5px; z-index: 2; border: 1px solid rgba(255,255,255,.72); border-radius: 6px; padding: 4px 7px; background: rgba(18,18,18,.78); color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(4px); }
+.composer__chip-edit:hover, .composer__chip-edit:focus-visible { background: var(--accent); outline: none; }
 .celebrity-prompt {
   border: 1px solid var(--border);
   border-radius: 8px;

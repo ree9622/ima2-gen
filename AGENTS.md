@@ -65,6 +65,7 @@ image_gen/
 - **`IMAGE_MODEL`을 5.6으로 올리지 말 것.** OAuth 백엔드가 `gpt-5.6-sol/-terra/-luna`를 `/v1/models`에 노출하고 텍스트 응답도 정상이지만, 셋 다 `image_generation` 도구를 조용히 떨어뜨려 `Tool choice 'required' must be specified with 'tools' parameter`로 실패한다(2026-08-03 라이브 프록시 실측, ima2-router는 `tools`를 건드리지 않으므로 upstream 제약). 증상은 전건 `UPSTREAM_EMPTY`라 모델을 가리키지 않는다. `tests/models.test.js`가 이 핀을 강제한다.
 - `input_fidelity`는 gpt-image-1.5/1/1-mini 전용. gpt-image-2가 안 받는 이유는 미지원이 아니라 **입력 이미지를 이미 자동으로 high fidelity로 처리하기 때문**이다. 우리 OAuth 경로(`gpt-image-2-codex`)의 400은 정상이며, 얼굴 유사도를 이 파라미터로 올리려는 시도는 근거가 없다.
 - 프롬프트 순서 권장: 배경/장면 → 주체 → 핵심 디테일 → 제약. 정체성 보존은 `"Change only X, keep everything else the same"` + preserve 목록을 **편집마다 재기재**.
+- `/api/edit`는 레퍼런스 생성용 `hasRefs` 안전 우회 문맥을 강제하지 않는다. 빈 응답 재시도에 `fashion BTS` 같은 장면 문구가 붙으면 사용자가 요청하지 않은 촬영장으로 재구성된다. 마스크 편집은 `MASKED_EDIT_CONTRACT`를 포함하고, 최종 결과에 `preserveOutsideMask`를 적용하며, 합성 전 partial 이미지는 노출하지 않는다.
 - 레퍼런스 여러 장은 인덱스·역할로 지목(`"Image 1: … Image 2: style reference"`). 우리 UI엔 ref별 역할 지정이 없다.
 - `8k`/`masterpiece`/`best quality` 류 키워드 스팸은 읽히지 않는다 → `lib/enhance.js` `[퀄리티]` 기본값에서 `8k` 제거(비율만).
 - 1024² 단가: gpt-image-2 high $0.211 / medium $0.053, gpt-image-1.5 high $0.133 / medium $0.034.

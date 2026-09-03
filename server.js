@@ -102,6 +102,7 @@ import { withDefaultPrompt, buildDeveloperPrompt, resolveSystemPrompt } from "./
 import {
   GENERATE_DEVELOPER_WRAPPER,
   EDIT_DEVELOPER_WRAPPER,
+  MASKED_EDIT_CONTRACT,
   REFERENCE_DEVELOPER_WRAPPER,
 } from "./lib/developerPrompts.js";
 import {
@@ -118,6 +119,7 @@ import {
 import { createRequestLogger } from "./lib/requestLogger.js";
 import { detectImageMimeFromB64, validateAndNormalizeRefs } from "./lib/refs.js";
 import { writeTextChunks, IMA2_METADATA_VERSION } from "./lib/imageMetadata.js";
+import { preserveOutsideMask } from "./lib/maskedEdit.js";
 import { logEvent, logError } from "./lib/logger.js";
 import { applyOrientationDirective } from "./lib/orientationPrompt.js";
 import {
@@ -3595,7 +3597,10 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
   // skipped when the UI default prompt toggle is off.
   const baseUserPrompt = promptMutationDisabled ? prompt : boostRefPrompt(prompt);
   const userPrompt = applyOrientationDirective(baseUserPrompt, size);
-  const developerPrompt = buildDeveloperPrompt(EDIT_DEVELOPER_WRAPPER, systemPromptOpts);
+  const editWrapper = maskB64
+    ? `${EDIT_DEVELOPER_WRAPPER}\n${MASKED_EDIT_CONTRACT}`
+    : EDIT_DEVELOPER_WRAPPER;
+  const developerPrompt = buildDeveloperPrompt(editWrapper, systemPromptOpts);
   const tools = [{
     type: "image_generation",
     action: "edit",
@@ -3753,6 +3758,10 @@ app.post("/api/edit", async (req, res) => {
     const normalizedMaskB64 = typeof maskB64 === "string"
       ? maskB64.replace(/^data:[^;]+;base64,/, "")
       : null;
+    // Partial frames come straight from the model before deterministic mask
+    // protection is applied. Suppress them for masked edits so the UI never
+    // flashes a fully redrawn scene that will not be the saved result.
+    const editPartialImages = normalizedMaskB64 ? 0 : partialImages;
 
     if (provider === "api") {
       return res.status(403).json({ error: { code: "APIKEY_DISABLED", message: "API key provider is disabled. Use OAuth (Codex login)." } });
@@ -3798,11 +3807,11 @@ app.post("/api/edit", async (req, res) => {
               background,
               compression,
               previousResponseId,
-              partialImages,
-              onPhase: requestId && partialImages > 0
+              partialImages: editPartialImages,
+              onPhase: requestId && editPartialImages > 0
                 ? (phase) => publishJobEvent(req.authUser || LEGACY_OWNER, requestId, "phase", { phase })
                 : null,
-              onPartialImage: requestId && partialImages > 0
+              onPartialImage: requestId && editPartialImages > 0
                 ? (partial) => publishJobEvent(req.authUser || LEGACY_OWNER, requestId, "partial", {
                     image: dataUrlFromB64(format, partial.b64),
                     index: partial.index,
@@ -3813,7 +3822,10 @@ app.post("/api/edit", async (req, res) => {
         "edit",
         maxAttempts,
         null,
-        { requestId, hasRefs: true, abortSignal: generationAbort.signal, disablePromptMutation },
+        // Direct edits already carry the source plus a preservation wrapper.
+        // Reference-mode retry prefixes can invent a fashion/BTS scene when
+        // an otherwise harmless edit returns an empty first response.
+        { requestId, hasRefs: false, abortSignal: generationAbort.signal, disablePromptMutation },
       );
     } catch (e) {
       await writeFailureSidecar({
@@ -3845,7 +3857,15 @@ app.post("/api/edit", async (req, res) => {
 
     await mkdir(join(__dirname, "generated"), { recursive: true });
     const filename = `${Date.now()}_${randomBytes(4).toString("hex")}.${format}`;
-    const editImageBuf = stampImageMetaIfPng(Buffer.from(resultB64, "base64"), format, {
+    const protectedResultBuf = await preserveOutsideMask({
+      originalB64: imageB64,
+      generatedB64: resultB64,
+      maskB64: normalizedMaskB64,
+      format,
+      compression,
+    });
+    const protectedResultB64 = protectedResultBuf.toString("base64");
+    const editImageBuf = stampImageMetaIfPng(protectedResultBuf, format, {
       prompt,
       size,
       quality,
@@ -3884,12 +3904,13 @@ app.post("/api/edit", async (req, res) => {
       previousResponseId,
       ...(editResult.responseChainFallback ? { responseChainFallback: true } : {}),
       hasMask: Boolean(normalizedMaskB64),
+      maskOutsidePreserved: Boolean(normalizedMaskB64),
     };
     await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
     s3MirrorAsync(filename + ".json", Buffer.from(JSON.stringify(meta)), "application/json");
 
     res.json({
-      image: dataUrlFromB64(format, resultB64),
+      image: dataUrlFromB64(format, protectedResultB64),
       elapsed,
       filename,
       requestId,
@@ -3909,6 +3930,7 @@ app.post("/api/edit", async (req, res) => {
       responseId: editResult.responseId || null,
       imageCallId: editResult.imageCallId || null,
       responseChainFallback: editResult.responseChainFallback === true,
+      maskOutsidePreserved: Boolean(normalizedMaskB64),
       ...systemPromptMeta,
       promptRuntime: editResult.promptRuntime || null,
       safetyRetryAvailable: hasCompliantRetry(prompt),

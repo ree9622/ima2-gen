@@ -32,6 +32,11 @@ test("classic editor sends masks and keeps response-chain context", () => {
   assert.match(server, /input_image_mask:\s*\{ image_url:/);
   assert.match(server, /previous_response_id:\s*previousResponseId/);
   assert.match(server, /action:\s*"edit"/);
+  assert.match(server, /requestId, hasRefs:\s*false/);
+  assert.match(server, /preserveOutsideMask\(\{/);
+  assert.match(server, /MASKED_EDIT_CONTRACT/);
+  assert.match(server, /editPartialImages = normalizedMaskB64 \? 0 : partialImages/);
+  assert.match(server, /maskOutsidePreserved: Boolean\(normalizedMaskB64\)/);
   assert.match(editor, /"whole" \| "area" \| "outpaint"/);
   assert.match(editor, /되돌리기/);
   assert.match(editor, /다시 실행/);

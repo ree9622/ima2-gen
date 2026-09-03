@@ -110,6 +110,8 @@ import {
   validateQuality,
   validateFormat,
   validateModeration,
+  validateBackground,
+  validateCompression,
   validateCount,
   validateSize,
 } from "./lib/validate.js";
@@ -743,7 +745,17 @@ async function renderDirectReferenceTransform(prompt, references, tag) {
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}, systemPromptOpts = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
-  const { partialImages, onPartialImage, abortSignal, onPhase: onPhaseEvent } = options;
+  const {
+    partialImages,
+    onPartialImage,
+    abortSignal,
+    onPhase: onPhaseEvent,
+    outputFormat = "png",
+    background = "auto",
+    compression = 100,
+    action = "auto",
+    previousResponseId = null,
+  } = options;
   const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
   console.log(
     `${tag} call: quality=${quality} size=${size} moderation=${moderation} ` +
@@ -775,9 +787,15 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   // See: https://cookbook.openai.com/examples/generate_images_with_high_input_fidelity
   const imageTool = {
     type: "image_generation",
+    action,
     quality,
     size,
     moderation,
+    output_format: outputFormat,
+    background,
+    ...(outputFormat === "jpeg" || outputFormat === "webp"
+      ? { output_compression: compression }
+      : {}),
     ...(partialImages ? { partial_images: partialImages } : {}),
   };
 
@@ -829,6 +847,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       body: {
         model: RESPONSES_MODEL,
         reasoning: { effort: "medium" },
+        ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
         input: [
           { role: "developer", content: developerPrompt },
           { role: "user", content: userContent },
@@ -851,7 +870,15 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       `${tag} stream SUCCESS: b64Len=${stream.b64.length} events=${stream.eventCount} ` +
       `webSearchCalls=${stream.webSearchCalls ?? 0}`,
     );
-    return { b64: stream.b64, usage: stream.usage, webSearchCalls: stream.webSearchCalls, codexAccount: stream.codexAccount, promptRuntime };
+    return {
+      b64: stream.b64,
+      usage: stream.usage,
+      webSearchCalls: stream.webSearchCalls,
+      codexAccount: stream.codexAccount,
+      responseId: stream.responseId || null,
+      imageCallId: stream.imageCallId || null,
+      promptRuntime,
+    };
   }
 
   // Ref-mode already uses minimal tools + tool_choice:required; a fallback
@@ -894,7 +921,18 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
         { role: "developer", content: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts) },
         { role: "user", content: applyOrientationDirective(prompt, size) },
       ],
-      tools: [{ type: "image_generation", quality, size, moderation }],
+      tools: [{
+        type: "image_generation",
+        action,
+        quality,
+        size,
+        moderation,
+        output_format: outputFormat,
+        background,
+        ...(outputFormat === "jpeg" || outputFormat === "webp"
+          ? { output_compression: compression }
+          : {}),
+      }],
       stream: false,
     },
     signal: abortSignal,
@@ -908,6 +946,8 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       usage: retry.usage,
       webSearchCalls: stream.webSearchCalls,
       codexAccount: retry.codexAccount || stream.codexAccount,
+      responseId: retry.responseId || null,
+      imageCallId: retry.imageCallId || null,
       promptRuntime: buildPromptRuntimeMetadata({
         prompt,
         userPrompt: applyOrientationDirective(prompt, size),
@@ -2058,6 +2098,13 @@ const __startedAt = Date.now();
 
 app.get("/api/health", async (req, res) => {
   const deep = req.query.deep === "1" || req.query.deep === "true";
+  let oauthReady = OAUTH_READY;
+  try {
+    const live = await fetch(`${OAUTH_URL}/health`, { signal: AbortSignal.timeout(1000) });
+    oauthReady = live.ok;
+  } catch {
+    oauthReady = false;
+  }
   const base = {
     ok: true,
     version: __pkg.version,
@@ -2074,7 +2121,7 @@ app.get("/api/health", async (req, res) => {
     pid: process.pid,
     startedAt: __startedAt,
     oauth: {
-      ready: OAUTH_READY,
+      ready: oauthReady,
       port: OAUTH_PORT,
       portRequested: OAUTH_PORT_REQUESTED,
       portDrifted: OAUTH_PORT !== OAUTH_PORT_REQUESTED,
@@ -2218,6 +2265,11 @@ async function loadHistoryRows(baseDir) {
         resolution: imageResolution.resolution,
         format: meta?.format || name.split(".").pop(),
         moderation: meta?.moderation || null,
+        background: meta?.background || null,
+        compression: Number.isFinite(meta?.compression) ? meta.compression : null,
+        responseId: typeof meta?.responseId === "string" ? meta.responseId : null,
+        imageCallId: typeof meta?.imageCallId === "string" ? meta.imageCallId : null,
+        previousResponseId: typeof meta?.previousResponseId === "string" ? meta.previousResponseId : null,
         provider: meta?.provider || "oauth",
         imageRoute: meta?.imageRoute || meta?.promptRuntime?.route || null,
         imageModel: meta?.imageModel || meta?.promptRuntime?.imageModel || null,
@@ -2634,11 +2686,10 @@ app.post("/api/storage/prune", async (req, res) => {
 // -- OAuth status --
 app.get("/api/oauth/status", async (_req, res) => {
   try {
-    // ima2-router /admin/ 는 단순 정적 페이지라 codex 계정이 모두 busy
-    // 일 때도 200 을 응답한다. /v1/models 로 ping 하면 503 "all codex
-    // accounts busy" 가 나와 router 자체는 살아있는데 UI 가 "OAuth 프록시
-    // 오프라인" 으로 잘못 표시되던 회귀 회복 (2026-05-06).
-    const r = await fetch(`${OAUTH_URL}/admin/`, { signal: AbortSignal.timeout(5000) });
+    // 프록시 자체의 liveness 전용 경로를 사용한다. 모델 목록이나 실제
+    // 생성 엔드포인트는 계정 busy 상태에서 503일 수 있으므로 UI의
+    // "프록시 오프라인" 판정 근거로 사용할 수 없다.
+    const r = await fetch(`${OAUTH_URL}/health`, { signal: AbortSignal.timeout(5000) });
     if (r.ok) {
       res.json({ status: "ready" });
     } else if (r.status === 401 || r.status === 403) {
@@ -3094,7 +3145,7 @@ app.post("/api/generate", async (req, res) => {
       typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
     const clientNodeId =
       typeof req.body?.clientNodeId === "string" ? req.body.clientNodeId : null;
-    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt, outfitModule: rawOutfitModule, batchId: rawBatchId, batchIndex: rawBatchIndex, batchTotal: rawBatchTotal, batchSource: rawBatchSource } =
+    const { prompt: rawPrompt, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", background: rawBackground = "auto", compression: rawCompression = 100, partialImages: rawPartialImages = 0, previousResponseId: rawPreviousResponseId = null, action: rawAction = "auto", referenceRoles: rawReferenceRoles = [], provider = "auto", n = 1, references = [], referenceMeta: rawReferenceMeta = [], maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt, outfitModule: rawOutfitModule, batchId: rawBatchId, batchIndex: rawBatchIndex, batchTotal: rawBatchTotal, batchSource: rawBatchSource } =
       req.body;
     const batchId = isValidBatchId(rawBatchId) ? rawBatchId : null;
     const batchIndex = batchId && Number.isFinite(rawBatchIndex)
@@ -3131,6 +3182,10 @@ app.post("/api/generate", async (req, res) => {
     if (!fCheck.ok) return send400(res, fCheck);
     const mCheck = validateModeration(rawModeration);
     if (!mCheck.ok) return send400(res, mCheck);
+    const bgCheck = validateBackground(rawBackground);
+    if (!bgCheck.ok) return send400(res, bgCheck);
+    const compressionCheck = validateCompression(rawCompression);
+    if (!compressionCheck.ok) return send400(res, compressionCheck);
     const nCheck = validateCount(n, { max: 8 });
     if (!nCheck.ok) return send400(res, nCheck);
 
@@ -3139,6 +3194,16 @@ app.post("/api/generate", async (req, res) => {
     const size = sCheck.value;
     const format = fCheck.value;
     const moderation = mCheck.value;
+    const background = bgCheck.value;
+    const compression = compressionCheck.value;
+    if (background === "transparent" && format === "jpeg") {
+      return send400(res, { code: "TRANSPARENT_JPEG", message: "transparent background requires PNG or WebP" });
+    }
+    const partialImages = Math.max(0, Math.min(3, Number.parseInt(rawPartialImages, 10) || 0));
+    const previousResponseId = typeof rawPreviousResponseId === "string"
+      ? rawPreviousResponseId.trim().slice(0, 200) || null
+      : null;
+    const action = ["auto", "generate", "edit"].includes(rawAction) ? rawAction : "auto";
     const count = nCheck.value;
     startJob({
       requestId,
@@ -3208,15 +3273,49 @@ app.post("/api/generate", async (req, res) => {
     const systemPromptOpts = readSystemPromptOpts(req.body);
     const systemPromptMeta = buildSystemPromptMetadata(systemPromptOpts);
     const disablePromptMutation = isPromptMutationDisabled(systemPromptOpts);
+    const referenceRoleLabels = {
+      identity: "subject identity and facial appearance",
+      product: "product, logo, or object details",
+      composition: "pose and composition",
+      style: "visual style and color treatment",
+      background: "background and environment",
+    };
+    const referenceRoleLines = Array.isArray(rawReferenceRoles)
+      ? rawReferenceRoles.slice(0, refB64s.length).map((role, index) => {
+          const label = referenceRoleLabels[role];
+          return label ? `Reference image ${index + 1}: use for ${label}.` : null;
+        }).filter(Boolean)
+      : [];
+    const withReferenceRoles = (attemptPrompt) => referenceRoleLines.length
+      ? `${attemptPrompt}\n\nReference image roles:\n${referenceRoleLines.join("\n")}`
+      : attemptPrompt;
+    const eventOwner = req.authUser || LEGACY_OWNER;
     const generateWithSelectedRoute = (attemptPrompt) =>
       generateViaOAuth(
-        attemptPrompt,
+        withReferenceRoles(attemptPrompt),
         quality,
         size,
         moderation,
         refB64s,
         requestId,
-        { abortSignal: generationAbort.signal },
+        {
+          abortSignal: generationAbort.signal,
+          outputFormat: format,
+          background,
+          compression,
+          action,
+          previousResponseId,
+          partialImages: count === 1 ? partialImages : 0,
+          onPhase: requestId && partialImages > 0
+            ? (phase) => publishJobEvent(eventOwner, requestId, "phase", { phase })
+            : null,
+          onPartialImage: requestId && partialImages > 0
+            ? (partial) => publishJobEvent(eventOwner, requestId, "partial", {
+                image: dataUrlFromB64(format, partial.b64),
+                index: partial.index,
+              })
+            : null,
+        },
         systemPromptOpts,
       );
 
@@ -3247,6 +3346,8 @@ app.post("/api/generate", async (req, res) => {
           size,
           quality,
           moderation,
+          background,
+          compression,
           originalPrompt,
           outfitModule,
           batchId,
@@ -3255,7 +3356,7 @@ app.post("/api/generate", async (req, res) => {
           maxAttempts,
         });
         await writeFile(join(__dirname, "generated", filename), imageBuf);
-        s3MirrorAsync(filename, imageBuf, "image/png");
+        s3MirrorAsync(filename, imageBuf, contentTypeFor(filename));
         // Sidecar metadata for /api/history reconstruction
         const meta = {
           prompt,
@@ -3285,6 +3386,10 @@ app.post("/api/generate", async (req, res) => {
           sessionId,
           owner: req.authUser || LEGACY_OWNER,
           requestId,
+          responseId: r.value.responseId || null,
+          imageCallId: r.value.imageCallId || null,
+          previousResponseId,
+          referenceRoles: Array.isArray(rawReferenceRoles) ? rawReferenceRoles.slice(0, refB64s.length) : [],
           ...(outfitModule ? { outfitModule } : {}),
           ...(batchId ? { batchId, batchIndex } : {}),
         };
@@ -3398,6 +3503,10 @@ app.post("/api/generate", async (req, res) => {
       quality,
       size,
       moderation,
+      background,
+      compression,
+      responseId: results.find((r) => r.status === "fulfilled" && r.value?.responseId)?.value?.responseId || null,
+      imageCallId: results.find((r) => r.status === "fulfilled" && r.value?.imageCallId)?.value?.imageCallId || null,
       ...systemPromptMeta,
       promptRuntime: results.find((r) => r.status === "fulfilled" && r.value?.promptRuntime)?.value?.promptRuntime || null,
       safetyRetryAvailable: hasCompliantRetry(prompt),
@@ -3449,14 +3558,39 @@ app.post("/api/generate", async (req, res) => {
 
 // -- OAuth edit: send image as input to Responses API --
 async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto", systemPromptOpts = {}, options = {}) {
-  const { abortSignal } = options;
+  const {
+    abortSignal,
+    maskB64 = null,
+    outputFormat = "png",
+    background = "auto",
+    compression = 100,
+    previousResponseId = null,
+    partialImages = 0,
+    onPartialImage = null,
+    onPhase = null,
+  } = options;
   const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
   // user role carries only the user's prompt. Reference face-lock boosting is
   // skipped when the UI default prompt toggle is off.
   const baseUserPrompt = promptMutationDisabled ? prompt : boostRefPrompt(prompt);
   const userPrompt = applyOrientationDirective(baseUserPrompt, size);
   const developerPrompt = buildDeveloperPrompt(EDIT_DEVELOPER_WRAPPER, systemPromptOpts);
-  const tools = [{ type: "image_generation", quality, size, moderation }];
+  const tools = [{
+    type: "image_generation",
+    action: "edit",
+    quality,
+    size,
+    moderation,
+    output_format: outputFormat,
+    background,
+    ...(outputFormat === "jpeg" || outputFormat === "webp"
+      ? { output_compression: compression }
+      : {}),
+    ...(maskB64
+      ? { input_image_mask: { image_url: `data:image/png;base64,${maskB64}` } }
+      : {}),
+    ...(partialImages ? { partial_images: partialImages } : {}),
+  }];
   const promptRuntime = buildPromptRuntimeMetadata({
     prompt,
     userPrompt,
@@ -3476,6 +3610,7 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
       body: {
         model: RESPONSES_MODEL,
         reasoning: { effort: "medium" },
+        ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
         input: [
           { role: "developer", content: developerPrompt },
           {
@@ -3491,6 +3626,8 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
         tool_choice: "required",
         stream: true,
       },
+      onPartialImage,
+      onPhase,
       signal: abortSignal,
     });
   } catch (err) {
@@ -3500,7 +3637,13 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
   const { b64, usage } = result;
   if (b64) {
     console.log("[oauth-edit] got image, b64 length:", b64.length);
-    return { b64, usage, promptRuntime };
+    return {
+      b64,
+      usage,
+      responseId: result.responseId || null,
+      imageCallId: result.imageCallId || null,
+      promptRuntime,
+    };
   }
   const e = new Error("No image data received from OAuth edit");
   e.promptRuntime = promptRuntime;
@@ -3512,7 +3655,7 @@ app.post("/api/edit", async (req, res) => {
   const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : null;
   let generationAbort = { signal: null, cleanup: () => {} };
   try {
-    const { prompt: rawPrompt, image: imageB64, mask: maskB64, quality: rawQuality = "low", size: rawSize = "1024x1024", moderation: rawModeration = "auto", provider = "oauth", maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt } =
+    const { prompt: rawPrompt, image: imageB64, mask: maskB64, quality: rawQuality = "low", size: rawSize = "1024x1024", format: rawFormat = "png", moderation: rawModeration = "auto", background: rawBackground = "auto", compression: rawCompression = 100, partialImages: rawPartialImages = 0, previousResponseId: rawPreviousResponseId = null, provider = "oauth", maxAttempts: rawMaxAttempts, originalPrompt: rawOriginalPrompt } =
       req.body;
     const maxAttempts = clampMaxAttempts(rawMaxAttempts, 2);
     const originalPrompt =
@@ -3530,11 +3673,30 @@ app.post("/api/edit", async (req, res) => {
     if (!sCheck.ok) return send400(res, sCheck);
     const mCheck = validateModeration(rawModeration);
     if (!mCheck.ok) return send400(res, mCheck);
+    const fCheck = validateFormat(rawFormat);
+    if (!fCheck.ok) return send400(res, fCheck);
+    const bgCheck = validateBackground(rawBackground);
+    if (!bgCheck.ok) return send400(res, bgCheck);
+    const compressionCheck = validateCompression(rawCompression);
+    if (!compressionCheck.ok) return send400(res, compressionCheck);
 
     const prompt = pCheck.value;
     const quality = qCheck.value;
     const size = sCheck.value;
     const moderation = mCheck.value;
+    const format = fCheck.value;
+    const background = bgCheck.value;
+    const compression = compressionCheck.value;
+    if (background === "transparent" && format === "jpeg") {
+      return send400(res, { code: "TRANSPARENT_JPEG", message: "transparent background requires PNG or WebP" });
+    }
+    const partialImages = Math.max(0, Math.min(3, Number.parseInt(rawPartialImages, 10) || 0));
+    const previousResponseId = typeof rawPreviousResponseId === "string"
+      ? rawPreviousResponseId.trim().slice(0, 200) || null
+      : null;
+    const normalizedMaskB64 = typeof maskB64 === "string"
+      ? maskB64.replace(/^data:[^;]+;base64,/, "")
+      : null;
 
     if (provider === "api") {
       return res.status(403).json({ error: { code: "APIKEY_DISABLED", message: "API key provider is disabled. Use OAuth (Codex login)." } });
@@ -3573,7 +3735,24 @@ app.post("/api/edit", async (req, res) => {
             size,
             moderation,
             systemPromptOpts,
-            { abortSignal: generationAbort.signal },
+            {
+              abortSignal: generationAbort.signal,
+              maskB64: normalizedMaskB64,
+              outputFormat: format,
+              background,
+              compression,
+              previousResponseId,
+              partialImages,
+              onPhase: requestId && partialImages > 0
+                ? (phase) => publishJobEvent(req.authUser || LEGACY_OWNER, requestId, "phase", { phase })
+                : null,
+              onPartialImage: requestId && partialImages > 0
+                ? (partial) => publishJobEvent(req.authUser || LEGACY_OWNER, requestId, "partial", {
+                    image: dataUrlFromB64(format, partial.b64),
+                    index: partial.index,
+                  })
+                : null,
+            },
           ),
         "edit",
         maxAttempts,
@@ -3587,7 +3766,7 @@ app.post("/api/edit", async (req, res) => {
         originalPrompt,
         quality,
         size,
-        format: "png",
+        format,
         moderation,
         attempts: e.attempts || [],
         error: e,
@@ -3609,15 +3788,15 @@ app.post("/api/edit", async (req, res) => {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     await mkdir(join(__dirname, "generated"), { recursive: true });
-    const filename = `${Date.now()}_${randomBytes(4).toString("hex")}.png`;
-    const editImageBuf = stampImageMetaIfPng(Buffer.from(resultB64, "base64"), "png", {
+    const filename = `${Date.now()}_${randomBytes(4).toString("hex")}.${format}`;
+    const editImageBuf = stampImageMetaIfPng(Buffer.from(resultB64, "base64"), format, {
       prompt,
       size,
       quality,
       moderation: typeof moderation === "string" ? moderation : undefined,
     });
     await writeFile(join(__dirname, "generated", filename), editImageBuf);
-    s3MirrorAsync(filename, editImageBuf, "image/png");
+    s3MirrorAsync(filename, editImageBuf, contentTypeFor(filename));
     const meta = {
       prompt,
       promptUsed: promptUsed || prompt,
@@ -3627,7 +3806,9 @@ app.post("/api/edit", async (req, res) => {
       quality,
       size,
       moderation,
-      format: "png",
+      format,
+      background,
+      compression,
       provider: "oauth",
       imageRoute: editResult.promptRuntime?.route || null,
       imageModel: editResult.promptRuntime?.imageModel || null,
@@ -3641,12 +3822,16 @@ app.post("/api/edit", async (req, res) => {
       promptRuntime: editResult.promptRuntime || null,
       owner: req.authUser || LEGACY_OWNER,
       requestId,
+      responseId: editResult.responseId || null,
+      imageCallId: editResult.imageCallId || null,
+      previousResponseId,
+      hasMask: Boolean(normalizedMaskB64),
     };
     await atomicWriteJson(join(__dirname, "generated", filename + ".json"), meta).catch(() => {});
     s3MirrorAsync(filename + ".json", Buffer.from(JSON.stringify(meta)), "application/json");
 
     res.json({
-      image: `data:image/png;base64,${resultB64}`,
+      image: dataUrlFromB64(format, resultB64),
       elapsed,
       filename,
       requestId,
@@ -3656,6 +3841,13 @@ app.post("/api/edit", async (req, res) => {
       imageModel: editResult.promptRuntime?.imageModel || null,
       responsesModel: editResult.promptRuntime?.model || null,
       moderation,
+      quality,
+      size,
+      format,
+      background,
+      compression,
+      responseId: editResult.responseId || null,
+      imageCallId: editResult.imageCallId || null,
       ...systemPromptMeta,
       promptRuntime: editResult.promptRuntime || null,
       safetyRetryAvailable: hasCompliantRetry(prompt),
@@ -3666,7 +3858,7 @@ app.post("/api/edit", async (req, res) => {
     if (err?.code === "GENERATION_CANCELED" || err?.status === 499) {
       return res.status(499).json({ error: err.message, code: "GENERATION_CANCELED", requestId });
     }
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message, code: err.code, requestId });
   } finally {
     generationAbort.cleanup();
     finishJob(requestId);
@@ -3847,7 +4039,7 @@ app.post("/api/node/generate", async (req, res) => {
                 size,
                 moderation,
                 systemPromptOpts,
-                { abortSignal: generationAbort.signal },
+                { abortSignal: generationAbort.signal, outputFormat: format },
               )
             : generateViaOAuth(
                 attemptPrompt,
@@ -3858,6 +4050,7 @@ app.post("/api/node/generate", async (req, res) => {
                 requestId,
                 {
                   abortSignal: generationAbort.signal,
+                  outputFormat: format,
                   partialImages: streamResponse || asyncResponse ? 2 : 0,
                   onPhase: asyncResponse
                     ? (phase) => emitNodeEvent("phase", { phase })

@@ -7,7 +7,7 @@ import { CostEstimate } from "./CostEstimate";
 import { ViewControls } from "./ViewControls";
 import { PresetManager } from "./PresetManager";
 import { PanelResizeHandle } from "./PanelResizeHandle";
-import type { Count, Format, Quality } from "../types";
+import type { Background, Count, Format, Quality } from "../types";
 
 const QUALITY_ITEMS = [
   { value: "low" as const, label: "낮음", sub: "~10–20초" },
@@ -19,6 +19,12 @@ const FORMAT_ITEMS = [
   { value: "png" as const, label: "PNG", sub: "투명 지원" },
   { value: "jpeg" as const, label: "JPEG", sub: "작은 용량" },
   { value: "webp" as const, label: "WebP", sub: "균형" },
+];
+
+const BACKGROUND_ITEMS = [
+  { value: "auto" as const, label: "자동", sub: "내용에 맞춤" },
+  { value: "opaque" as const, label: "불투명", sub: "일반 배경" },
+  { value: "transparent" as const, label: "투명", sub: "PNG/WebP" },
 ];
 
 const MOD_ITEMS = [
@@ -76,6 +82,10 @@ export function RightPanel() {
   const setCount = useAppStore((s) => s.setCount);
   const maxAttempts = useAppStore((s) => s.maxAttempts);
   const setMaxAttempts = useAppStore((s) => s.setMaxAttempts);
+  const background = useAppStore((s) => s.background);
+  const setBackground = useAppStore((s) => s.setBackground);
+  const compression = useAppStore((s) => s.compression);
+  const setCompression = useAppStore((s) => s.setCompression);
 
   return (
     <>
@@ -129,6 +139,29 @@ export function RightPanel() {
             value={format}
             onChange={setFormat}
           />
+          <OptionGroup<Background>
+            title="배경"
+            items={BACKGROUND_ITEMS}
+            value={background}
+            onChange={setBackground}
+          />
+          {format !== "png" ? (
+            <div className="option-group">
+              <div className="section-title">압축 품질</div>
+              <label className="compression-control">
+                <input
+                  type="range"
+                  aria-label="압축 품질"
+                  min={0}
+                  max={100}
+                  value={compression}
+                  onChange={(event) => setCompression(Number(event.target.value))}
+                />
+                <output>{compression}</output>
+              </label>
+              <div className="option-sub">높을수록 선명하고 파일이 커집니다.</div>
+            </div>
+          ) : null}
           <div className="option-group">
             <div className="section-title option-title-with-help">
               모더레이션

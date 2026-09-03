@@ -1,6 +1,6 @@
 import { useAppStore } from "../store/useAppStore";
 
-export function ResultActions() {
+export function ResultActions({ onEdit }: { onEdit?: () => void }) {
   const currentImage = useAppStore((s) => s.currentImage);
   const showToast = useAppStore((s) => s.showToast);
   const setPrompt = useAppStore((s) => s.setPrompt);
@@ -93,6 +93,9 @@ export function ResultActions() {
         title="이 이미지의 프롬프트를 가져와 이어서 작업"
       >
         여기서 이어서
+      </button>
+      <button type="button" className="action-btn action-btn--primary" onClick={onEdit}>
+        바로 수정
       </button>
     </div>
   );

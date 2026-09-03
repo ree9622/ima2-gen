@@ -55,6 +55,11 @@ describe("Server: /api/health + advertisement", () => {
         res.end(JSON.stringify({ data: [{ id: "gpt-5.5" }] }));
         return;
       }
+      if (req.method === "GET" && req.url === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
       res.writeHead(404).end();
     });
     await new Promise((resolve) => oauthServer.listen(Number(OAUTH_PORT), "127.0.0.1", resolve));
@@ -162,7 +167,7 @@ describe("Server: /api/health + advertisement", () => {
     assert.strictEqual(r.status, 400);
   });
 
-  it("/api/generate forwards moderation to the image tool", async () => {
+  it("/api/generate forwards classic output options to the image tool", async () => {
     lastOAuthPayload = null;
     const r = await fetch(`http://localhost:${PORT}/api/generate`, {
       method: "POST",
@@ -172,6 +177,10 @@ describe("Server: /api/health + advertisement", () => {
         quality: "medium",
         size: "1024x1024",
         moderation: "auto",
+        format: "webp",
+        background: "transparent",
+        compression: 72,
+        partialImages: 2,
       }),
     });
     assert.strictEqual(r.status, 200);
@@ -180,9 +189,32 @@ describe("Server: /api/health + advertisement", () => {
     assert.ok(lastOAuthPayload, "proxy request should be captured");
     assert.strictEqual(lastOAuthPayload.tools[1].type, "image_generation");
     assert.strictEqual(lastOAuthPayload.tools[1].moderation, "auto");
+    assert.strictEqual(lastOAuthPayload.tools[1].action, "auto");
+    assert.strictEqual(lastOAuthPayload.tools[1].output_format, "webp");
+    assert.strictEqual(lastOAuthPayload.tools[1].background, "transparent");
+    assert.strictEqual(lastOAuthPayload.tools[1].output_compression, 72);
+    assert.strictEqual(lastOAuthPayload.tools[1].partial_images, 2);
     const userInput = lastOAuthPayload.input.find((item) => item.role === "user")?.content;
     assert.match(userInput, /^You MUST generate this image at exactly 1024x1024 resolution as a SQUARE 1:1 canvas\./);
     assert.match(userInput, /test moderation forwarding$/);
+  });
+
+  it("rejects transparent JPEG before calling the provider", async () => {
+    lastOAuthPayload = null;
+    const r = await fetch(`http://localhost:${PORT}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "invalid transparent jpeg",
+        format: "jpeg",
+        background: "transparent",
+      }),
+    });
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual(lastOAuthPayload, null);
+    const body = await r.json();
+    assert.strictEqual(body.error.code, "TRANSPARENT_JPEG");
+    assert.match(body.error.message, /transparent.*PNG|WebP/i);
   });
 
   it("GET /api/storage/stats returns bucket counts", async () => {

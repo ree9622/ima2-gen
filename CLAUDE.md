@@ -30,6 +30,8 @@ ima2 serve | setup | status | doctor | gen <prompt> | edit <file> | ls | show | 
 npm run release:patch    # :minor, :major
 ```
 
+macOS/zsh에서 원격 배포 명령을 `ssh asrock "...$(command)..."`처럼 큰따옴표로 감싸지 않는다. `$()`가 로컬에서 먼저 실행돼 원격 preflight가 깨진다. 여러 줄 배포는 `ssh asrock 'bash -se' <<'REMOTE'` 형태의 quoted heredoc을 쓰고, 성공 판정은 원격 `systemctl`·SHA·health 출력으로 확인한다.
+
 `npm run build` runs `tsc -b && vite build` inside `ui/`. The server statically serves `ui/dist/`, and `bin/ima2.js serve` auto-runs the UI build if `ui/dist/index.html` is missing and `ui/package.json` exists (dev checkout). On a packaged install with `ui/dist/` missing, it errors out.
 
 ## Architecture

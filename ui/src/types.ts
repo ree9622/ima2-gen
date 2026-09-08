@@ -93,6 +93,18 @@ export type PromptRuntime = {
   model?: string | null;
   imageModel?: string | null;
   reasoningEffort?: string | null;
+  // What the backend ACTUALLY applied, which is not what we asked for. The
+  // Codex OAuth path rewrites the image_generation tool arguments on every
+  // call (model/quality/size/background), so the request values above are a
+  // record of intent only. Present from 2026-09-09 onward; older history
+  // rows leave it undefined.
+  effectiveImage?: {
+    model?: string | null;
+    quality?: string | null;
+    size?: string | null;
+    background?: string | null;
+    outputFormat?: string | null;
+  } | null;
 };
 
 // Hint sent to the server alongside `references` so it can label each

@@ -128,6 +128,7 @@ export function RightPanel() {
           <BillingBar />
           <OptionGroup<Quality>
             title="품질"
+            hint="요청값입니다. 실제 화질은 서버가 정하며 대개 low~medium으로 적용됩니다."
             items={QUALITY_ITEMS}
             value={quality}
             onChange={setQuality}
@@ -141,6 +142,7 @@ export function RightPanel() {
           />
           <OptionGroup<Background>
             title="배경"
+            hint="투명 배경은 현재 경로에서 적용되지 않고 불투명으로 처리됩니다."
             items={BACKGROUND_ITEMS}
             value={background}
             onChange={setBackground}

@@ -71,6 +71,11 @@ export function SizePicker() {
   return (
     <div className="size-picker">
       <div className="section-title">크기</div>
+      {/* 백엔드가 size 인자를 auto 로 덮어써서 정확한 픽셀은 지켜지지 않는다.
+          비율만 프롬프트(applyOrientationDirective)를 통해 전달된다. */}
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "-2px 0 6px" }}>
+        가로세로 비율만 반영됩니다. 실제 픽셀 크기는 서버가 정합니다.
+      </div>
       <div className="size-picker__tabs" role="tablist" aria-label="크기 카테고리">
         {SIZE_CATEGORIES.map((c) => {
           const selected = c.id === active;

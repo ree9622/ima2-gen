@@ -10,8 +10,20 @@ export function PromptRuntimeBlock({ runtime }: { runtime: GenerationLogItem["pr
     runtime.model ? `호출 모델: ${runtime.model}` : null,
     runtime.reasoningEffort ? `reasoning: ${runtime.reasoningEffort}` : null,
   ].filter(Boolean).join(" · ");
+  // 요청값과 실제 적용값은 다르다. 백엔드가 image_generation 인자를 덮어쓰기
+  // 때문에, 오른쪽 패널에서 고른 화질·크기는 "요청"이고 여기가 "결과"다.
+  const applied = runtime.effectiveImage;
+  const appliedText = applied
+    ? [
+        applied.model ? `이미지 모델: ${applied.model}` : null,
+        applied.quality ? `화질: ${applied.quality}` : null,
+        applied.size ? `크기: ${applied.size}` : null,
+        applied.background ? `배경: ${applied.background}` : null,
+      ].filter(Boolean).join(" · ")
+    : "";
   const rows = [
     ["호출 경로/모델", routeText],
+    ["백엔드가 실제 적용한 값", appliedText],
     ["실제 User 입력", runtime.userPrompt],
     ["Developer 프롬프트", runtime.developerPrompt],
     ["기본 프롬프트", runtime.systemPrompt],

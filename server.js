@@ -166,6 +166,31 @@ const HAS_API_KEY = !!apiKey;
 const RESPONSES_MODEL = IMAGE_MODEL;
 const RESPONSES_IMAGE_MODEL_LABEL = "gpt-image-2:auto";
 
+// RESPONSES_IMAGE_MODEL_LABEL above is a guess, not an observation: the Codex
+// OAuth backend rewrites every image_generation tool argument we send. Measured
+// 2026-09-09 against the live proxy -- an explicit model (any value, including
+// a nonexistent one) comes back as "gpt-image-2-codex", quality "high" is
+// served as "low", and size "1024x1024" as 1254x1254. oauthStream now reports
+// what was actually applied; fold it into promptRuntime so sidecars, history
+// rows and logs record reality. It also means a future backend change (a
+// 2.5-class model, or quality no longer pinned to low) becomes visible in
+// history on its own, without anyone re-probing by hand.
+function applyEffectiveImage(promptRuntime, effectiveImage) {
+  if (!promptRuntime || !effectiveImage) return promptRuntime;
+  promptRuntime.effectiveImage = effectiveImage;
+  if (effectiveImage.model) promptRuntime.imageModel = effectiveImage.model;
+  return promptRuntime;
+}
+
+function describeEffectiveImage(effectiveImage) {
+  if (!effectiveImage) return "";
+  const parts = [];
+  if (effectiveImage.model) parts.push(`model=${effectiveImage.model}`);
+  if (effectiveImage.quality) parts.push(`quality=${effectiveImage.quality}`);
+  if (effectiveImage.size) parts.push(`size=${effectiveImage.size}`);
+  return parts.length ? ` applied[${parts.join(" ")}]` : "";
+}
+
 let openai = null;
 if (HAS_API_KEY) {
   const OpenAI = (await import("openai")).default;
@@ -887,9 +912,11 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   }
 
   if (stream.b64) {
+    applyEffectiveImage(promptRuntime, stream.effectiveImage);
     console.log(
       `${tag} stream SUCCESS: b64Len=${stream.b64.length} events=${stream.eventCount} ` +
-      `webSearchCalls=${stream.webSearchCalls ?? 0}`,
+      `webSearchCalls=${stream.webSearchCalls ?? 0}` +
+      describeEffectiveImage(stream.effectiveImage),
     );
     return {
       b64: stream.b64,
@@ -898,6 +925,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       codexAccount: stream.codexAccount,
       responseId: stream.responseId || null,
       imageCallId: stream.imageCallId || null,
+      effectiveImage: stream.effectiveImage || null,
       promptRuntime,
     };
   }
@@ -960,7 +988,8 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
   });
   if (retry.b64) {
     console.log(
-      `${tag} non-stream retry SUCCESS: b64Len=${retry.b64.length}`,
+      `${tag} non-stream retry SUCCESS: b64Len=${retry.b64.length}` +
+      describeEffectiveImage(retry.effectiveImage),
     );
     return {
       b64: retry.b64,
@@ -969,7 +998,8 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
       codexAccount: retry.codexAccount || stream.codexAccount,
       responseId: retry.responseId || null,
       imageCallId: retry.imageCallId || null,
-      promptRuntime: buildPromptRuntimeMetadata({
+      effectiveImage: retry.effectiveImage || null,
+      promptRuntime: applyEffectiveImage(buildPromptRuntimeMetadata({
         prompt,
         userPrompt: applyOrientationDirective(prompt, size),
         developerPrompt: buildDeveloperPrompt(GENERATE_DEVELOPER_WRAPPER, systemPromptOpts),
@@ -980,7 +1010,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
         model: RESPONSES_MODEL,
         imageModel: RESPONSES_IMAGE_MODEL_LABEL,
         reasoningEffort: "medium",
-      }),
+      }), retry.effectiveImage),
     };
   }
 
@@ -3697,12 +3727,18 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
   }
   const { b64, usage } = result;
   if (b64) {
-    console.log("[oauth-edit] got image, b64 length:", b64.length);
+    applyEffectiveImage(promptRuntime, result.effectiveImage);
+    console.log(
+      "[oauth-edit] got image, b64 length:",
+      b64.length,
+      describeEffectiveImage(result.effectiveImage).trim(),
+    );
     return {
       b64,
       usage,
       responseId: result.responseId || null,
       imageCallId: result.imageCallId || null,
+      effectiveImage: result.effectiveImage || null,
       promptRuntime,
     };
   }

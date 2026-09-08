@@ -44,12 +44,24 @@ export function Canvas() {
     showToast("기본 프롬프트를 복사했습니다");
   };
 
-  const displayQuality = currentImage?.quality ?? quality;
+  // currentImage.quality 는 우리가 "요청한" 화질이다. 백엔드가 그대로 쓰지
+  // 않으므로(요청 high 가 low~medium 으로 적용된다) 실제 적용값이 기록돼
+  // 있으면 그쪽을 보여준다. 기록이 없는 2026-09-09 이전 생성분만 요청값으로
+  // 물러난다.
+  const displayQuality =
+    currentImage?.promptRuntime?.effectiveImage?.quality ??
+    currentImage?.quality ??
+    quality;
+  // 크기도 같다. currentImage.size 는 요청값이라 "auto" 나 고르지도 않은 픽셀이
+  // 찍힌다. 서버가 잰 실제 해상도 → 백엔드가 보고한 실제 크기 → (기록이 없는
+  // 옛 생성분에 한해) 요청값 순으로 내려간다.
   const displaySize =
     currentImage?.resolution ||
     (currentImage?.width && currentImage?.height
       ? `${currentImage.width}x${currentImage.height}`
-      : currentImage?.size ?? getResolvedSize());
+      : currentImage?.promptRuntime?.effectiveImage?.size ??
+        currentImage?.size ??
+        getResolvedSize());
 
   const isGenerating = activeGenerations > 0;
   const showSkeleton = !currentImage && isGenerating;

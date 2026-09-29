@@ -63,6 +63,7 @@ export function PromptComposer() {
 
   const refs = useAppStore((s) => s.referenceImages);
   const addReferences = useAppStore((s) => s.addReferences);
+  const addReferenceDataUrl = useAppStore((s) => s.addReferenceDataUrl);
   const removeReference = useAppStore((s) => s.removeReference);
   const referenceRoles = useAppStore((s) => s.referenceRoles);
   const setReferenceRole = useAppStore((s) => s.setReferenceRole);
@@ -117,13 +118,39 @@ export function PromptComposer() {
     }
   };
 
+  // A thumbnail dragged from the history strip (or any generated image on the
+  // page) arrives as a URL, not a file. Accept only our own /generated/ assets
+  // and swap a thumbnail/preview variant for the full-resolution original.
+  const draggedGeneratedUrl = (dt: DataTransfer): string | null => {
+    const raw = dt.getData("text/uri-list") || dt.getData("text/plain");
+    const first = raw.split(/\r?\n/).find((line) => line && !line.startsWith("#"))?.trim();
+    if (!first) return null;
+    let url: URL;
+    try {
+      url = new URL(first, window.location.href);
+    } catch {
+      return null;
+    }
+    if (url.origin !== window.location.origin || !url.pathname.startsWith("/generated/")) return null;
+    return url.pathname.replace(/^\/generated\/\.thumbs\/(.+)\.(?:thumb|web)\.webp$/, "/generated/$1");
+  };
+
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
     const files = Array.from(e.dataTransfer.files).filter((f) =>
       f.type.startsWith("image/"),
     );
-    if (files.length > 0) void addReferences(files);
+    if (files.length > 0) {
+      void addReferences(files);
+      return;
+    }
+    const url = draggedGeneratedUrl(e.dataTransfer);
+    if (url) {
+      void addReferenceDataUrl(url).then((ok) => {
+        if (ok) showToast("참조 이미지로 추가했습니다.");
+      });
+    }
   };
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {

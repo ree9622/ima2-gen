@@ -166,6 +166,18 @@ const HAS_API_KEY = !!apiKey;
 const RESPONSES_MODEL = IMAGE_MODEL;
 const RESPONSES_IMAGE_MODEL_LABEL = "gpt-image-2:auto";
 
+// Name the image tool explicitly instead of "required" whenever it is the only
+// tool (upstream cb31f3f6). On paper the two are equivalent with a single tool;
+// the explicit form leaves the model no room to answer with text or an SVG.
+// Calls that also carry web_search stay on "auto" so the search can still run.
+// IMA2_FORCE_IMAGE_TOOL_CHOICE=0 restores the previous "required".
+const FORCE_IMAGE_TOOL_CHOICE = !/^(0|false|off|no)$/i.test(
+  String(process.env.IMA2_FORCE_IMAGE_TOOL_CHOICE ?? "").trim(),
+);
+function imageToolChoice(force = FORCE_IMAGE_TOOL_CHOICE) {
+  return force ? { type: "image_generation" } : "required";
+}
+
 // RESPONSES_IMAGE_MODEL_LABEL above is a guess, not an observation: the Codex
 // OAuth backend rewrites every image_generation tool argument we send. Measured
 // 2026-09-09 against the live proxy -- an explicit model (any value, including
@@ -880,7 +892,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
           { role: "user", content: userContent },
         ],
         tools,
-        tool_choice: hasRefs ? "required" : "auto",
+        tool_choice: tools.length === 1 ? imageToolChoice() : "auto",
         stream: true,
       },
       onPhase,
@@ -982,6 +994,7 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
           ? { output_compression: compression }
           : {}),
       }],
+      tool_choice: imageToolChoice(),
       stream: false,
     },
     signal: abortSignal,
@@ -3679,7 +3692,7 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
         ],
         // gpt-image-2 auto-applies high fidelity; do NOT pass input_fidelity.
         tools,
-        tool_choice: "required",
+        tool_choice: imageToolChoice(),
         stream: true,
       },
       onPartialImage,

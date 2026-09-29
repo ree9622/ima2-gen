@@ -105,6 +105,20 @@ test("writeTextChunks rejects invalid keywords (non ima2:* namespace)", () => {
   assert.throws(() => writeTextChunks(ONE_PIXEL_PNG, { "ima2:has space": "x" }), /invalid tEXt keyword/);
 });
 
+test("writeTextChunks accepts dotted fork.* keywords and rejects malformed dots", () => {
+  const out = writeTextChunks(ONE_PIXEL_PNG, {
+    "ima2:prompt": "p",
+    "ima2:fork.referenceCount": "3",
+    "ima2:fork.originalPrompt": "원문",
+  });
+  const meta = readIma2Metadata(out);
+  assert.equal(meta["fork.referenceCount"], "3");
+  assert.equal(meta["fork.originalPrompt"], "원문");
+  assert.throws(() => writeTextChunks(ONE_PIXEL_PNG, { "ima2:fork.": "x" }), /invalid tEXt keyword/);
+  assert.throws(() => writeTextChunks(ONE_PIXEL_PNG, { "ima2:.x": "x" }), /invalid tEXt keyword/);
+  assert.throws(() => writeTextChunks(ONE_PIXEL_PNG, { ["ima2:" + "a".repeat(80)]: "x" }), /invalid tEXt keyword/);
+});
+
 test("writeTextChunks rejects oversized values (>64KB)", () => {
   const big = "A".repeat(64 * 1024 + 1);
   assert.throws(() => writeTextChunks(ONE_PIXEL_PNG, { "ima2:prompt": big }), /exceeds 65536 bytes/);

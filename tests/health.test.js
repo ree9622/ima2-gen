@@ -2,7 +2,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, readFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -13,6 +13,31 @@ const PORT = String(3500 + Math.floor(Math.random() * 400));
 const OAUTH_PORT = String(10532 + Math.floor(Math.random() * 400));
 const FAKE_HOME = mkdtempSync(join(tmpdir(), "ima2-test-home-"));
 
+// The spawned server writes into the real generated/ directory (the path is
+// fixed to server.js's own folder), so a successful /api/generate here leaves a
+// fake image in the production gallery. Remove exactly what this run created.
+const TEST_STARTED_AT = Date.now();
+const TEST_PROMPTS = new Set(["test moderation forwarding"]);
+function removeTestGenerated() {
+  const dir = join(process.cwd(), "generated");
+  let names;
+  try { names = readdirSync(dir); } catch { return; }
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    let meta;
+    try { meta = JSON.parse(readFileSync(join(dir, name), "utf8")); } catch { continue; }
+    if (!TEST_PROMPTS.has(meta?.prompt) || !(meta?.createdAt >= TEST_STARTED_AT)) continue;
+    const media = name.slice(0, -".json".length);
+    for (const target of [
+      join(dir, name),
+      join(dir, media),
+      join(dir, ".thumbs", media + ".thumb.webp"),
+      join(dir, ".thumbs", media + ".web.webp"),
+    ]) {
+      try { unlinkSync(target); } catch {}
+    }
+  }
+}
 const HEALTH_TIMEOUT = process.platform === "win32" ? 30000 : 8000;
 
 async function waitForHealth(base, timeoutMs = HEALTH_TIMEOUT) {
@@ -98,6 +123,7 @@ describe("Server: /api/health + advertisement", () => {
       await new Promise((resolve) => oauthServer.close(resolve));
     }
     try { rmSync(FAKE_HOME, { recursive: true, force: true }); } catch {}
+    removeTestGenerated();
   });
 
   it("GET /api/health returns expected shape", async () => {

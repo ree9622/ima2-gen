@@ -4026,6 +4026,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     let succeeded = 0;
     let failed = 0;
     let backgroundFallbackCount = 0;
+    let opaqueAlphaCount = 0;
     let maxElapsed = 0;
     let firstErrMsg: string | null = null;
 
@@ -4182,6 +4183,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           if (res.backgroundFallback === true) {
             backgroundFallbackCount += 1;
             set({ background: "auto" });
+          } else if (res.alphaVerified === false) {
+            opaqueAlphaCount += 1;
           }
 
           const item: GenerateItem = {
@@ -4291,8 +4294,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       get().showToast(
         backgroundFallbackCount > 0
           ? `${label} 현재 모델은 투명 배경을 지원하지 않아 자동 배경으로 생성했습니다.`
-          : label,
-        backgroundFallbackCount > 0,
+          : opaqueAlphaCount > 0
+            ? `${label} 투명 배경을 요청했지만 ${count === 1 ? "배경이" : `${opaqueAlphaCount}장은 배경이`} 투명하지 않게 나왔습니다. 다시 생성해 보세요.`
+            : label,
+        backgroundFallbackCount > 0 || opaqueAlphaCount > 0,
       );
     } else if (succeeded > 0 && failed > 0) {
       get().showToast(`${succeeded}/${count}장 생성 성공 (${failed}장 실패)`, true);

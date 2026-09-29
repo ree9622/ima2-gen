@@ -2,6 +2,7 @@ import "./lib/timestampConsole.js";
 import "dotenv/config";
 import express from "express";
 import sharp from "sharp";
+import { verifyAlpha } from "./lib/alphaVerify.js";
 import { writeFile, mkdir, readFile, readdir, stat } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -3394,6 +3395,7 @@ app.post("/api/generate", async (req, res) => {
     let totalUsage = null;
     let totalWebSearchCalls = 0;
     let promptRewrittenForSafety = false;
+    const alphaChecks = [];
     for (const r of results) {
       if (r.status === "fulfilled" && r.value.b64) {
         if (r.value.promptRewrittenForSafety === true) promptRewrittenForSafety = true;
@@ -3417,6 +3419,13 @@ app.post("/api/generate", async (req, res) => {
         });
         await writeFile(join(__dirname, "generated", filename), imageBuf);
         s3MirrorAsync(filename, imageBuf, contentTypeFor(filename));
+        const alphaCheck = background === "transparent" ? await verifyAlpha(imageBuf) : null;
+        if (alphaCheck) {
+          alphaChecks.push(alphaCheck);
+          if (!alphaCheck.alphaVerified) {
+            console.warn(`[generate] transparent requested but result is ${alphaCheck.alphaReason}: ${filename}`);
+          }
+        }
         // Sidecar metadata for /api/history reconstruction
         const meta = {
           prompt,
@@ -3431,6 +3440,7 @@ app.post("/api/generate", async (req, res) => {
           background: effectiveBackground,
           compression,
           ...(r.value.backgroundFallback ? { backgroundRequested: background, backgroundFallback: true } : {}),
+          ...(alphaCheck || {}),
           provider: "oauth",
           imageRoute: r.value.route || r.value.promptRuntime?.route || null,
           imageModel: r.value.imageModel || r.value.promptRuntime?.imageModel || null,
@@ -3570,6 +3580,7 @@ app.post("/api/generate", async (req, res) => {
       background: successfulResult?.background || background,
       backgroundRequested: background,
       backgroundFallback: successfulResult?.backgroundFallback === true,
+      ...(alphaChecks.length ? { alphaVerified: alphaChecks.every((a) => a.alphaVerified) } : {}),
       compression,
       responseId: results.find((r) => r.status === "fulfilled" && r.value?.responseId)?.value?.responseId || null,
       imageCallId: results.find((r) => r.status === "fulfilled" && r.value?.imageCallId)?.value?.imageCallId || null,
@@ -3922,6 +3933,10 @@ app.post("/api/edit", async (req, res) => {
     });
     await writeFile(join(__dirname, "generated", filename), editImageBuf);
     s3MirrorAsync(filename, editImageBuf, contentTypeFor(filename));
+    const alphaCheck = background === "transparent" ? await verifyAlpha(editImageBuf) : null;
+    if (alphaCheck && !alphaCheck.alphaVerified) {
+      console.warn(`[edit] transparent requested but result is ${alphaCheck.alphaReason}: ${filename}`);
+    }
     const meta = {
       prompt,
       promptUsed: promptUsed || prompt,
@@ -3934,6 +3949,7 @@ app.post("/api/edit", async (req, res) => {
       format,
       background: editResult.background || background,
       ...(editResult.backgroundFallback ? { backgroundRequested: background, backgroundFallback: true } : {}),
+      ...(alphaCheck || {}),
       compression,
       provider: "oauth",
       imageRoute: editResult.promptRuntime?.route || null,
@@ -3975,6 +3991,7 @@ app.post("/api/edit", async (req, res) => {
       background: editResult.background || background,
       backgroundRequested: background,
       backgroundFallback: editResult.backgroundFallback === true,
+      ...(alphaCheck ? { alphaVerified: alphaCheck.alphaVerified } : {}),
       compression,
       responseId: editResult.responseId || null,
       imageCallId: editResult.imageCallId || null,

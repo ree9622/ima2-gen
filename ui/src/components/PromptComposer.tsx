@@ -138,19 +138,19 @@ export function PromptComposer() {
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter((f) =>
-      f.type.startsWith("image/"),
-    );
-    if (files.length > 0) {
-      void addReferences(files);
-      return;
-    }
+    // Check the URL first: Chrome also attaches the dragged <img> as a File,
+    // which would be the 480px thumbnail rather than the original.
     const url = draggedGeneratedUrl(e.dataTransfer);
     if (url) {
       void addReferenceDataUrl(url).then((ok) => {
         if (ok) showToast("참조 이미지로 추가했습니다.");
       });
+      return;
     }
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    if (files.length > 0) void addReferences(files);
   };
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {

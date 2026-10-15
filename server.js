@@ -51,7 +51,8 @@ import {
 import { importFromGitHubUrl, PromptImportError } from "./lib/promptImport.js";
 import { setFavoriteFlag } from "./lib/favorite.js";
 import { runResponses } from "./lib/oauthStream.js";
-import { IMAGE_MODEL, TEXT_MODEL } from "./lib/models.js";
+import { IMAGE_MODEL, IMAGE_API_MODEL, IMAGE_ROUTE, TEXT_MODEL } from "./lib/models.js";
+import { runImagesApi, composeImagesPrompt } from "./lib/imagesApi.js";
 import {
   isValidBatchId,
   ensureBatchMeta,
@@ -162,8 +163,8 @@ let OAUTH_URL = `http://127.0.0.1:${OAUTH_PORT}`;
 let OAUTH_READY = false;
 let OAUTH_LAST_ERROR = null;
 const HAS_API_KEY = !!apiKey;
-// Image orchestrator model. Pinned to the 5.5 line — see lib/models.js
-// for the measured reason 5.6 ids cannot carry the image_generation tool.
+// Orchestrator model for the legacy Responses route (IMA2_IMAGE_ROUTE=responses).
+// The default route is the Images API with IMAGE_API_MODEL — see lib/models.js.
 const RESPONSES_MODEL = IMAGE_MODEL;
 const RESPONSES_IMAGE_MODEL_LABEL = "gpt-image-2:auto";
 
@@ -782,6 +783,105 @@ async function renderDirectReferenceTransform(prompt, references, tag) {
   };
 }
 
+// -- Images API route (default since 2026-10-15, see lib/models.js) --
+// One upstream call per attempt; runPromptAttempts still owns retries and
+// error classification. Returns the same shape generateViaOAuth/editViaOAuth
+// always returned so every caller (SSE, sidecars, queue, node routes) is
+// unchanged. Not supported upstream and therefore dropped here: moderation,
+// partial images, response chaining (previous_response_id), web_search, and
+// sending the mask (masked edits are still pixel-locked afterwards by
+// preserveOutsideMask in /api/edit).
+async function renderViaImagesApi({
+  tag,
+  prompt,
+  userPrompt,
+  wrapper,
+  systemPromptOpts,
+  references,
+  quality,
+  size,
+  background,
+  outputFormat,
+  compression,
+  abortSignal,
+  onPhase,
+  hasRefs,
+  route = "images-api",
+}) {
+  const promptMutationDisabled = isPromptMutationDisabled(systemPromptOpts);
+  const systemPrompt = promptMutationDisabled ? "" : resolveSystemPrompt(systemPromptOpts);
+  const finalPrompt = promptMutationDisabled
+    ? userPrompt
+    : composeImagesPrompt({ userPrompt, wrapper, systemPrompt });
+  const endpointTool = references.length > 0 ? "images_edits" : "images_generations";
+  const promptRuntime = buildPromptRuntimeMetadata({
+    prompt,
+    userPrompt: finalPrompt,
+    developerPrompt: null,
+    tools: [{ type: endpointTool }],
+    systemPromptOpts,
+    hasRefs,
+    route,
+    model: IMAGE_API_MODEL,
+    imageModel: IMAGE_API_MODEL,
+    reasoningEffort: null,
+  });
+  let result;
+  try {
+    result = await runImagesApi({
+      url: OAUTH_URL,
+      model: IMAGE_API_MODEL,
+      prompt: finalPrompt,
+      quality,
+      size,
+      background,
+      references,
+      outputFormat,
+      compression,
+      signal: abortSignal,
+      onPhase,
+    });
+  } catch (err) {
+    if (background === "transparent" && /transparent background is not supported/i.test(err?.message || "")) {
+      console.warn(`${tag} transparent background unsupported — retrying once with background=auto`);
+      const fallback = await renderViaImagesApi({
+        tag, prompt, userPrompt, wrapper, systemPromptOpts, references, quality, size,
+        background: "auto", outputFormat, compression, abortSignal, onPhase, hasRefs, route,
+      });
+      return { ...fallback, background: "auto", backgroundRequested: "transparent", backgroundFallback: true };
+    }
+    err.promptRuntime = promptRuntime;
+    throw err;
+  }
+  applyEffectiveImage(promptRuntime, result.effectiveImage);
+  if (result.b64) {
+    console.log(
+      `${tag} images-api SUCCESS: endpoint=${result.endpoint} refs=${references.length} ` +
+      `b64Len=${result.b64.length}` + describeEffectiveImage(result.effectiveImage),
+    );
+    return {
+      b64: result.b64,
+      usage: result.usage,
+      webSearchCalls: 0,
+      codexAccount: result.codexAccount,
+      responseId: null,
+      imageCallId: result.generationId || null,
+      effectiveImage: result.effectiveImage || null,
+      revisedPrompt: result.revisedPrompt || null,
+      promptRuntime,
+    };
+  }
+  const reason = (hasRefs ? diagnoseRefMismatch(references) : null) || diagnose4kReason(size);
+  console.warn(`${tag} images-api EMPTY: endpoint=${result.endpoint}` + (reason ? ` (diagnostic=${reason})` : ""));
+  const e = new Error(`No image data received from Images API (${result.endpoint})`);
+  e.code = "UPSTREAM_EMPTY";
+  if (reason) e.diagnosticReason = reason;
+  if (hasRefs) e.refsCount = references.length;
+  if (result.usage) e.usage = result.usage;
+  e.promptRuntime = promptRuntime;
+  throw e;
+}
+
 async function generateViaOAuth(prompt, quality, size, moderation = "auto", references = [], requestId = null, options = {}, systemPromptOpts = {}) {
   const hasRefs = references.length > 0;
   const tag = requestId ? `[oauth][${requestId}]` : `[oauth]`;
@@ -819,6 +919,32 @@ async function generateViaOAuth(prompt, quality, size, moderation = "auto", refe
         imageModel: null,
       }),
     };
+  }
+
+  if (IMAGE_ROUTE === "images") {
+    const baseUserPrompt = hasRefs && !promptMutationDisabled ? boostRefPrompt(prompt) : prompt;
+    const onImagesPhase = requestId || onPhaseEvent
+      ? (phase) => {
+          if (requestId) setJobPhase(requestId, phase);
+          onPhaseEvent?.(phase);
+        }
+      : undefined;
+    return renderViaImagesApi({
+      tag,
+      prompt,
+      userPrompt: applyOrientationDirective(baseUserPrompt, size),
+      wrapper: hasRefs ? REFERENCE_DEVELOPER_WRAPPER : GENERATE_DEVELOPER_WRAPPER,
+      systemPromptOpts,
+      references,
+      quality,
+      size,
+      background,
+      outputFormat,
+      compression,
+      abortSignal,
+      onPhase: onImagesPhase,
+      hasRefs,
+    });
   }
 
   // gpt-image-2 (the actual image model dispatched by the Responses API
@@ -2143,6 +2269,8 @@ app.get("/api/providers", (_req, res) => {
     apiKeyDisabled: true,
     directImageApi: false,
     directImageModel: null,
+    imageRoute: IMAGE_ROUTE,
+    imageApiModel: IMAGE_API_MODEL,
     responsesModel: RESPONSES_MODEL,
     responsesImageModel: RESPONSES_IMAGE_MODEL_LABEL,
     // Model behind 다듬기 / safety-retry rewrite. Surfaced so a running
@@ -2183,6 +2311,8 @@ app.get("/api/health", async (req, res) => {
     provider: "oauth",
     directImageApi: false,
     directImageModel: null,
+    imageRoute: IMAGE_ROUTE,
+    imageApiModel: IMAGE_API_MODEL,
     responsesModel: RESPONSES_MODEL,
     responsesImageModel: RESPONSES_IMAGE_MODEL_LABEL,
     // Model behind 다듬기 / safety-retry rewrite. Surfaced so a running
@@ -3651,6 +3781,29 @@ async function editViaOAuth(prompt, imageB64, quality, size, moderation = "auto"
   // skipped when the UI default prompt toggle is off.
   const baseUserPrompt = promptMutationDisabled ? prompt : boostRefPrompt(prompt);
   const userPrompt = applyOrientationDirective(baseUserPrompt, size);
+  if (IMAGE_ROUTE === "images") {
+    // The proxy rejects masks; say in words what the mask meant. /api/edit
+    // restores every unmasked pixel from the source afterwards regardless.
+    const wrapper = maskB64
+      ? `${EDIT_DEVELOPER_WRAPPER}\nChange only the region the edit describes. Keep every other subject, person, object, background detail, camera angle, lighting condition, and composition unchanged.`
+      : EDIT_DEVELOPER_WRAPPER;
+    return renderViaImagesApi({
+      tag: "[oauth-edit]",
+      prompt,
+      userPrompt,
+      wrapper,
+      systemPromptOpts,
+      references: [imageB64],
+      quality,
+      size,
+      background,
+      outputFormat,
+      compression,
+      abortSignal,
+      onPhase,
+      hasRefs: true,
+    });
+  }
   const editWrapper = maskB64
     ? `${EDIT_DEVELOPER_WRAPPER}\n${MASKED_EDIT_CONTRACT}`
     : EDIT_DEVELOPER_WRAPPER;

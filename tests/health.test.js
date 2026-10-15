@@ -38,6 +38,9 @@ function removeTestGenerated() {
     }
   }
 }
+// 1x1 transparent PNG — the Images API route transcodes it, so it must decode.
+const TINY_PNG_B64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 const HEALTH_TIMEOUT = process.platform === "win32" ? 30000 : 8000;
 
 async function waitForHealth(base, timeoutMs = HEALTH_TIMEOUT) {
@@ -57,6 +60,7 @@ describe("Server: /api/health + advertisement", () => {
   let childStderr = "";
   let oauthServer;
   let lastOAuthPayload = null;
+  let lastImagesPayload = null;
 
   before(async () => {
     oauthServer = createServer((req, res) => {
@@ -70,6 +74,25 @@ describe("Server: /api/health + advertisement", () => {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({
             output: [{ type: "image_generation_call", result: "aGVsbG8=" }],
+            usage: { total_tokens: 1 },
+          }));
+        });
+        return;
+      }
+      if (req.method === "POST" && req.url === "/v1/images/generations") {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk;
+        });
+        req.on("end", () => {
+          lastImagesPayload = JSON.parse(body);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            background: "transparent",
+            output_format: "png",
+            quality: "medium",
+            size: "1254x1254",
+            data: [{ b64_json: TINY_PNG_B64, generation_id: "gen_test" }],
             usage: { total_tokens: 1 },
           }));
         });
@@ -194,8 +217,9 @@ describe("Server: /api/health + advertisement", () => {
     assert.strictEqual(r.status, 400);
   });
 
-  it("/api/generate forwards classic output options to the image tool", async () => {
+  it("/api/generate sends only proxy-accepted options to the Images API", async () => {
     lastOAuthPayload = null;
+    lastImagesPayload = null;
     const r = await fetch(`http://localhost:${PORT}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,17 +237,24 @@ describe("Server: /api/health + advertisement", () => {
     assert.strictEqual(r.status, 200);
     const body = await r.json();
     assert.strictEqual(body.moderation, "auto");
-    assert.ok(lastOAuthPayload, "proxy request should be captured");
-    assert.strictEqual(lastOAuthPayload.tools[1].type, "image_generation");
-    assert.strictEqual(lastOAuthPayload.tools[1].moderation, "auto");
-    assert.strictEqual(lastOAuthPayload.tools[1].action, "auto");
-    assert.strictEqual(lastOAuthPayload.tools[1].output_format, "webp");
-    assert.strictEqual(lastOAuthPayload.tools[1].background, "transparent");
-    assert.strictEqual(lastOAuthPayload.tools[1].output_compression, 72);
-    assert.strictEqual(lastOAuthPayload.tools[1].partial_images, 2);
-    const userInput = lastOAuthPayload.input.find((item) => item.role === "user")?.content;
-    assert.match(userInput, /^You MUST generate this image at exactly 1024x1024 resolution as a SQUARE 1:1 canvas\./);
-    assert.match(userInput, /test moderation forwarding$/);
+    // Default route is the Images API (lib/models.js); Responses is untouched.
+    assert.strictEqual(lastOAuthPayload, null);
+    assert.ok(lastImagesPayload, "images request should be captured");
+    assert.strictEqual(lastImagesPayload.model, "gpt-image-2");
+    assert.strictEqual(lastImagesPayload.quality, "medium");
+    assert.strictEqual(lastImagesPayload.size, "1024x1024");
+    assert.strictEqual(lastImagesPayload.background, "transparent");
+    assert.strictEqual(lastImagesPayload.n, 1);
+    // openai-oauth answers 400 to any of these, so they must never be sent.
+    for (const k of ["moderation", "output_format", "output_compression", "partial_images", "stream"]) {
+      assert.strictEqual(lastImagesPayload[k], undefined, `${k} must not be sent`);
+    }
+    assert.match(lastImagesPayload.prompt, /^You MUST generate this image at exactly 1024x1024 resolution as a SQUARE 1:1 canvas\./);
+    assert.match(lastImagesPayload.prompt, /test moderation forwarding/);
+    // The backend always returns PNG; webp was requested, so bytes are transcoded.
+    assert.match(body.image, /^data:image\/webp;base64,/);
+    const bytes = Buffer.from(body.image.split(",")[1], "base64");
+    assert.strictEqual(bytes.toString("ascii", 8, 12), "WEBP");
   });
 
   it("rejects transparent JPEG before calling the provider", async () => {

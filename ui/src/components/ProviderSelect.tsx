@@ -11,7 +11,7 @@ type StatusView = {
 function viewForStatus(status: string | undefined): StatusView {
   switch (status) {
     case "ready":
-      return { tone: "ok", title: "OAuth 연결됨", hint: "ChatGPT 세션으로 생성합니다" };
+      return { tone: "ok", title: "코덱스 구독 연결됨", hint: "이미지 모델은 코덱스가 자동 선택합니다" };
     case "starting":
       return { tone: "warn", title: "OAuth 준비 중", hint: "몇 초만 기다려 주세요…" };
     case "auth_required":

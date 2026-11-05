@@ -1,13 +1,15 @@
 import type { AttemptLog, GenerationLogItem } from "../types";
+import { imageModelLabel } from "../lib/imageModelLabel";
 
 // 한 번의 호출에 실제로 나간 프롬프트/모델 조합을 그대로 펼쳐 보여준다.
 // 생성 로그 모달과 실패 상세 팝업이 같은 블록을 공유한다.
 export function PromptRuntimeBlock({ runtime }: { runtime: GenerationLogItem["promptRuntime"] }) {
   if (!runtime) return null;
+  const modelLabel = imageModelLabel(runtime);
   const routeText = [
     runtime.route ? `경로: ${runtime.route}` : null,
-    runtime.imageModel ? `이미지 모델: ${runtime.imageModel}` : null,
-    runtime.model ? `호출 모델: ${runtime.model}` : null,
+    modelLabel ? `이미지 모델: ${modelLabel}` : null,
+    runtime.model ? `${runtime.route?.startsWith("images-api") ? "요청 모델" : "호출 모델"}: ${runtime.model}` : null,
     runtime.reasoningEffort ? `reasoning: ${runtime.reasoningEffort}` : null,
   ].filter(Boolean).join(" · ");
   // 요청값과 실제 적용값은 다르다. 백엔드가 image_generation 인자를 덮어쓰기
@@ -15,7 +17,7 @@ export function PromptRuntimeBlock({ runtime }: { runtime: GenerationLogItem["pr
   const applied = runtime.effectiveImage;
   const appliedText = applied
     ? [
-        applied.model ? `이미지 모델: ${applied.model}` : null,
+        modelLabel ? `이미지 모델: ${modelLabel}` : null,
         applied.quality ? `화질: ${applied.quality}` : null,
         applied.size ? `크기: ${applied.size}` : null,
         applied.background ? `배경: ${applied.background}` : null,

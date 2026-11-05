@@ -823,7 +823,7 @@ async function renderViaImagesApi({
     hasRefs,
     route,
     model: IMAGE_API_MODEL,
-    imageModel: IMAGE_API_MODEL,
+    imageModel: null,
     reasoningEffort: null,
   });
   let result;

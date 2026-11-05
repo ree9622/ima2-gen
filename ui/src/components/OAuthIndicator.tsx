@@ -10,7 +10,7 @@ export function OAuthIndicator() {
   const tone = status === "ready" ? "ok" : status === "starting" ? "warn" : "bad";
   const label =
     status === "ready"
-      ? "OAuth 연결됨"
+      ? "코덱스 구독 연결됨"
       : status === "starting"
         ? "OAuth 준비 중"
         : status === "auth_required"
@@ -22,7 +22,7 @@ export function OAuthIndicator() {
   return (
     <span
       className={`oauth-dot oauth-dot--${tone}`}
-      title={label}
+      title={status === "ready" ? `${label} · 이미지 모델 자동 선택` : label}
       aria-label={label}
       role="status"
     />

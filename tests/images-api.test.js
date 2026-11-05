@@ -63,9 +63,38 @@ describe("runImagesApi", () => {
     assert.equal(r.b64, PNG_B64);
     assert.equal(r.generationId, "gen_1");
     assert.equal(r.codexAccount, "acct-1");
-    assert.equal(r.effectiveImage.model, "gpt-image-2");
+    assert.equal(r.effectiveImage.model, null);
+    assert.equal(r.effectiveImage.requestedModel, "gpt-image-2");
+    assert.equal(r.effectiveImage.modelSource, "unreported");
     assert.equal(r.effectiveImage.size, "1254x1254");
     assert.deepEqual(r.usage, OK_BODY.usage);
+  });
+
+  it("does not report a requested model as observed when Codex omits it", async () => {
+    const f = fakeFetch(() => ({ body: OK_BODY }));
+    const r = await runImagesApi({ url: "http://proxy", model: "gpt-image-2.6-flare", prompt: "mug", fetchImpl: f });
+    assert.equal(r.effectiveImage.model, null);
+    assert.equal(r.effectiveImage.modelSource, "unreported");
+    assert.equal(r.effectiveImage.requestedModel, "gpt-image-2.6-flare");
+  });
+
+  it("records the actual reported model instead of the requested alias", async () => {
+    for (const body of [
+      { ...OK_BODY, model: "gpt-image-reported" },
+      { ...OK_BODY, data: [{ ...OK_BODY.data[0], model: "gpt-image-reported" }] },
+    ]) {
+      const r = await runImagesApi({ url: "http://proxy", model: "gpt-image-2", prompt: "mug", fetchImpl: fakeFetch(() => ({ body })) });
+      assert.equal(r.effectiveImage.model, "gpt-image-reported");
+      assert.equal(r.effectiveImage.modelSource, "upstream");
+      assert.equal(r.effectiveImage.requestedModel, "gpt-image-2");
+    }
+  });
+
+  it("ignores empty and non-string reported model values", async () => {
+    const f = fakeFetch(() => ({ body: { ...OK_BODY, model: {}, data: [{ ...OK_BODY.data[0], model: " " }] } }));
+    const r = await runImagesApi({ url: "http://proxy", model: "requested", prompt: "mug", fetchImpl: f });
+    assert.equal(r.effectiveImage.model, null);
+    assert.equal(r.effectiveImage.modelSource, "unreported");
   });
 
   it("sends references as multipart image[] to /v1/images/edits", async () => {

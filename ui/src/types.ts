@@ -100,6 +100,8 @@ export type PromptRuntime = {
   // rows leave it undefined.
   effectiveImage?: {
     model?: string | null;
+    requestedModel?: string | null;
+    modelSource?: "upstream" | "unreported";
     quality?: string | null;
     size?: string | null;
     background?: string | null;

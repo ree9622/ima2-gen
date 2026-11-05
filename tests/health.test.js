@@ -237,6 +237,11 @@ describe("Server: /api/health + advertisement", () => {
     assert.strictEqual(r.status, 200);
     const body = await r.json();
     assert.strictEqual(body.moderation, "auto");
+    assert.strictEqual(body.imageModel, null);
+    assert.strictEqual(body.promptRuntime.imageModel, null);
+    assert.strictEqual(body.promptRuntime.effectiveImage.model, null);
+    assert.strictEqual(body.promptRuntime.effectiveImage.requestedModel, "gpt-image-2");
+    assert.strictEqual(body.promptRuntime.effectiveImage.modelSource, "unreported");
     // Default route is the Images API (lib/models.js); Responses is untouched.
     assert.strictEqual(lastOAuthPayload, null);
     assert.ok(lastImagesPayload, "images request should be captured");

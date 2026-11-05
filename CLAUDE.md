@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+- 코덱스 구독의 실제 모델과 요청 이름은 구분한다. `effectiveImage.model`은 서버 보고값만 기록하며, 2.6 이름으로 생성됐다는 이유로 2.6 사용을 확정하지 않는다. 구독 연결 검증과 새 기능 제한은 `docs/CODEX-IMAGE-MODELS.md`를 따른다.
+
 ```bash
 # Dev (server --watch + Vite UI + Node-mode gate on)
 npm run dev

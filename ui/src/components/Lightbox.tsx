@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { webVariant, fallbackTo } from "../lib/imageVariants";
 import { useAppStore } from "../store/useAppStore";
 import { deleteHistoryItem, restoreHistoryItem } from "../lib/api";
+import { imageModelLabel } from "../lib/imageModelLabel";
 import type { GenerateItem } from "../types";
 
 type ZoomMode = "fit" | "actual";
@@ -321,12 +322,12 @@ export function Lightbox() {
   const runtimeDeveloperPrompt = promptRuntime?.developerPrompt?.trim() || "";
   const runtimeTools = promptRuntime?.toolNames?.join(", ") || "";
   const runtimeRoute = (currentImage.imageRoute || promptRuntime?.route || "").trim();
-  const runtimeModel = (currentImage.imageModel || promptRuntime?.imageModel || promptRuntime?.model || currentImage.responsesModel || "").trim();
+  const runtimeModel = imageModelLabel(promptRuntime, currentImage.imageModel || promptRuntime?.imageModel || promptRuntime?.model || currentImage.responsesModel);
   const runtimeResponsesModel = (currentImage.responsesModel || promptRuntime?.model || "").trim();
   const runtimeRouteText = [
     runtimeRoute ? `경로: ${runtimeRoute}` : null,
     runtimeModel ? `이미지 모델: ${runtimeModel}` : null,
-    runtimeResponsesModel && runtimeResponsesModel !== runtimeModel ? `호출 모델: ${runtimeResponsesModel}` : null,
+    runtimeResponsesModel && runtimeResponsesModel !== runtimeModel ? `${runtimeRoute.startsWith("images-api") ? "요청 모델" : "호출 모델"}: ${runtimeResponsesModel}` : null,
     promptRuntime?.reasoningEffort ? `reasoning: ${promptRuntime.reasoningEffort}` : null,
   ].filter(Boolean).join(" · ");
   const hasRuntimePrompt =

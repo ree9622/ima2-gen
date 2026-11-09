@@ -69,6 +69,8 @@ import {
   parseSafetyViolation,
 } from "./lib/safetyRetry.js";
 import { rewritePromptForSafety } from "./lib/llmRewrite.js";
+import { throwIfSafetyRefusal } from "./lib/safetyRefusal.js";
+import { isUpstreamBusy, upstreamBusyError } from "./lib/upstreamBusy.js";
 import {
   loadBundles as loadPromptBundles,
   saveBundles as savePromptBundles,
@@ -1326,6 +1328,9 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
   // budget, so a transient 429 retry never consumes (or is consumed by) the
   // prompt-cycling attempts.
   let transientRateRetries = 0;
+  // The router already waits up to 60s for capacity. Allow one additional
+  // try, independently of the prompt budget, instead of repeating 7 times.
+  let busyRetries = 0;
 
   const tag = ctx.requestId ? `[${label}][${ctx.requestId}]` : `[${label}]`;
   console.log(
@@ -1379,9 +1384,11 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       // upstream 45b7892: refusalText/reasoningSummary 없으면 실제 moderation 아님 →
       // EMPTY_RESPONSE 로 분기해서 사용자에게 "빈 응답" 메시지 안내. refusalText 있을
       // 때만 SAFETY_REFUSAL 유지.
-      const isActualSafety = Boolean(r?.refusalText) || Boolean(r?.reasoningSummary);
+      // A reasoning summary alone is not evidence of a policy refusal.
+      const isActualSafety = Boolean(r?.refusalText);
       lastErr = new Error(isActualSafety ? "Empty response (safety refusal)" : "Empty response (no image data)");
       lastErr.code = isActualSafety ? "SAFETY_REFUSAL" : "EMPTY_RESPONSE";
+      if (r?.refusalText) lastErr.refusalText = r.refusalText;
       log.push({
         attempt: i + 1,
         promptUsed: attemptPrompt,
@@ -1455,6 +1462,16 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
           `${tag} canceled — aborting after ${i + 1}/${attempts.length}`,
         );
         throw stop;
+      }
+      throwIfSafetyRefusal(e, log);
+      if (isUpstreamBusy(e)) {
+        log.at(-1).errorCode = "UPSTREAM_BUSY";
+        if (busyRetries >= 1) throw upstreamBusyError(e, log);
+        busyRetries++;
+        imageRateCooldownUntil = Math.max(imageRateCooldownUntil, Date.now() + 8000);
+        await waitWithGenerationCancel(8000, ctx.abortSignal, ctx.requestId);
+        i -= 1; // Retry the same prompt after capacity has had time to free.
+        continue;
       }
       // Auth-invalidated path: upstream OAuth token was revoked. No prompt
       // rewrite or wrapper can fix this — only re-auth (codex login). Bail
@@ -1567,6 +1584,8 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       }
     }
 
+    // Covers an explicit refusal returned in a successful Responses stream.
+    throwIfSafetyRefusal(lastErr, log);
     if (i < attempts.length - 1) {
       const mode = isCompliantRetry ? "compliant retry failed" : "retrying";
       // Adaptive routing log (단계 3): when the rejection is skin-related,
@@ -3657,6 +3676,9 @@ app.post("/api/generate", async (req, res) => {
       }
       if (firstErr?.code === "SAFETY_REFUSAL") {
         return res.status(422).json({ error: firstErr.message, code: "SAFETY_REFUSAL", attempts: firstErr.attempts || [], batchId });
+      }
+      if (firstErr?.code === "UPSTREAM_BUSY") {
+        return res.status(503).json({ error: firstErr.message, code: firstErr.code, attempts: firstErr.attempts || [], batchId });
       }
       // upstream 45b7892 흡수: 빈 응답을 SAFETY_REFUSAL 로 잘못 라벨하지 않도록 분기.
       if (firstErr?.code === "EMPTY_RESPONSE" || firstErr?.code === "UPSTREAM_EMPTY") {

@@ -162,6 +162,14 @@ describe("runImagesApi", () => {
     assert.equal(r.b64, null);
   });
 
+  it("preserves string router errors for capacity classification", async () => {
+    const f = fakeFetch(() => ({ status: 503, body: { error: "all codex accounts busy (try again shortly)" } }));
+    await assert.rejects(
+      runImagesApi({ url: "http://p", model: "m", prompt: "x", fetchImpl: f }),
+      (e) => e.status === 503 && e.message === "all codex accounts busy (try again shortly)",
+    );
+  });
+
   it("honours an already-aborted signal", async () => {
     const f = fakeFetch(() => ({ body: OK_BODY }));
     const ac = new AbortController();

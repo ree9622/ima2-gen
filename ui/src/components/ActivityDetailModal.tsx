@@ -82,6 +82,10 @@ export function ActivityDetailModal() {
   const prompt = record?.prompt ?? activity?.prompt ?? null;
   const errorCode = record?.errorCode ?? null;
   const errorMessage = record?.errorMessage ?? activity?.errorMessage ?? null;
+  // Older failure records used ALL_ATTEMPTS_FAILED for the same rejection.
+  const policyRefused = errorCode === "SAFETY_REFUSAL" || errorCode === "SAFETY_UNRECOVERABLE" ||
+    /rejected by (?:the )?safety system|safety_violations\s*=/i.test(errorMessage ?? "");
+  const poolBusy = errorCode === "UPSTREAM_BUSY" || /all codex accounts busy/i.test(errorMessage ?? "");
   const references = record?.references ?? [];
   const referenceCount = record?.referenceCount ?? 0;
   const attempts = record?.attempts ?? [];
@@ -231,6 +235,23 @@ export function ActivityDetailModal() {
               </div>
             )}
             {diagAttempt ? <AttemptDiagnostics attempt={diagAttempt} /> : null}
+            {policyRefused ? (
+              <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6 }}>
+                안전 정책에 따른 거절입니다. 같은 요청을 반복하거나 품질·파일 형식을 바꿔도 해결되지 않습니다.
+                성적인 포즈·노출 묘사 등을 수정한 뒤 생성해주세요.
+                일반적인 장면도 거절되면 위 요청 식별값으로 OpenAI 지원팀에 문의해주세요.
+              </p>
+            ) : null}
+            {poolBusy ? (
+              <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6 }}>
+                이미지 생성 계정이 모두 사용 중이었습니다. 잠시 후 다시 시도하거나 동시 생성 개수를 줄여주세요.
+              </p>
+            ) : null}
+            {record?.imageRoute === "images-api" ? (
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: MUTED }}>
+                현재 코덱스 구독 연결에는 위 모더레이션 요청값이 적용되지 않습니다.
+              </p>
+            ) : null}
             {loadError ? (
               <div style={{ marginTop: 6, fontSize: 12, color: MUTED }}>{loadError}</div>
             ) : null}

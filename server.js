@@ -69,7 +69,6 @@ import {
   parseSafetyViolation,
 } from "./lib/safetyRetry.js";
 import { rewritePromptForSafety } from "./lib/llmRewrite.js";
-import { throwIfSafetyRefusal } from "./lib/safetyRefusal.js";
 import { isUpstreamBusy, upstreamBusyError } from "./lib/upstreamBusy.js";
 import {
   loadBundles as loadPromptBundles,
@@ -1463,7 +1462,6 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
         );
         throw stop;
       }
-      throwIfSafetyRefusal(e, log);
       if (isUpstreamBusy(e)) {
         log.at(-1).errorCode = "UPSTREAM_BUSY";
         if (busyRetries >= 1) throw upstreamBusyError(e, log);
@@ -1584,8 +1582,6 @@ async function runPromptAttempts(prompt, invoke, label, maxAttempts = 2, onAttem
       }
     }
 
-    // Covers an explicit refusal returned in a successful Responses stream.
-    throwIfSafetyRefusal(lastErr, log);
     if (i < attempts.length - 1) {
       const mode = isCompliantRetry ? "compliant retry failed" : "retrying";
       // Adaptive routing log (단계 3): when the rejection is skin-related,

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseSafetyViolation } from "../lib/safetyRetry.js";
-import { isSafetyRefusal, throwIfSafetyRefusal } from "../lib/safetyRefusal.js";
+import { buildAttemptSequence, parseSafetyViolation } from "../lib/safetyRetry.js";
+import { isSafetyRefusal } from "../lib/safetyRefusal.js";
 import { isUpstreamBusy, upstreamBusyError } from "../lib/upstreamBusy.js";
 
 // Exercise the production retry loop without starting HTTP, SQLite, or OAuth.
@@ -14,7 +14,7 @@ const waits = [];
 const deps = {
   console: { log() {}, warn() {}, error() {} },
   throwIfGenerationCanceled() {},
-  throwIfSafetyRefusal,
+  buildAttemptSequence,
   isUpstreamBusy,
   upstreamBusyError,
   imageRateCooldownUntil: 0,
@@ -38,38 +38,45 @@ for (const [label, error] of [
   ["uncategorized Images API rejection", new Error(refusal)],
   ["structured upstream code", Object.assign(new Error("Blocked"), { upstreamCode: "content_policy_violation" })],
   ["categorized rejection", new Error("safety_violations=[sexual]")],
-  ["unrecoverable category", new Error("safety_violations=[minors]")],
 ]) {
-  test(`${label} stops after one call with evidence intact`, async () => {
+  test(`${label} advances to a safety retry variant`, async () => {
     let calls = 0;
-    await assert.rejects(run("ordinary test input", async () => {
+    const prompts = [];
+    const result = await run("수영복 셀카", async (prompt) => {
       calls++;
-      throw error;
-    }, "test", 7, null, { disablePromptMutation: true }), (e) => {
-      assert.equal(e.code, "SAFETY_REFUSAL");
-      assert.equal(e.status, 422);
-      assert.equal(e.cause, error);
-      assert.equal(e.attempts.length, 1);
-      assert.equal(e.attempts[0].errorCode, "SAFETY_REFUSAL");
-      assert.ok(e.message.includes(error.message));
-      return true;
-    });
-    assert.equal(calls, 1);
+      prompts.push(prompt);
+      if (calls === 1) throw error;
+      return { b64: "image-result" };
+    }, "test", 2);
+    assert.equal(calls, 2);
+    assert.equal(result.b64, "image-result");
+    assert.notEqual(prompts[0], prompts[1]);
   });
 }
 
-test("explicit Responses refusal stops without a second tool call", async () => {
+test("unrecoverable minor-safety category stops after one call", async () => {
   let calls = 0;
-  await assert.rejects(run("test", async () => {
+  await assert.rejects(run("ordinary test input", async () => {
     calls++;
-    return { b64: null, refusalText: "I cannot generate that image." };
+    throw new Error("safety_violations=[minors]");
   }, "test", 7, null, { disablePromptMutation: true }), (e) => {
-    assert.equal(e.code, "SAFETY_REFUSAL");
-    assert.match(e.message, /I cannot generate/);
+    assert.equal(e.code, "SAFETY_UNRECOVERABLE");
+    assert.equal(e.status, 422);
     assert.equal(e.attempts.length, 1);
     return true;
   });
   assert.equal(calls, 1);
+});
+
+test("explicit Responses refusal advances to the next attempt", async () => {
+  let calls = 0;
+  const result = await run("test", async () => {
+    calls++;
+    if (calls === 1) return { b64: null, refusalText: "I cannot generate that image." };
+    return { b64: "image-result" };
+  }, "test", 2, null, { disablePromptMutation: true });
+  assert.equal(calls, 2);
+  assert.equal(result.b64, "image-result");
 });
 
 test("temporary server error and empty reasoning response still recover", async () => {
